@@ -25,7 +25,10 @@ namespace MenuGoBE.Mapper
             CreateMap<TableUpdateDto, Table>();
 
             CreateMap<Account, AccountViewDto>()
-                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.TempRoles.Select(tr => tr.RoleId).ToList()));
+                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()));
+
+            CreateMap<AccountCreateDto, Account>();
+            CreateMap<AccountUpdateDto, Account>();
         }
     }
 }
