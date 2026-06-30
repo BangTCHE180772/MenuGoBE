@@ -22,8 +22,16 @@ builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Repository
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
+builder.Services.AddScoped<ITableRepository, TableRepository>();
+
+// Service
 builder.Services.AddScoped<IChainService, ChainService>();
+builder.Services.AddScoped<ITableService, TableService>();
+
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
