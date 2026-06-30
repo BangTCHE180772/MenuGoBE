@@ -35,16 +35,17 @@ builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
 app.UseHttpsRedirection();
-app.MapGet("/hello", () =>
-{
-    return "Hello boy!";
-});
+
+app.MapControllers();
+
 app.Run();
 
 
