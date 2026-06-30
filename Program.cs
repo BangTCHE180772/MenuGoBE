@@ -1,14 +1,50 @@
 using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Data;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using MenuGoBE.Interface.Services;
+using MenuGoBE.Service;
+using MenuGoBE.Interface.Repository;
+using MenuGoBE.Repositories;
+using MenuGoBE.Mapper;
+using AutoMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-   options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+
+//AutoMapper
+builder.Services.AddAutoMapper(typeof(AutoMapperProfiles));
+
+//FluentValidation setup
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddFluentValidationClientsideAdapters();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+//Swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+//
+builder.Services.AddScoped<IChainRepository, ChainRepository>();
+builder.Services.AddScoped<IChainService, ChainService>();
+
+
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
+
 // Configure the HTTP request pipeline.
+
+//Swagger
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseHttpsRedirection();
 
