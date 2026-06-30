@@ -30,7 +30,7 @@ public class Account
 
     public bool IsActive { get; set; }
 
-    public long AddressId { get; set; }
+    public long? AddressId { get; set; }
 
     public long CreatedBy { get; set; }
 
@@ -38,7 +38,7 @@ public class Account
 
     // Navigation
     [ForeignKey("AddressId")]
-    public Address Address { get; set; } = null!;
+    public Address? Address { get; set; }
 
     public ICollection<TempRole> TempRoles { get; set; } = new List<TempRole>();
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
