@@ -6,6 +6,7 @@ using AutoMapper;
 using MenuGoBE.Models;
 using MenuGoBE.Dtos.Chain;
 using MenuGoBE.Dtos.Table;
+using MenuGoBE.Dtos.Account;
 
 namespace MenuGoBE.Mapper
 {
@@ -22,6 +23,9 @@ namespace MenuGoBE.Mapper
             CreateMap<Table, TableViewDto>();
             CreateMap<TableCreateDto, Table>();
             CreateMap<TableUpdateDto, Table>();
+
+            CreateMap<Account, AccountViewDto>()
+                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.TempRoles.Select(tr => tr.RoleId).ToList()));
         }
     }
 }
