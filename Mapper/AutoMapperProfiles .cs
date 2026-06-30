@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AutoMapper;
 using MenuGoBE.Models;
 using MenuGoBE.Dtos.Chain;
+using MenuGoBE.Dtos.Table;
 
 namespace MenuGoBE.Mapper
 {
@@ -17,6 +18,10 @@ namespace MenuGoBE.Mapper
             CreateMap<ChainCreateDto, Chain>();
 
             CreateMap<ChainUpdateDto, Chain>();
+
+            CreateMap<Table, TableViewDto>();
+            CreateMap<TableCreateDto, Table>();
+            CreateMap<TableUpdateDto, Table>();
         }
     }
 }
