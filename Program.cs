@@ -26,10 +26,12 @@ builder.Services.AddSwaggerGen();
 // Repository
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
 builder.Services.AddScoped<ITableRepository, TableRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<ITableService, TableService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 
 
 builder.Services.AddControllers();
@@ -41,6 +43,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 app.UseHttpsRedirection();
+app.MapControllers();
+
 app.MapGet("/hello", () =>
 {
     return "Hello boy!";
