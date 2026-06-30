@@ -20,9 +20,41 @@ namespace MenuGoBE.Repositories
         public async Task<List<Account>> GetAccountsWithRoleRangeAsync(int minRole, int maxRole)
         {
             return await _context.Accounts
-                .Include(a => a.TempRoles)
-                .Where(a => a.TempRoles.Any(tr => tr.RoleId >= minRole && tr.RoleId <= maxRole))
+                .Include(a => a.Contracts)
+                .Where(a => a.Contracts.Any(c => c.RoleId >= minRole && c.RoleId <= maxRole))
                 .ToListAsync();
+        }
+
+        public async Task<Account?> GetByIdAsync(long id)
+        {
+            return await _context.Accounts
+                .Include(a => a.Contracts)
+                .FirstOrDefaultAsync(a => a.Id == id);
+        }
+
+        public async Task CreateAsync(Account entity)
+        {
+            await _context.Accounts.AddAsync(entity);
+        }
+
+        public Task UpdateAsync(Account entity)
+        {
+            _context.Accounts.Update(entity);
+            return Task.CompletedTask;
+        }
+
+        public async Task DeleteAsync(long id)
+        {
+            var entity = await _context.Accounts.FindAsync(id);
+            if (entity != null)
+            {
+                _context.Accounts.Remove(entity);
+            }
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _context.SaveChangesAsync();
         }
     }
 }
