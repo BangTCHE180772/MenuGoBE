@@ -27,6 +27,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
 builder.Services.AddScoped<ITableRepository, TableRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IOrderDetailRepository, OrderDetailRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
