@@ -1,0 +1,16 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using MenuGoBE.Models;
+
+namespace MenuGoBE.Interface.Repository
+{
+    public interface IWorkScheduleRepository
+    {
+        Task<List<WorkSchedule>> GetAllAsync();
+        Task<WorkSchedule?> GetByIdAsync(long id);
+        Task CreateAsync(WorkSchedule entity);
+        Task UpdateAsync(WorkSchedule entity);
+        Task DeleteAsync(long id);
+        Task SaveChangesAsync();
+    }
+}

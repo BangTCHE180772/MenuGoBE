@@ -27,11 +27,15 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
 builder.Services.AddScoped<ITableRepository, TableRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<IWorkScheduleRepository, WorkScheduleRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IWorkScheduleService, WorkScheduleService>();
 
 
 builder.Services.AddControllers();
