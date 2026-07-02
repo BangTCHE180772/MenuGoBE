@@ -27,6 +27,10 @@ namespace MenuGoBE.Mapper
             CreateMap<Order, OrderViewDto>();
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
+
+            CreateMap<OrderDetail, OrderDetailViewDto>();
+            CreateMap<OrderDetailCreateDto, OrderDetail>();
+            CreateMap<OrderDetailUpdateDto, OrderDetail>();
         }
     }
 }
