@@ -1,0 +1,72 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using AutoMapper;
+using MenuGoBE.Dtos.Account;
+using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Services;
+using MenuGoBE.Models;
+
+namespace MenuGoBE.Service
+{
+    public class AccountService : IAccountService
+    {
+        private readonly IAccountRepository _repo;
+        private readonly IMapper _mapper;
+
+        public AccountService(IAccountRepository repo, IMapper mapper)
+        {
+            _repo = repo;
+            _mapper = mapper;
+        }
+
+        public async Task<List<AccountViewDto>> GetAccountsWithRoleRangeAsync(int minRole, int maxRole)
+        {
+            var accounts = await _repo.GetAccountsWithRoleRangeAsync(minRole, maxRole);
+            return _mapper.Map<List<AccountViewDto>>(accounts);
+        }
+
+        public async Task<AccountViewDto?> GetByIdAsync(long id)
+        {
+            var account = await _repo.GetByIdAsync(id);
+            if (account == null) return null;
+            return _mapper.Map<AccountViewDto>(account);
+        }
+
+        public async Task<AccountViewDto> CreateAsync(AccountCreateDto dto)
+        {
+            var entity = _mapper.Map<Account>(dto);
+            entity.HashedPassword = HashHelper.HashPassword(dto.Password);
+            entity.CreatedAt = DateTime.UtcNow;
+
+            await _repo.CreateAsync(entity);
+            await _repo.SaveChangesAsync();
+
+            return _mapper.Map<AccountViewDto>(entity);
+        }
+
+        public async Task<bool> UpdateAsync(AccountUpdateDto dto)
+        {
+            var entity = await _repo.GetByIdAsync(dto.Id);
+            if (entity == null) return false;
+
+            _mapper.Map(dto, entity);
+
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> DeleteAsync(long id)
+        {
+            var entity = await _repo.GetByIdAsync(id);
+            if (entity == null) return false;
+
+            await _repo.DeleteAsync(id);
+            await _repo.SaveChangesAsync();
+
+            return true;
+        }
+    }
+}
