@@ -9,10 +9,12 @@ namespace MenuGoBE.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _service;
+        private readonly IOrderDetailService _detailService;
 
-        public OrderController(IOrderService service)
+        public OrderController(IOrderService service, IOrderDetailService detailService)
         {
             _service = service;
+            _detailService = detailService;
         }
 
         [HttpGet]
@@ -65,14 +67,14 @@ namespace MenuGoBE.Controllers
         [HttpGet("{orderId}/details")]
         public async Task<IActionResult> GetDetails(long orderId)
         {
-            var result = await _service.GetDetailsByOrderIdAsync(orderId);
+            var result = await _detailService.GetByOrderIdAsync(orderId);
             return Ok(result);
         }
 
         [HttpGet("{orderId}/details/{id}")]
         public async Task<IActionResult> GetDetailById(long orderId, long id)
         {
-            var result = await _service.GetDetailByIdAsync(id);
+            var result = await _detailService.GetByIdAsync(id);
 
             if (result == null)
                 return NotFound(new { message = "Không tìm thấy OrderDetail" });
@@ -87,7 +89,7 @@ namespace MenuGoBE.Controllers
 
             try
             {
-                var result = await _service.CreateDetailAsync(dto);
+                var result = await _detailService.CreateAsync(dto);
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -101,7 +103,7 @@ namespace MenuGoBE.Controllers
         {
             dto.Id = id;
 
-            var result = await _service.UpdateDetailAsync(dto);
+            var result = await _detailService.UpdateAsync(dto);
 
             if (!result)
                 return NotFound(new { message = "Không tìm thấy OrderDetail để cập nhật" });
@@ -112,7 +114,7 @@ namespace MenuGoBE.Controllers
         [HttpDelete("{orderId}/details/{id}")]
         public async Task<IActionResult> DeleteDetail(long orderId, long id)
         {
-            var result = await _service.DeleteDetailAsync(id);
+            var result = await _detailService.DeleteAsync(id);
 
             if (!result)
                 return NotFound(new { message = "Không tìm thấy OrderDetail để xóa" });
