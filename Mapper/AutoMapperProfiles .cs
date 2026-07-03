@@ -27,6 +27,10 @@ namespace MenuGoBE.Mapper
             CreateMap<Order, OrderViewDto>();
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
+            CreateMap<OrderDetail, OrderDetailViewDto>();
+            CreateMap<OrderDetailCreateDto, OrderDetail>();
+            CreateMap<OrderDetailUpdateDto, OrderDetail>();
+
             CreateMap<Account, AccountViewDto>()
                 .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()));
 
