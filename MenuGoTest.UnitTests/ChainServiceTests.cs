@@ -10,7 +10,7 @@ using MenuGoBE.Service;
 using Moq;
 using Xunit;
 
-namespace MenuGoBE.Tests
+namespace MenuGoTest.UnitTests
 {
     public class ChainServiceTests
     {
@@ -25,7 +25,7 @@ namespace MenuGoBE.Tests
             var config = new MapperConfiguration(cfg =>
             {
                 cfg.AddProfile<AutoMapperProfiles>();
-            });
+            }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = config.CreateMapper();
 
             _service = new ChainService(_repoMock.Object, _mapper);
