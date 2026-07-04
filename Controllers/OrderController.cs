@@ -64,6 +64,46 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Xóa thành công" });
         }
 
+        [HttpPost("merge")]
+        public async Task<IActionResult> Merge([FromBody] OrderMergeDto dto)
+        {
+            var result = await _service.MergeAsync(dto);
+
+            if (!result)
+                return BadRequest(new { message = "Không thể gộp đơn. Kiểm tra lại OrderId hoặc đơn cha đã bị gộp vào đơn khác." });
+
+            return Ok(new { message = "Gộp đơn thành công" });
+        }
+
+        [HttpDelete("{id}/unmerge")]
+        public async Task<IActionResult> Unmerge(long id)
+        {
+            var result = await _service.UnmergeAsync(id);
+
+            if (!result)
+                return BadRequest(new { message = "Không thể tách đơn. Đơn này chưa được gộp." });
+
+            return Ok(new { message = "Tách đơn thành công" });
+        }
+
+        [HttpGet("{fatherId}/children")]
+        public async Task<IActionResult> GetChildren(long fatherId)
+        {
+            var result = await _service.GetChildOrdersAsync(fatherId);
+            return Ok(result);
+        }
+
+        [HttpGet("{fatherId}/merged-summary")]
+        public async Task<IActionResult> GetMergedSummary(long fatherId)
+        {
+            var result = await _service.GetMergedSummaryAsync(fatherId);
+
+            if (result == null)
+                return NotFound(new { message = "Không tìm thấy đơn hàng" });
+
+            return Ok(result);
+        }
+
         [HttpGet("{orderId}/details")]
         public async Task<IActionResult> GetDetails(long orderId)
         {

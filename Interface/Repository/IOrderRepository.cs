@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using MenuGoBE.Models;
 
 namespace MenuGoBE.Interface.Repository
@@ -10,6 +6,7 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<List<Order>> GetAllAsync();
         Task<Order?> GetByIdAsync(long id);
+        Task<List<Order>> GetChildOrdersAsync(long fatherId);
 
         Task CreateAsync(Order entity);
         Task UpdateAsync(Order entity);
