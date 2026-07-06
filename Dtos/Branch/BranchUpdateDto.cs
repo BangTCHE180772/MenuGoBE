@@ -7,6 +7,7 @@ namespace MenuGoBE.Dtos.Branch
 {
     public class BranchUpdateDto
     {
+        public long Id { get; set; }
         public long AddressId { get; set; }
 
         public string Name { get; set; } = string.Empty;

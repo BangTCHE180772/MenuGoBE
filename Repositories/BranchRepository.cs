@@ -28,7 +28,7 @@ namespace MenuGoBE.Repositories
             return await _context.Branches.FindAsync(id);
         }
 
-        public async Task AddAsync(Branch branch)
+        public async Task CreateAsync(Branch branch)
         {
             await _context.Branches.AddAsync(branch);
         }
