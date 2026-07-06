@@ -31,10 +31,11 @@ namespace MenuGoTest.UnitTests
             _service = new ChainService(_repoMock.Object, _mapper);
         }
 
+        //Nếu Repository có dữ liệu thì Service phải trả về danh sách DTO đúng
         [Fact]
-        public async Task GetAllAsync_ShouldReturnListOfChainViewDtos_WhenChainsExist()
+        public async Task Test_Return_Dtos_Of_GetAllAsync()
         {
-            // Arrange
+            //data (fake) test
             var chains = new List<Chain>
             {
                 new Chain { Id = 1, Name = "Chain A", OpenTime = new TimeOnly(8, 0), CloseTime = new TimeOnly(22, 0) },
@@ -42,7 +43,7 @@ namespace MenuGoTest.UnitTests
             };
             _repoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(chains);
 
-            // Act
+
             var result = await _service.GetAllAsync();
 
             // Assert
@@ -54,7 +55,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task GetByIdAsync_ShouldReturnChainViewDto_WhenChainExists()
+        public async Task Test_Return_Dtos_Of_GetByIdAsync_When_Chain_Exists()
         {
             // Arrange
             var chainId = 1L;
@@ -71,7 +72,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task GetByIdAsync_ShouldReturnNull_WhenChainDoesNotExist()
+        public async Task Test_Return_Null_Of_GetByIdAsync_When_Chain_Does_Not_Exist()
         {
             // Arrange
             var chainId = 99L;
@@ -86,7 +87,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task CreateAsync_ShouldCallCreateAndSave_AndReturnMappedDto()
+        public async Task Test_CreateAsync()
         {
             // Arrange
             var createDto = new ChainCreateDto
@@ -119,7 +120,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task UpdateAsync_ShouldReturnTrue_WhenChainExistsAndIsUpdated()
+        public async Task Test_UpdateAsync_Should_Return_True_When_Chain_Exists_And_Is_Updated()
         {
             // Arrange
             var updateDto = new ChainUpdateDto
@@ -166,7 +167,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task UpdateAsync_ShouldReturnFalse_WhenChainDoesNotExist()
+        public async Task Test_UpdateAsync_Should_Return_False_When_Chain_Does_Not_Exist()
         {
             // Arrange
             var updateDto = new ChainUpdateDto
@@ -188,7 +189,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task DeleteAsync_ShouldReturnTrue_WhenChainExistsAndIsDeleted()
+        public async Task Test_DeleteAsync_Should_Return_True_When_Chain_Exists_And_Is_Deleted()
         {
             // Arrange
             var chainId = 1L;
@@ -209,7 +210,7 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task DeleteAsync_ShouldReturnFalse_WhenChainDoesNotExist()
+        public async Task Test_DeleteAsync_Should_Return_False_When_Chain_Does_Not_Exist()
         {
             // Arrange
             var chainId = 99L;
