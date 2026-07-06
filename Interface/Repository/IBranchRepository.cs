@@ -12,7 +12,7 @@ namespace MenuGoBE.Interface.Repository
 
         Task<Branch?> GetByIdAsync(long id);
 
-        Task AddAsync(Branch branch);
+        Task CreateAsync(Branch branch);
 
         Task UpdateAsync(Branch branch);
 
