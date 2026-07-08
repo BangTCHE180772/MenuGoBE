@@ -10,5 +10,10 @@ namespace MenuGoBE.Interface.Services
         Task<OrderViewDto> CreateAsync(OrderCreateDto dto);
         Task<bool> UpdateAsync(OrderUpdateDto dto);
         Task<bool> DeleteAsync(long id);
+
+        Task<bool> MergeAsync(OrderMergeDto dto);
+        Task<bool> UnmergeAsync(long childOrderId);
+        Task<List<OrderViewDto>> GetChildOrdersAsync(long fatherOrderId);
+        Task<OrderMergedSummaryDto?> GetMergedSummaryAsync(long fatherOrderId);
     }
 }

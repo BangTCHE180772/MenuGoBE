@@ -5,6 +5,7 @@ using MenuGoBE.Models;
 using MenuGoBE.Dtos.Chain;
 using MenuGoBE.Dtos.Table;
 using MenuGoBE.Dtos.Order;
+using MenuGoBE.Dtos.Area;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Dtos.Branch;
@@ -29,6 +30,10 @@ namespace MenuGoBE.Mapper
             CreateMap<Table, TableViewDto>();
             CreateMap<TableCreateDto, Table>();
             CreateMap<TableUpdateDto, Table>();
+
+            CreateMap<Area, AreaViewDto>();
+            CreateMap<AreaCreateDto, Area>();
+            CreateMap<AreaUpdateDto, Area>();
 
             //order
             CreateMap<Order, OrderViewDto>();
