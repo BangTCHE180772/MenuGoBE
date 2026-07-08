@@ -27,4 +27,16 @@ public static class ErrorCodes
         "Tên Menu đã tồn tại.", 
         409
     );
+
+    public static readonly ErrorResult DuplicateUnitName = new(
+        1005, 
+        "Tên Đơn vị đã tồn tại.", 
+        409
+    );
+
+    public static readonly ErrorResult UnitInUse = new(
+        1006, 
+        "Không thể xóa Đơn vị vì đang được sử dụng trong Chuyển đổi đơn vị.", 
+        400
+    );
 }

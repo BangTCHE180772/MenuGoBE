@@ -12,6 +12,7 @@ using MenuGoBE.Dtos.Branch;
 using MenuGoBE.Dtos.Image;
 using MenuGoBE.Dtos.Group;
 using MenuGoBE.Dtos.Menu;
+using MenuGoBE.Dtos.Unit;
 
 namespace MenuGoBE.Mapper
 {
@@ -72,6 +73,11 @@ namespace MenuGoBE.Mapper
             CreateMap<Menu, MenuViewDto>();
             CreateMap<MenuCreateDto, Menu>();
             CreateMap<MenuUpdateDto, Menu>();
+
+            //Unit
+            CreateMap<Unit, UnitViewDto>();
+            CreateMap<UnitCreateDto, Unit>();
+            CreateMap<UnitUpdateDto, Unit>();
         }
     }
 }
