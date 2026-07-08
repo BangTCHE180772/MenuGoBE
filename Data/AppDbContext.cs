@@ -68,6 +68,10 @@ public class AppDbContext : DbContext
             .HasIndex(m => m.Name)
             .IsUnique();
 
+        modelBuilder.Entity<Unit>()
+            .HasIndex(u => u.Name)
+            .IsUnique();
+
         // Iterate over all entities and disable cascade deletes globally to avoid Multiple Cascade Path errors
         foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
         {

@@ -907,6 +907,9 @@ namespace MenuGoBE.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Name")
+                        .IsUnique();
+
                     b.ToTable("Units");
                 });
 
