@@ -9,6 +9,9 @@ using MenuGoBE.Dtos.Area;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Dtos.Branch;
+using MenuGoBE.Dtos.Image;
+using MenuGoBE.Dtos.Group;
+using MenuGoBE.Dtos.Menu;
 
 namespace MenuGoBE.Mapper
 {
@@ -54,6 +57,21 @@ namespace MenuGoBE.Mapper
             CreateMap<WorkSchedule, WorkScheduleViewDto>();
             CreateMap<WorkScheduleCreateDto, WorkSchedule>();
             CreateMap<WorkScheduleUpdateDto, WorkSchedule>();
+
+            //Image
+            CreateMap<Models.Image, ImageViewDto>();
+            CreateMap<ImageCreateDto, Models.Image>();
+            CreateMap<ImageUpdateDto, Models.Image>();
+
+            //Group
+            CreateMap<Group, GroupViewDto>();
+            CreateMap<GroupCreateDto, Group>();
+            CreateMap<GroupUpdateDto, Group>();
+
+            //Menu
+            CreateMap<Menu, MenuViewDto>();
+            CreateMap<MenuCreateDto, Menu>();
+            CreateMap<MenuUpdateDto, Menu>();
         }
     }
 }
