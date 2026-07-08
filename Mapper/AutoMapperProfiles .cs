@@ -8,6 +8,7 @@ using MenuGoBE.Dtos.Order;
 using MenuGoBE.Dtos.Area;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
+using MenuGoBE.Dtos.Branch;
 
 namespace MenuGoBE.Mapper
 {
@@ -15,12 +16,17 @@ namespace MenuGoBE.Mapper
     {
         public AutoMapperProfiles()
         {
+            //Chain
             CreateMap<Chain, ChainViewDto>();
-
             CreateMap<ChainCreateDto, Chain>();
-
             CreateMap<ChainUpdateDto, Chain>();
 
+            //Branch
+            CreateMap<Branch, BranchViewDto>();
+            CreateMap<BranchCreateDto, Branch>();
+            CreateMap<BranchUpdateDto, Branch>();
+
+            //Table
             CreateMap<Table, TableViewDto>();
             CreateMap<TableCreateDto, Table>();
             CreateMap<TableUpdateDto, Table>();
@@ -29,6 +35,7 @@ namespace MenuGoBE.Mapper
             CreateMap<AreaCreateDto, Area>();
             CreateMap<AreaUpdateDto, Area>();
 
+            //order
             CreateMap<Order, OrderViewDto>();
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
@@ -36,12 +43,14 @@ namespace MenuGoBE.Mapper
             CreateMap<OrderDetailCreateDto, OrderDetail>();
             CreateMap<OrderDetailUpdateDto, OrderDetail>();
 
+            //account
             CreateMap<Account, AccountViewDto>()
                 .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()));
 
             CreateMap<AccountCreateDto, Account>();
             CreateMap<AccountUpdateDto, Account>();
 
+            //work schedule
             CreateMap<WorkSchedule, WorkScheduleViewDto>();
             CreateMap<WorkScheduleCreateDto, WorkSchedule>();
             CreateMap<WorkScheduleUpdateDto, WorkSchedule>();
