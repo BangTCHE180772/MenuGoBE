@@ -11,6 +11,8 @@ namespace MenuGoBE.Interface.Repository
         Task CreateAsync(Menu entity);
         Task UpdateAsync(Menu entity);
         Task DeleteAsync(long id);
+        Task<bool> ExistsByNameAsync(string name);
+        Task<bool> ExistsByNameExcludeIdAsync(string name, long id);
 
         // Product membership
         Task<bool> ProductExistsInMenuAsync(long menuId, long productId);

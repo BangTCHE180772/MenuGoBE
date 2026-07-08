@@ -42,6 +42,16 @@ namespace MenuGoBE.Repositories
                 _context.Groups.Remove(entity);
         }
 
+        public async Task<bool> ExistsByNameAsync(string name)
+        {
+            return await _context.Groups.AnyAsync(g => g.Name.ToLower() == name.ToLower());
+        }
+
+        public async Task<bool> ExistsByNameExcludeIdAsync(string name, long id)
+        {
+            return await _context.Groups.AnyAsync(g => g.Name.ToLower() == name.ToLower() && g.Id != id);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

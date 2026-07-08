@@ -1,5 +1,6 @@
 using AutoMapper;
 using MenuGoBE.Dtos.Group;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
@@ -32,6 +33,11 @@ namespace MenuGoBE.Service
 
         public async Task<GroupViewDto> CreateAsync(GroupCreateDto dto)
         {
+            if (await _repo.ExistsByNameAsync(dto.Name))
+            {
+                throw new MenuGoException(ErrorCodes.DuplicateGroupName);
+            }
+
             var entity = _mapper.Map<Group>(dto);
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -42,6 +48,11 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            if (await _repo.ExistsByNameExcludeIdAsync(dto.Name, dto.Id))
+            {
+                throw new MenuGoException(ErrorCodes.DuplicateGroupName);
+            }
 
             _mapper.Map(dto, entity);
             await _repo.UpdateAsync(entity);
