@@ -6,6 +6,7 @@ using MenuGoBE.Dtos.Chain;
 using MenuGoBE.Dtos.Table;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
+using MenuGoBE.Dtos.Contract;
 
 namespace MenuGoBE.Mapper
 {
@@ -32,6 +33,10 @@ namespace MenuGoBE.Mapper
             CreateMap<WorkSchedule, WorkScheduleViewDto>();
             CreateMap<WorkScheduleCreateDto, WorkSchedule>();
             CreateMap<WorkScheduleUpdateDto, WorkSchedule>();
+
+            CreateMap<Contract, ContractViewDto>();
+            CreateMap<ContractCreateDto, Contract>();
+            CreateMap<ContractUpdateDto, Contract>();
         }
     }
 }
