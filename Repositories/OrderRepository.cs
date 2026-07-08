@@ -28,6 +28,13 @@ namespace MenuGoBE.Repositories
             return await _context.Orders.FindAsync(id);
         }
 
+        public async Task<List<Order>> GetChildOrdersAsync(long fatherId)
+        {
+            return await _context.Orders
+                .Where(o => o.FatherId == fatherId)
+                .ToListAsync();
+        }
+
         public async Task CreateAsync(Order entity)
         {
             await _context.Orders.AddAsync(entity);

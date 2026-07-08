@@ -64,5 +64,61 @@ namespace MenuGoBE.Service
 
             return true;
         }
+
+        public async Task<bool> MergeAsync(OrderMergeDto dto)
+        {
+            var childOrder = await _repo.GetByIdAsync(dto.ChildOrderId);
+            if (childOrder == null) return false;
+
+            var fatherOrder = await _repo.GetByIdAsync(dto.FatherOrderId);
+            if (fatherOrder == null) return false;
+
+            if (dto.ChildOrderId == dto.FatherOrderId) return false;
+
+            if (fatherOrder.FatherId != null) return false;
+
+            childOrder.FatherId = dto.FatherOrderId;
+
+            await _repo.UpdateAsync(childOrder);
+            await _repo.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> UnmergeAsync(long childOrderId)
+        {
+            var childOrder = await _repo.GetByIdAsync(childOrderId);
+            if (childOrder == null || childOrder.FatherId == null) return false;
+
+            childOrder.FatherId = null;
+
+            await _repo.UpdateAsync(childOrder);
+            await _repo.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<List<OrderViewDto>> GetChildOrdersAsync(long fatherOrderId)
+        {
+            var data = await _repo.GetChildOrdersAsync(fatherOrderId);
+            return _mapper.Map<List<OrderViewDto>>(data);
+        }
+
+        public async Task<OrderMergedSummaryDto?> GetMergedSummaryAsync(long fatherOrderId)
+        {
+            var fatherOrder = await _repo.GetByIdAsync(fatherOrderId);
+            if (fatherOrder == null) return null;
+
+            var childOrders = await _repo.GetChildOrdersAsync(fatherOrderId);
+
+            var grandTotal = fatherOrder.TotalAmount + childOrders.Sum(o => o.TotalAmount);
+
+            return new OrderMergedSummaryDto
+            {
+                FatherOrder = _mapper.Map<OrderViewDto>(fatherOrder),
+                ChildOrders = _mapper.Map<List<OrderViewDto>>(childOrders),
+                GrandTotal = grandTotal
+            };
+        }
     }
 }

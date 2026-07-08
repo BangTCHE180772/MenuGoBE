@@ -25,6 +25,7 @@ builder.Services.AddSwaggerGen();
 
 // Repository
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
+builder.Services.AddScoped<IAreaRepository, AreaRepository>();
 builder.Services.AddScoped<ITableRepository, TableRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IOrderDetailRepository, OrderDetailRepository>();
@@ -34,6 +35,7 @@ builder.Services.AddScoped<IBranchRepository, BranchRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
+builder.Services.AddScoped<IAreaService, AreaService>();
 builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
