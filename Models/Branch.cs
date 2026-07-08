@@ -31,13 +31,8 @@ public class Branch
     [ForeignKey("AddressId")]
     public Address Address { get; set; } = null!;
 
-    public ICollection<BVariant> BVariants { get; set; } = new List<BVariant>();
-    public ICollection<Inventory> Inventories { get; set; } = new List<Inventory>();
-    public ICollection<Transport> Transports { get; set; } = new List<Transport>();
-    public ICollection<Supplier> Suppliers { get; set; } = new List<Supplier>();
     public ICollection<Area> Areas { get; set; } = new List<Area>();
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
     public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
-    public ICollection<BInventoryCheck> BInventoryChecks { get; set; } = new List<BInventoryCheck>();
 }

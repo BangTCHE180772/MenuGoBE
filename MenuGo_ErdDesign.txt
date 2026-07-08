@@ -2,55 +2,52 @@
 TABLES & COLUMNS
 ================================================================
 
-Chains: Id, CloseTime, OpenTime, BackgroundImage, LogoImage, Name, AddressId, CreatedAt
-Categories: Id, Name, CreatedAt
-Items: Id, CategoryId, ChainId, Name, IsActive, CreatedBy, CreatedAt
-Variants: Id, ItemId, Type, Name, Image, SKUCode, IsActive, IsSellAble, IsSecret, BasePrice, SellPrice, CreatedAt
-Units: Id, Name, CreatedAt
-UnitConversions: Id, UnitId, BaseId, VariantId, ConversionPoint, CreatedAt
-Recipes: Id, VariantId, VersionName, UnitConversionId, Quantity, LossRate, IsActive, CreatedAt
-RecipesDetaileds: Id, VariantId, RecipeId, UnitConversionId, Quantity, LossRate, CreatedAt
+-- ADDRESS MODULE
+NewProvinces:   Id, Name, CreatedAt
+NewWards:       Id, Name, NewProvinceId, CreatedAt
+OldProvinces:   Id, Name, CreatedAt
+OldDistricts:   Id, Name, OldProvinceId, CreatedAt
+OldWards:       Id, Name, OldDistrictId, CreatedAt
+Addresses:      Id, Type, NewWardId, OldWardId, CreatedAt
 
-Branches: Id, ChainId, AddressId, Name, Type, CloseTime, OpenTime, CreatedAt
-BVariants: Id, BranchId, VariantId, PricePerBaseUnit, TotalAmount, TotalCost, ChainActive, BranchActive, CreatedAt
-Inventories: Id, BranchId, Name, Type, CreatedAt
-BVariantBatches: Id, BVariantId, InventoryId, Type, Name, ExpireDate, IsActive, UpdatedAt, CreatedAt
-BVariantBatchDetailds: Id, BVariantBatchId, UnitConversionId, Quantity, CreatedAt
+-- CHAIN & BRANCH MODULE
+Chains:         Id, CloseTime, OpenTime, BackgroundImage, LogoImage, Name, AddressId, CreatedAt
+Branches:       Id, ChainId, AddressId, Name, Type, CloseTime, OpenTime, CreatedAt
 
-Transports: Id, BranchId, Name, Phone, LisencePlate, Note, CreatedBy, CreatedAt
-Suppliers: Id, ChainId, BranchId, Name, Phone, Email, AddressId, Note, Type, CreatedBy, CreatedAt
-SuppliersTransactions: Id, ToBInventoryId, TransportId, SupplierId, Code, Type, Status, GoodsCost, TransportCost, SSName, SSPhone, SSLisencePlate, SSEmail, CreatedBy, CreatedAt
-BInInventoryTransactionDetailds: Id, SuppliersTransactionId, VariantId, BVariantBatchId, UnitConversionId, Quantity, TotalCost, CreatedAt
-InventoryTransactions: Id, FromInventoryId, ToInventoryId, TransportId, Code, Type, Status, GoodsCost, TransportCost, SSLisencePlate, SSPhone, SSName, CreatedBy, CreatedAt
-InventoryTransactionBatches: Id, InventoryTransactionId, FromBVariantBatchId, ToBVariantBatchId, CreatedAt
-InventoryTransactionDetailds: Id, InventoryTransactionBatchId, FromBVariantBatchDetailId, ToBVariantBatchDetailId, UnitConversionId, ClaimQuantity, DamageQuantity, WACAtExport, CreatedAt
-TransportClaims: Id, InventoryTransactionId, TotalClaim, SettledClaim, Status, Note, ResolvedAt, CreatedBy, CreatedAt
-Evidences: Id, TransportClaimId, Link, CreatedAt
+-- PRODUCT CATALOG MODULE
+Groups:         Id, Name, CreatedAt
+Images:         Id, ImageLink, CreatedAt
+Menu:           Id, Name, CreatedAt
+Products:       Id, GroupId, ImageId, ChainId, Type, Name, Description, SKUCode,
+                IsBatchManage, IsActive, IsSecret, IsSellable, SellPrice, CreatedAt
+MenuProducts:   MenuId, ProductId
 
-BInventoryCheck: Id, BranchId, InventoryId, Type, Code, Status, Note, CreatedBy, CreatedAt
-InventoryCheckDetailds: Id, InventoryCheckId, BVariantBatchId, SSName, SSImage, SSSKUCode, Cost, Note, CreatedAt
-InventoryCheckDetailedQuantities: Id, InventoryCheckDetailedId, BVariantBatchDetailedId, UnitConversionId, SystemQuantity, ActualQuantity, CreatedAt
+-- UNITS & CONVERSIONS MODULE
+Units:          Id, Name, CreatedAt
+UnitConversions: Id, UnitId, BaseId, ProductId, ConversionPoint, CreatedAt
 
-Role: Id, Name, CreatedAt
-Accounts: Id, Name, DateOfBirth, Gender, AvatarImage, CitizenIdCode, Email, Phone, HashedPassword, TwoFACode, IsActive, AddressId, CreatedBy, CreatedAt
-TempRole: Id, AccountId, RoleId, Name, StartTime, EndTime, Status, Reason, CreatedBy, CreatedAt
-Contracts: Id, AccountId, RoleId, BranchId, Type, StartDate, EndDate, Status, Note, SalaryType, BaseSalary, BaseWorkDay, CreatedBy, CreatedAt
-Shifts: Id, Name, StartTime, EndTime, IsActive, CreatedBy, CreatedAt
-WorkSchedules: Id, AccountId, BranchId, ShiftId, Code, WorkDate, CheckInAt, CheckOutAt, ActualHours, Status, ManagerApproved, CreatedBy, CreatedAt
-Tickets: Id, AccountId, BranchId, Reason, PenaltyAmount, CreatedBy, CreatedAt
+-- RECIPES MODULE
+Recipes:        Id, ProductId, VersionName, IsActive, CreatedAt
+RecipesDetaileds: Id, ProductId, RecipeId, Quantity, CreatedAt
 
-NewProvinces: Id, Name, CreatedAt
-NewWards: Id, Name, NewProvinceId, CreatedAt
-OldProvinces: Id, Name, CreatedAt
-OldDistricts: Id, Name, OldProvinceId, CreatedAt
-OldWards: Id, Name, OldDistrictId, CreatedAt
-Addresses: Id, Type, NewWardId, OldWardId, CreatedAt
+-- HR MODULE
+Role:           Id, Name, CreatedAt
+Accounts:       Id, Name, DateOfBirth, Gender, AvatarImage, CitizenIdCode, Email, Phone,
+                HashedPassword, TwoFACode, IsActive, AddressId, CreatedBy, CreatedAt
+TempRole:       Id, AccountId, RoleId, Name, StartTime, EndTime, Status, Reason, CreatedBy, CreatedAt
+Contracts:      Id, AccountId, RoleId, BranchId, Type, StartDate, EndDate, Status,
+                Note, SalaryType, BaseSalary, BaseWorkDay, CreatedBy, CreatedAt
+Shifts:         Id, Name, StartTime, EndTime, IsActive, CreatedBy, CreatedAt
+WorkSchedules:  Id, AccountId, BranchId, ShiftId, Code, WorkDate, CheckInAt, CheckOutAt,
+                ActualHours, Status, ManagerApproved, CreatedBy, CreatedAt
+Tickets:        Id, AccountId, BranchId, Reason, PenaltyAmount, CreatedBy, CreatedAt
 
-Areas: Id, BranchId, Name, Status, IsActive, CreatedAt
-Tables: Id, AreaId, Name, Status, IsActive, CreatedAt
-Customer: Id, Name, Phone, Point, CreatedAt
-Orders: Id, TableId, FatherId, Method, Status, CustomerId, TotalAmount, CreatedBy, CreatedAt
-OrderDetails: Id, OrderId, VariantId, RecipeId, Quantity, Price, Note, Status, CookingStatus, CreatedAt
+-- ORDERS MODULE
+Areas:          Id, BranchId, Name, Status, IsActive, CreatedAt
+Tables:         Id, AreaId, Name, Status, IsActive, CreatedAt
+Customer:       Id, Name, Phone, Point, CreatedAt
+Orders:         Id, TableId, FatherId, Method, Status, CustomerId, TotalAmount, CreatedBy, CreatedAt
+OrderDetails:   Id, OrderId, ProductId, RecipeId, Quantity, Price, Note, Status, CookingStatus, CreatedAt
 
 
 ================================================================
@@ -74,71 +71,23 @@ Chains.AddressId                -> Addresses.Id                 [1-1]
 Branches.ChainId                -> Chains.Id                    [N-1]
 Branches.AddressId              -> Addresses.Id                 [1-1]
 
---- ITEMS & VARIANTS ---
-Items.ChainId                   -> Chains.Id                    [N-1]
-Items.CategoryId                -> Categories.Id                [N-1]
-Variants.ItemId                 -> Items.Id                     [N-1]
+--- PRODUCT CATALOG ---
+Products.GroupId                -> Groups.Id                    [N-1] (nullable)
+Products.ImageId                -> Images.Id                    [N-1] (nullable)
+Products.ChainId                -> Chains.Id                    [N-1] (required)
+MenuProducts.MenuId             -> Menu.Id                      [N-1]
+MenuProducts.ProductId          -> Products.Id                  [N-1]
+-- MenuProducts PRIMARY KEY: (MenuId, ProductId)               [N-N via MenuProducts]
 
 --- UNITS & CONVERSIONS ---
 UnitConversions.UnitId          -> Units.Id                     [N-1]
 UnitConversions.BaseId          -> UnitConversions.Id           [N-1] (self-ref, nullable)
-UnitConversions.VariantId       -> Variants.Id                  [N-1]
+UnitConversions.ProductId       -> Products.Id                  [N-1]
 
 --- RECIPES ---
-Recipes.VariantId               -> Variants.Id                  [N-1]
-Recipes.UnitConversionId        -> UnitConversions.Id           [N-1]
-RecipesDetaileds.VariantId      -> Variants.Id                  [N-1]
+Recipes.ProductId               -> Products.Id                  [N-1]
+RecipesDetaileds.ProductId      -> Products.Id                  [N-1]
 RecipesDetaileds.RecipeId       -> Recipes.Id                   [N-1]
-RecipesDetaileds.UnitConversionId -> UnitConversions.Id         [N-1]
-
---- BRANCH VARIANTS & INVENTORY ---
-BVariants.BranchId              -> Branches.Id                  [N-1]
-BVariants.VariantId             -> Variants.Id                  [N-1]
-Inventories.BranchId            -> Branches.Id                  [N-1]
-BVariantBatches.BVariantId      -> BVariants.Id                 [N-1]
-BVariantBatches.InventoryId     -> Inventories.Id               [N-1]
-BVariantBatchDetailds.BVariantBatchId   -> BVariantBatches.Id   [N-1]
-BVariantBatchDetailds.UnitConversionId  -> UnitConversions.Id   [N-1]
-
---- SUPPLIERS & TRANSPORTS ---
-Suppliers.ChainId               -> Chains.Id                    [N-1]
-Suppliers.BranchId              -> Branches.Id                  [N-1]
-Suppliers.AddressId             -> Addresses.Id                 [1-1]
-Transports.BranchId             -> Branches.Id                  [N-1]
-
---- SUPPLIERS TRANSACTIONS ---
-SuppliersTransactions.ToBInventoryId    -> Inventories.Id       [N-1]
-SuppliersTransactions.TransportId       -> Transports.Id        [N-1]
-SuppliersTransactions.SupplierId        -> Suppliers.Id         [N-1]
-BInInventoryTransactionDetailds.SuppliersTransactionId -> SuppliersTransactions.Id  [N-1]
-BInInventoryTransactionDetailds.VariantId       -> Variants.Id          [N-1]
-BInInventoryTransactionDetailds.BVariantBatchId -> BVariantBatches.Id   [N-1]
-BInInventoryTransactionDetailds.UnitConversionId -> UnitConversions.Id  [N-1]
-
---- INVENTORY TRANSACTIONS ---
-InventoryTransactions.FromInventoryId   -> Inventories.Id       [N-1]
-InventoryTransactions.ToInventoryId     -> Inventories.Id       [N-1]
-InventoryTransactions.TransportId       -> Transports.Id        [N-1]
-InventoryTransactionBatches.InventoryTransactionId  -> InventoryTransactions.Id     [N-1]
-InventoryTransactionBatches.FromBVariantBatchId     -> BVariantBatches.Id           [N-1]
-InventoryTransactionBatches.ToBVariantBatchId       -> BVariantBatches.Id           [N-1]
-InventoryTransactionDetailds.InventoryTransactionBatchId    -> InventoryTransactionBatches.Id       [N-1]
-InventoryTransactionDetailds.FromBVariantBatchDetailId      -> BVariantBatchDetailds.Id             [N-1]
-InventoryTransactionDetailds.ToBVariantBatchDetailId        -> BVariantBatchDetailds.Id             [N-1]
-InventoryTransactionDetailds.UnitConversionId               -> UnitConversions.Id                   [N-1]
-
---- TRANSPORT CLAIMS ---
-TransportClaims.InventoryTransactionId  -> InventoryTransactions.Id     [N-1]
-Evidences.TransportClaimId              -> TransportClaims.Id           [N-1]
-
---- INVENTORY CHECK ---
-BInventoryCheck.BranchId                -> Branches.Id                  [N-1]
-BInventoryCheck.InventoryId             -> Inventories.Id               [N-1]
-InventoryCheckDetailds.InventoryCheckId         -> BInventoryCheck.Id           [N-1]
-InventoryCheckDetailds.BVariantBatchId          -> BVariantBatches.Id           [N-1]
-InventoryCheckDetailedQuantities.InventoryCheckDetailedId   -> InventoryCheckDetailds.Id        [N-1]
-InventoryCheckDetailedQuantities.BVariantBatchDetailedId    -> BVariantBatchDetailds.Id         [N-1]
-InventoryCheckDetailedQuantities.UnitConversionId           -> UnitConversions.Id               [N-1]
 
 --- HR ---
 Accounts.AddressId              -> Addresses.Id                 [1-1]
@@ -160,5 +109,24 @@ Orders.TableId                  -> Tables.Id                    [N-1]
 Orders.FatherId                 -> Orders.Id                    [N-1] (self-ref, nullable)
 Orders.CustomerId               -> Customer.Id                  [N-1]
 OrderDetails.OrderId            -> Orders.Id                    [N-1]
-OrderDetails.VariantId          -> Variants.Id                  [N-1]
+OrderDetails.ProductId          -> Products.Id                  [N-1]
 OrderDetails.RecipeId           -> Recipes.Id                   [N-1]
+
+
+================================================================
+REMOVED ENTITIES (from previous schema)
+================================================================
+
+-- REMOVED: Items, Variants, Categories
+--   Reason: Replaced by the Products/Groups/Images catalog module.
+
+-- REMOVED: BVariants, BVariantBatches, BVariantBatchDetailds
+-- REMOVED: Inventories
+-- REMOVED: Suppliers, SuppliersTransactions, BInInventoryTransactionDetailds
+-- REMOVED: Transports
+-- REMOVED: InventoryTransactions, InventoryTransactionBatches, InventoryTransactionDetailds
+-- REMOVED: TransportClaims, Evidences
+-- REMOVED: BInventoryCheck, InventoryCheckDetailds, InventoryCheckDetailedQuantities
+--   Reason: All warehouse/inventory/supplier/transport logic removed from Branch.
+--           Branch now only manages HR (Contracts, WorkSchedules, Tickets)
+--           and the physical layout (Areas -> Tables -> Orders).

@@ -32,6 +32,9 @@ builder.Services.AddScoped<IOrderDetailRepository, OrderDetailRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IWorkScheduleRepository, WorkScheduleRepository>();
 builder.Services.AddScoped<IBranchRepository, BranchRepository>();
+builder.Services.AddScoped<IImageRepository, ImageRepository>();
+builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+builder.Services.AddScoped<IMenuRepository, MenuRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -42,6 +45,9 @@ builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IWorkScheduleService, WorkScheduleService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
+builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IGroupService, GroupService>();
+builder.Services.AddScoped<IMenuService, MenuService>();
 
 builder.Services.AddControllers();
 
