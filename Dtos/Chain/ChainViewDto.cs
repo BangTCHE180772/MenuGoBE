@@ -7,6 +7,7 @@ namespace MenuGoBE.Dtos.Chain
 {
     public class ChainViewDto
     {
+        public long Id { get; set; }
         public TimeOnly OpenTime { get; set; }
 
         public TimeOnly CloseTime { get; set; }
@@ -18,5 +19,6 @@ namespace MenuGoBE.Dtos.Chain
         public string Name { get; set; } = string.Empty;
 
         public long AddressId { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }
