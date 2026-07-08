@@ -56,6 +56,7 @@ builder.Services.AddScoped<IBranchRepository, BranchRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
 builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<IMenuRepository, MenuRepository>();
+builder.Services.AddScoped<IUnitRepository, UnitRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -69,6 +70,7 @@ builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
+builder.Services.AddScoped<IUnitService, UnitService>();
 
 builder.Services.AddCors(options =>
 {
