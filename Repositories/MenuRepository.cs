@@ -99,6 +99,16 @@ namespace MenuGoBE.Repositories
             _context.MenuProducts.RemoveRange(links);
         }
 
+        public async Task<bool> ExistsByNameAsync(string name)
+        {
+            return await _context.Menus.AnyAsync(m => m.Name.ToLower() == name.ToLower());
+        }
+
+        public async Task<bool> ExistsByNameExcludeIdAsync(string name, long id)
+        {
+            return await _context.Menus.AnyAsync(m => m.Name.ToLower() == name.ToLower() && m.Id != id);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

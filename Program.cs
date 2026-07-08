@@ -7,6 +7,7 @@ using MenuGoBE.Service;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Repositories;
 using MenuGoBE.Mapper;
+using MenuGoBE.Exceptions;
 using AutoMapper;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -79,9 +80,13 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 app.UseCors("AllowAll");
 
