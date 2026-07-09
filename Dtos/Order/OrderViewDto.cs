@@ -17,7 +17,7 @@ namespace MenuGoBE.Dtos.Order
 
         public string Status { get; set; } = string.Empty;
 
-        public long CustomerId { get; set; }
+        public long? CustomerId { get; set; }
 
         public decimal TotalAmount { get; set; }
 
