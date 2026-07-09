@@ -9,7 +9,7 @@ public class Product
     [Key]
     public long Id { get; set; }
 
-    public long? GroupId { get; set; }
+    public long GroupId { get; set; }
 
     public long? ImageId { get; set; }
 
@@ -39,7 +39,7 @@ public class Product
 
     // Navigation
     [ForeignKey("GroupId")]
-    public Group? Group { get; set; }
+    public Group Group { get; set; } = null!;
 
     [ForeignKey("ImageId")]
     public Image? Image { get; set; }

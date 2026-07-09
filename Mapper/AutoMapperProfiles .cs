@@ -13,6 +13,7 @@ using MenuGoBE.Dtos.Image;
 using MenuGoBE.Dtos.Group;
 using MenuGoBE.Dtos.Menu;
 using MenuGoBE.Dtos.Unit;
+using MenuGoBE.Dtos.Product;
 
 namespace MenuGoBE.Mapper
 {
@@ -78,6 +79,17 @@ namespace MenuGoBE.Mapper
             CreateMap<Unit, UnitViewDto>();
             CreateMap<UnitCreateDto, Unit>();
             CreateMap<UnitUpdateDto, Unit>();
+
+            //Product
+            CreateMap<Product, ProductViewDto>();
+            CreateMap<ProductCreateDto, Product>()
+                .ForMember(dest => dest.UnitConversions, opt => opt.Ignore());
+            CreateMap<ProductUpdateDto, Product>()
+                .ForMember(dest => dest.UnitConversions, opt => opt.Ignore());
+            CreateMap<UnitConversion, ProductUnitConversionViewDto>();
+            CreateMap<Recipe, ProductRecipeViewDto>()
+                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.RecipesDetaileds));
+            CreateMap<RecipesDetailed, ProductRecipeDetailedViewDto>();
         }
     }
 }
