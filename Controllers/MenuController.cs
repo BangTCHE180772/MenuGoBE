@@ -60,6 +60,13 @@ namespace MenuGoBE.Controllers
 
         // ── Single product ────────────────────────────────────────────────────
 
+        [HttpGet("{id:long}/products")]
+        public async Task<IActionResult> GetProducts(long id)
+        {
+            var result = await _service.GetProductsAsync(id);
+            return Ok(result);
+        }
+
         /// <summary>Thêm 1 product vào menu.</summary>
         [HttpPost("products/add")]
         public async Task<IActionResult> AddProduct([FromBody] MenuProductDto dto)
