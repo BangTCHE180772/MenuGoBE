@@ -17,5 +17,7 @@ namespace MenuGoBE.Interface.Services
         // Bulk products
         Task<(bool success, string message)> AddProductsAsync(MenuProductsBulkDto dto);
         Task<(bool success, string message)> RemoveProductsAsync(MenuProductsBulkDto dto);
+
+        Task<List<MenuProductViewDto>> GetProductsAsync(long menuId);
     }
 }

@@ -57,6 +57,7 @@ builder.Services.AddScoped<IImageRepository, ImageRepository>();
 builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<IMenuRepository, MenuRepository>();
 builder.Services.AddScoped<IUnitRepository, UnitRepository>();
+builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
