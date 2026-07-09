@@ -3,6 +3,7 @@ using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Service
 {
@@ -10,12 +11,14 @@ namespace MenuGoBE.Service
     {
         private readonly IOrderDetailRepository _detailRepo;
         private readonly IOrderRepository _orderRepo;
+        private readonly IRecipeRepository _recipeRepo;
         private readonly IMapper _mapper;
 
-        public OrderDetailService(IOrderDetailRepository detailRepo, IOrderRepository orderRepo, IMapper mapper)
+        public OrderDetailService(IOrderDetailRepository detailRepo, IOrderRepository orderRepo, IRecipeRepository recipeRepo, IMapper mapper)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
+            _recipeRepo = recipeRepo;
             _mapper = mapper;
         }
 
@@ -40,6 +43,24 @@ namespace MenuGoBE.Service
                 throw new KeyNotFoundException($"Không tìm thấy Order với Id = {dto.OrderId}");
 
             var entity = _mapper.Map<OrderDetail>(dto);
+
+            if (dto.RecipeId == null || dto.RecipeId == 0)
+            {
+                var activeRecipe = await _recipeRepo.GetActiveByProductIdAsync(dto.ProductId);
+
+                if (activeRecipe != null)
+                {
+                    entity.RecipeId = activeRecipe.Id;
+                }
+                else
+                {
+                    throw new Exception($"Không tìm thấy công thức Active cho ProductId = {dto.ProductId}");
+                }
+            }
+            else
+            {
+                entity.RecipeId = dto.RecipeId.Value;
+            }
 
             await _detailRepo.CreateAsync(entity);
             await _detailRepo.SaveChangesAsync();

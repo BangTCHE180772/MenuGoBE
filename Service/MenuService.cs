@@ -148,5 +148,30 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
             return (true, "Xóa các product khỏi menu thành công.");
         }
+
+        public async Task<List<MenuProductViewDto>> GetProductsAsync(long menuId)
+        {
+            var products = await _context.MenuProducts
+                .Where(mp => mp.MenuId == menuId && mp.Product.IsSellable && mp.Product.IsActive)
+                .Include(mp => mp.Product)
+                    .ThenInclude(p => p.Group)
+                .Select(mp => new MenuProductViewDto
+                {
+                    Id = mp.Product.Id,
+                    Name = mp.Product.Name,
+                    Description = mp.Product.Description,
+                    Type = mp.Product.Type,
+                    SellPrice = mp.Product.SellPrice,
+                    IsSellable = mp.Product.IsSellable,
+                    IsActive = mp.Product.IsActive,
+                    GroupId = mp.Product.GroupId,
+                    GroupName = mp.Product.Group != null ? mp.Product.Group.Name : string.Empty,
+                })
+                .OrderBy(p => p.GroupId)
+                .ThenBy(p => p.Name)
+                .ToListAsync();
+
+            return products;
+        }
     }
 }

@@ -4,9 +4,9 @@ namespace MenuGoBE.Dtos.Order
     {
         public long OrderId { get; set; }
 
-        public long VariantId { get; set; }
+        public long ProductId { get; set; }
 
-        public long RecipeId { get; set; }
+        public long? RecipeId { get; set; }
 
         public int Quantity { get; set; }
 
