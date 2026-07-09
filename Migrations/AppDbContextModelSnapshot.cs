@@ -622,7 +622,7 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long?>("GroupId")
+                    b.Property<long>("GroupId")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("ImageId")
@@ -662,6 +662,12 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("GroupId");
 
                     b.HasIndex("ImageId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.HasIndex("SKUCode")
+                        .IsUnique();
 
                     b.ToTable("Products");
                 });
@@ -1215,7 +1221,8 @@ namespace MenuGoBE.Migrations
                     b.HasOne("MenuGoBE.Models.Group", "Group")
                         .WithMany("Products")
                         .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("MenuGoBE.Models.Image", "Image")
                         .WithMany("Products")
