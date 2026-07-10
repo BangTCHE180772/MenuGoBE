@@ -13,7 +13,7 @@ public class Contract
 
     public long RoleId { get; set; }
 
-    public long BranchId { get; set; }
+    public long? BranchId { get; set; }
 
     public string Type { get; set; } = string.Empty;
 
@@ -44,5 +44,5 @@ public class Contract
     public Role Role { get; set; } = null!;
 
     [ForeignKey("BranchId")]
-    public Branch Branch { get; set; } = null!;
+    public Branch? Branch { get; set; }
 }
