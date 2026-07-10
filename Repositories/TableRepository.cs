@@ -20,7 +20,17 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Table>> GetAllAsync()
         {
-            return await _context.Tables.ToListAsync();
+            return await _context.Tables
+                .Include(t => t.Area)
+                .ToListAsync();
+        }
+
+        public async Task<List<Table>> GetByBranchIdsAsync(List<long> branchIds)
+        {
+            return await _context.Tables
+                .Include(t => t.Area)
+                .Where(t => t.Area != null && branchIds.Contains(t.Area.BranchId))
+                .ToListAsync();
         }
 
         public async Task<Table?> GetByIdAsync(long id)

@@ -9,6 +9,7 @@ namespace MenuGoBE.Interface.Repository
     public interface ITableRepository
     {
         Task<List<Table>> GetAllAsync();
+        Task<List<Table>> GetByBranchIdsAsync(List<long> branchIds);
         Task<Table?> GetByIdAsync(long id);
 
         Task CreateAsync(Table entity);

@@ -27,6 +27,12 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<TableViewDto>>(data);
         }
 
+        public async Task<List<TableViewDto>> GetByBranchIdsAsync(List<long> branchIds)
+        {
+            var data = await _repo.GetByBranchIdsAsync(branchIds);
+            return _mapper.Map<List<TableViewDto>>(data);
+        }
+
         public async Task<TableViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
