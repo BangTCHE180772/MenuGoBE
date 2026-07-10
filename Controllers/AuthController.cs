@@ -111,8 +111,8 @@ namespace MenuGoBE.Controllers
             account.TwoFACode = dto.SecretKey;
             await _context.SaveChangesAsync();
 
-            var activeRoles = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles);
+            var (activeRoles, branchIds) = GetActiveRoles(account);
+            var token = GenerateJwtToken(account, activeRoles, branchIds);
 
             return Ok(new
             {
@@ -123,7 +123,8 @@ namespace MenuGoBE.Controllers
                     id = account.Id,
                     name = account.Name,
                     email = account.Email,
-                    roles = activeRoles
+                    roles = activeRoles,
+                    branchIds = branchIds
                 }
             });
         }
@@ -148,8 +149,8 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Mã xác thực không chính xác." });
             }
 
-            var activeRoles = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles);
+            var (activeRoles, branchIds) = GetActiveRoles(account);
+            var token = GenerateJwtToken(account, activeRoles, branchIds);
 
             return Ok(new
             {
@@ -160,12 +161,13 @@ namespace MenuGoBE.Controllers
                     id = account.Id,
                     name = account.Name,
                     email = account.Email,
-                    roles = activeRoles
+                    roles = activeRoles,
+                    branchIds = branchIds
                 }
             });
         }
 
-        private List<string> GetActiveRoles(Account account)
+        private (List<string> roles, List<long> branchIds) GetActiveRoles(Account account)
         {
             var now = DateTime.UtcNow;
             var today = DateOnly.FromDateTime(now);
@@ -176,8 +178,14 @@ namespace MenuGoBE.Controllers
 
             if (!activeContracts.Any())
             {
-                return new List<string>();
+                return (new List<string>(), new List<long>());
             }
+
+            var branchIds = activeContracts
+                .Where(c => c.BranchId > 0)
+                .Select(c => c.BranchId)
+                .Distinct()
+                .ToList();
 
             var activeTempRoles = account.TempRoles
                 .Where(tr => tr.Status == "Active" && tr.StartTime <= now && tr.EndTime >= now)
@@ -187,13 +195,14 @@ namespace MenuGoBE.Controllers
 
             if (activeTempRoles.Any())
             {
-                return activeTempRoles;
+                return (activeTempRoles, branchIds);
             }
 
-            return activeContracts.Select(c => c.Role.Name).Distinct().ToList();
+            var contractRoles = activeContracts.Select(c => c.Role.Name).Distinct().ToList();
+            return (contractRoles, branchIds);
         }
 
-        private string GenerateJwtToken(Account account, List<string> roles)
+        private string GenerateJwtToken(Account account, List<string> roles, List<long> branchIds)
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -210,6 +219,11 @@ namespace MenuGoBE.Controllers
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
 
+            foreach (var branchId in branchIds)
+            {
+                claims.Add(new Claim("branchId", branchId.ToString()));
+            }
+
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
@@ -221,3 +235,4 @@ namespace MenuGoBE.Controllers
         }
     }
 }
+
