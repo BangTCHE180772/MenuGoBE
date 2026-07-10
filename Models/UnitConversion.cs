@@ -13,7 +13,7 @@ public class UnitConversion
 
     public long? BaseId { get; set; }
 
-    public long VariantId { get; set; }
+    public long ProductId { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
     public decimal ConversionPoint { get; set; }
@@ -27,8 +27,8 @@ public class UnitConversion
     [ForeignKey("BaseId")]
     public UnitConversion? Base { get; set; }
 
-    [ForeignKey("VariantId")]
-    public Variant Variant { get; set; } = null!;
+    [ForeignKey("ProductId")]
+    public Product Product { get; set; } = null!;
 
     [InverseProperty("Base")]
     public ICollection<UnitConversion> DerivedConversions { get; set; } = new List<UnitConversion>();

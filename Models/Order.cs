@@ -17,7 +17,7 @@ public class Order
 
     public string Status { get; set; } = string.Empty;
 
-    public long CustomerId { get; set; }
+    public long? CustomerId { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
     public decimal TotalAmount { get; set; }
@@ -34,7 +34,7 @@ public class Order
     public Order? Father { get; set; }
 
     [ForeignKey("CustomerId")]
-    public Customer Customer { get; set; } = null!;
+    public Customer? Customer { get; set; }
 
     [InverseProperty("Father")]
     public ICollection<Order> ChildOrders { get; set; } = new List<Order>();
