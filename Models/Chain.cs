@@ -29,6 +29,5 @@ public class Chain
     public Address Address { get; set; } = null!;
 
     public ICollection<Branch> Branches { get; set; } = new List<Branch>();
-    public ICollection<Item> Items { get; set; } = new List<Item>();
-    public ICollection<Supplier> Suppliers { get; set; } = new List<Supplier>();
+    public ICollection<Product> Products { get; set; } = new List<Product>();
 }
