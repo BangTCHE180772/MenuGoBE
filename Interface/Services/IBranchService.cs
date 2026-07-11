@@ -12,6 +12,8 @@ namespace MenuGoBE.Interface.Services
 
         Task<BranchViewDto?> GetByIdAsync(long id);
 
+        Task<List<BranchViewDto>> SearchFilteredBranchesAsync(BranchQueryDto dto);
+
         Task<BranchViewDto> CreateAsync(BranchCreateDto dto);
 
         Task<bool> UpdateAsync(BranchUpdateDto dto);

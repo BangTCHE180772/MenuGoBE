@@ -40,6 +40,13 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] BranchQueryDto dto)
+        {
+            var result = await _service.SearchFilteredBranchesAsync(dto);
+            return Ok(result);
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] BranchCreateDto dto)
         {
