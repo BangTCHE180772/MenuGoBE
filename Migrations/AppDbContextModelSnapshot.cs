@@ -524,7 +524,7 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("CustomerId")
+                    b.Property<long?>("CustomerId")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("FatherId")
@@ -1162,8 +1162,7 @@ namespace MenuGoBE.Migrations
                     b.HasOne("MenuGoBE.Models.Customer", "Customer")
                         .WithMany("Orders")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("MenuGoBE.Models.Order", "Father")
                         .WithMany("ChildOrders")
