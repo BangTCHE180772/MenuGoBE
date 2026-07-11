@@ -10,6 +10,8 @@ using MenuGoBE.Service;
 using Moq;
 using Xunit;
 
+//dotnet test MenuGoBE.slnx để chạy test 
+
 namespace MenuGoTest.UnitTests
 {
     public class ChainServiceTests
@@ -52,6 +54,34 @@ namespace MenuGoTest.UnitTests
             Assert.Equal("Chain A", result[0].Name);
             Assert.Equal("Chain B", result[1].Name);
             _repoMock.Verify(r => r.GetAllAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task Test_Return_Dto_Of_GetMainChainAsync_When_Chain_Exists()
+        {
+            // Arrange
+            var chain = new Chain
+            {
+                Id = 1,
+                Name = "Main Chain",
+                OpenTime = new TimeOnly(8, 0),
+                CloseTime = new TimeOnly(22, 0)
+            };
+
+            _repoMock.Setup(r => r.GetMainChainAsync())
+                     .ReturnsAsync(chain);
+
+            // Act
+            var result = await _service.GetMainChainAsync();
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(chain.Id, result.Id);
+            Assert.Equal(chain.Name, result.Name);
+            Assert.Equal(chain.OpenTime, result.OpenTime);
+            Assert.Equal(chain.CloseTime, result.CloseTime);
+
+            _repoMock.Verify(r => r.GetMainChainAsync(), Times.Once);
         }
 
         [Fact]
