@@ -22,30 +22,22 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] string? branchIds)
         {
-            // Đọc branchIds từ JWT Claims
-            var branchIdClaims = User.Claims
-                .Where(c => c.Type == "branchId")
-                .Select(c => c.Value)
-                .ToList();
-
-            // Nếu người dùng chưa đăng nhập hoặc có branchId thì lọc theo chi nhánh
-            if (branchIdClaims.Any())
+            if (!string.IsNullOrEmpty(branchIds))
             {
-                var branchIds = branchIdClaims
-                    .Select(v => long.TryParse(v, out var id) ? id : 0L)
+                var idList = branchIds.Split(',')
+                    .Select(v => long.TryParse(v.Trim(), out var id) ? id : 0L)
                     .Where(id => id > 0)
                     .ToList();
 
-                if (branchIds.Any())
+                if (idList.Any())
                 {
-                    var filteredResult = await _service.GetByBranchIdsAsync(branchIds);
+                    var filteredResult = await _service.GetByBranchIdsAsync(idList);
                     return Ok(filteredResult);
                 }
             }
 
-            // Nếu không có branchId trong Token (Admin toàn hệ thống), trả về tất cả
             var result = await _service.GetAllAsync();
             return Ok(result);
         }
