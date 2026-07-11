@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Table;
 using MenuGoBE.Interface.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers
@@ -20,8 +22,22 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] string? branchIds)
         {
+            if (!string.IsNullOrEmpty(branchIds))
+            {
+                var idList = branchIds.Split(',')
+                    .Select(v => long.TryParse(v.Trim(), out var id) ? id : 0L)
+                    .Where(id => id > 0)
+                    .ToList();
+
+                if (idList.Any())
+                {
+                    var filteredResult = await _service.GetByBranchIdsAsync(idList);
+                    return Ok(filteredResult);
+                }
+            }
+
             var result = await _service.GetAllAsync();
             return Ok(result);
         }
