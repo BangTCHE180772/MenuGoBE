@@ -120,5 +120,48 @@ namespace MenuGoBE.Service
                 GrandTotal = grandTotal
             };
         }
+
+        public async Task<TableOrderSummaryDto> GetTableOrderSummaryAsync(long tableId)
+        {
+            var order = await _repo.GetActiveOrderByTableIdAsync(tableId);
+
+            var summary = new TableOrderSummaryDto
+            {
+                TableId = tableId,
+            };
+
+            if (order == null)
+            {
+                return summary;
+            }
+
+            summary.TableName = order.Table?.Name ?? string.Empty;
+            summary.TableStatus = order.Table?.Status ?? string.Empty;
+            summary.AreaName = order.Table?.Area?.Name ?? string.Empty;
+            summary.ActiveOrderId = order.Id;
+
+            var items = order.OrderDetails
+                .Where(od => od.Status != "Cancelled")
+                .Select(od => new OrderItemDto
+                {
+                    OrderDetailId = od.Id,
+                    OrderId = od.OrderId,
+                    ProductName = od.Product?.Name ?? "Không rõ",
+                    Quantity = od.Quantity,
+                    Price = od.Price,
+                    Note = od.Note,
+                    Status = od.Status,
+                    CookingStatus = od.CookingStatus,
+                    CreatedAt = od.CreatedAt,
+                })
+                .OrderByDescending(i => i.CreatedAt)
+                .ToList();
+
+            summary.Items = items;
+            summary.PendingConfirmCount = items.Count(i => i.Status == "CustomerPending");
+            summary.ReadyToServeCount = items.Count(i => i.CookingStatus == "Ready");
+
+            return summary;
+        }
     }
 }
