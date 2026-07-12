@@ -104,6 +104,26 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        public async Task<bool> ConfirmAsync(long orderDetailId)
+        {
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Confirmed");
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+            }
+            return result;
+        }
+
+        public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus)
+        {
+            var result = await _detailRepo.UpdateCookingStatusAsync(orderDetailId, cookingStatus);
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+            }
+            return result;
+        }
+
         private async Task RecalculateTotalAmountAsync(Order order)
         {
             var details = await _detailRepo.GetByOrderIdAsync(order.Id);

@@ -10,6 +10,8 @@ namespace MenuGoBE.Interface.Repository
         Task CreateAsync(OrderDetail entity);
         Task UpdateAsync(OrderDetail entity);
         Task DeleteAsync(long id);
+        Task<bool> UpdateStatusAsync(long id, string status);
+        Task<bool> UpdateCookingStatusAsync(long id, string cookingStatus);
         Task SaveChangesAsync();
     }
 }
