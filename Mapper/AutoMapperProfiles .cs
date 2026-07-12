@@ -33,7 +33,9 @@ namespace MenuGoBE.Mapper
             CreateMap<BranchUpdateDto, Branch>();
 
             //Table
-            CreateMap<Table, TableViewDto>();
+            CreateMap<Table, TableViewDto>()
+                .ForMember(dest => dest.AreaName, opt => opt.MapFrom(src => src.Area != null ? src.Area.Name : string.Empty))
+                .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Area != null ? src.Area.BranchId : 0));
             CreateMap<TableCreateDto, Table>();
             CreateMap<TableUpdateDto, Table>();
 

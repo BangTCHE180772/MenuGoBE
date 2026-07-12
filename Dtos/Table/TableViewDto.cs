@@ -11,6 +11,10 @@ namespace MenuGoBE.Dtos.Table
 
         public long AreaId { get; set; }
 
+        public string AreaName { get; set; } = string.Empty;
+
+        public long BranchId { get; set; }
+
         public string Name { get; set; } = string.Empty;
 
         public string Status { get; set; } = string.Empty;
