@@ -29,8 +29,6 @@ namespace MenuGoBE.Controllers
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
             var account = await _context.Accounts
-                .Include(a => a.TempRoles)
-                .ThenInclude(tr => tr.Role)
                 .FirstOrDefaultAsync(a => a.Email == dto.Email && a.IsActive);
 
             if (account == null)
@@ -38,7 +36,6 @@ namespace MenuGoBE.Controllers
                 return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
             }
 
-            // Kiểm tra mật khẩu (BCrypt)
             bool isPasswordValid = false;
             try
             {
@@ -55,10 +52,8 @@ namespace MenuGoBE.Controllers
                 return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
             }
 
-            // BẮT BUỘC 2FA:
             if (string.IsNullOrEmpty(account.TwoFACode))
             {
-                // Yêu cầu cài đặt 2FA
                 return Ok(new
                 {
                     status = "setup_2fa_required",
@@ -67,7 +62,6 @@ namespace MenuGoBE.Controllers
                 });
             }
 
-            // Yêu cầu nhập mã 2FA
             return Ok(new
             {
                 status = "verify_2fa_required",
@@ -100,7 +94,9 @@ namespace MenuGoBE.Controllers
         {
             var account = await _context.Accounts
                 .Include(a => a.TempRoles)
-                .ThenInclude(tr => tr.Role)
+                    .ThenInclude(tr => tr.Role)
+                .Include(a => a.Contracts)
+                    .ThenInclude(c => c.Role)
                 .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
 
             if (account == null) return NotFound("Account not found");
@@ -113,12 +109,12 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Mã xác thực không chính xác." });
             }
 
-            // Lưu Secret Key vào DB
             account.TwoFACode = dto.SecretKey;
             await _context.SaveChangesAsync();
 
-            // Trả về Token ngay
-            var token = GenerateJwtToken(account);
+            var (activeRoles, branchIds) = GetActiveRoles(account);
+            var token = GenerateJwtToken(account, activeRoles, branchIds);
+
             return Ok(new
             {
                 status = "success",
@@ -128,7 +124,8 @@ namespace MenuGoBE.Controllers
                     id = account.Id,
                     name = account.Name,
                     email = account.Email,
-                    roles = account.TempRoles.Select(tr => tr.Role.Name).ToList()
+                    roles = activeRoles,
+                    branchIds = branchIds
                 }
             });
         }
@@ -138,7 +135,9 @@ namespace MenuGoBE.Controllers
         {
             var account = await _context.Accounts
                 .Include(a => a.TempRoles)
-                .ThenInclude(tr => tr.Role)
+                    .ThenInclude(tr => tr.Role)
+                .Include(a => a.Contracts)
+                    .ThenInclude(c => c.Role)
                 .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
 
             if (account == null) return NotFound("Account not found");
@@ -151,7 +150,9 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Mã xác thực không chính xác." });
             }
 
-            var token = GenerateJwtToken(account);
+            var (activeRoles, branchIds) = GetActiveRoles(account);
+            var token = GenerateJwtToken(account, activeRoles, branchIds);
+
             return Ok(new
             {
                 status = "success",
@@ -161,12 +162,48 @@ namespace MenuGoBE.Controllers
                     id = account.Id,
                     name = account.Name,
                     email = account.Email,
-                    roles = account.TempRoles.Select(tr => tr.Role.Name).ToList()
+                    roles = activeRoles,
+                    branchIds = branchIds
                 }
             });
         }
 
-        private string GenerateJwtToken(Account account)
+        private (List<string> roles, List<long> branchIds) GetActiveRoles(Account account)
+        {
+            var now = DateTime.UtcNow;
+            var today = DateOnly.FromDateTime(now);
+
+            var activeContracts = account.Contracts
+                .Where(c => c.Status == "Active" && c.StartDate <= today && (c.EndDate == null || c.EndDate >= today))
+                .ToList();
+
+            if (!activeContracts.Any())
+            {
+                return (new List<string>(), new List<long>());
+            }
+
+            var branchIds = activeContracts
+                .Where(c => c.BranchId > 0)
+                .Select(c => c.BranchId)
+                .Distinct()
+                .ToList();
+
+            var activeTempRoles = account.TempRoles
+                .Where(tr => tr.Status == "Active" && tr.StartTime <= now && tr.EndTime >= now)
+                .Select(tr => tr.Role.Name)
+                .Distinct()
+                .ToList();
+
+            if (activeTempRoles.Any())
+            {
+                return (activeTempRoles, branchIds);
+            }
+
+            var contractRoles = activeContracts.Select(c => c.Role.Name).Distinct().ToList();
+            return (contractRoles, branchIds);
+        }
+
+        private string GenerateJwtToken(Account account, List<string> roles, List<long> branchIds)
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
@@ -178,10 +215,14 @@ namespace MenuGoBE.Controllers
                 new Claim("name", account.Name)
             };
 
-            // Add roles
-            foreach (var tempRole in account.TempRoles)
+            foreach (var role in roles)
             {
-                claims.Add(new Claim(ClaimTypes.Role, tempRole.Role.Name));
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            foreach (var branchId in branchIds)
+            {
+                claims.Add(new Claim("branchId", branchId.ToString()));
             }
 
             var token = new JwtSecurityToken(
@@ -195,3 +236,4 @@ namespace MenuGoBE.Controllers
         }
     }
 }
+

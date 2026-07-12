@@ -8,6 +8,7 @@ using MenuGoBE.Dtos.Order;
 using MenuGoBE.Dtos.Area;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
+using MenuGoBE.Dtos.Contract;
 using MenuGoBE.Dtos.Branch;
 using MenuGoBE.Dtos.Image;
 using MenuGoBE.Dtos.Group;
@@ -32,7 +33,9 @@ namespace MenuGoBE.Mapper
             CreateMap<BranchUpdateDto, Branch>();
 
             //Table
-            CreateMap<Table, TableViewDto>();
+            CreateMap<Table, TableViewDto>()
+                .ForMember(dest => dest.AreaName, opt => opt.MapFrom(src => src.Area != null ? src.Area.Name : string.Empty))
+                .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Area != null ? src.Area.BranchId : 0));
             CreateMap<TableCreateDto, Table>();
             CreateMap<TableUpdateDto, Table>();
 
@@ -60,6 +63,9 @@ namespace MenuGoBE.Mapper
             CreateMap<WorkScheduleCreateDto, WorkSchedule>();
             CreateMap<WorkScheduleUpdateDto, WorkSchedule>();
 
+            CreateMap<Contract, ContractViewDto>();
+            CreateMap<ContractCreateDto, Contract>();
+            CreateMap<ContractUpdateDto, Contract>();
             //Image
             CreateMap<Models.Image, ImageViewDto>();
             CreateMap<ImageCreateDto, Models.Image>();

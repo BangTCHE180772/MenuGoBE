@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MenuGoBE.Dtos.Branch;
 using MenuGoBE.Models;
 
 namespace MenuGoBE.Interface.Repository
@@ -11,6 +12,8 @@ namespace MenuGoBE.Interface.Repository
         Task<List<Branch>> GetAllAsync();
 
         Task<Branch?> GetByIdAsync(long id);
+
+        Task<List<Branch>> SearchFilteredBranchesAsync(BranchQueryDto dto);
 
         Task CreateAsync(Branch branch);
 
