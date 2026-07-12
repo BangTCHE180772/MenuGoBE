@@ -9,6 +9,7 @@ namespace MenuGoBE.Interface.Services
     public interface ITableService
     {
         Task<List<TableViewDto>> GetAllAsync();
+        Task<List<TableViewDto>> GetByBranchIdsAsync(List<long> branchIds);
         Task<TableViewDto?> GetByIdAsync(long id);
 
         Task<TableViewDto> CreateAsync(TableCreateDto dto);

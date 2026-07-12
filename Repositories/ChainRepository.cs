@@ -23,12 +23,17 @@ namespace MenuGoBE.Repositories
             return await _context.Chains.ToListAsync();
         }
 
+        public async Task<Chain?> GetMainChainAsync()
+        {
+            return await _context.Chains.FirstOrDefaultAsync();
+        }
+
         public async Task<Chain?> GetByIdAsync(long id)
         {
             return await _context.Chains.FindAsync(id);
         }
 
-        public async Task CreateAsync(Chain entity)        
+        public async Task CreateAsync(Chain entity)
         {
             await _context.Chains.AddAsync(entity);
         }
