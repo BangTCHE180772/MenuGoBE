@@ -20,7 +20,6 @@ namespace MenuGoTest.UnitTests
             _controller = new ChainController(_serviceMock.Object);
         }
 
-        // --- 1. ManufacturedProductController Tests ---
         [Fact]
         public async Task Test_GetAll_Should_Return_Ok_With_List()
         {
