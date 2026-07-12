@@ -54,7 +54,7 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
-                    throw new Exception($"Không tìm thấy công thức Active cho ProductId = {dto.ProductId}");
+                    entity.RecipeId = null;
                 }
             }
             else
