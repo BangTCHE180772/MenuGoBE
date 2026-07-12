@@ -161,5 +161,32 @@ namespace MenuGoBE.Controllers
 
             return Ok(new { message = "Xóa thành công" });
         }
+
+        [HttpGet("by-table/{tableId}")]
+        public async Task<IActionResult> GetTableOrderSummary(long tableId)
+        {
+            var summary = await _service.GetTableOrderSummaryAsync(tableId);
+            return Ok(summary);
+        }
+
+        [HttpPut("details/{id}/confirm")]
+        public async Task<IActionResult> ConfirmOrderDetail(long id)
+        {
+            var result = await _detailService.ConfirmAsync(id);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            return Ok(new { message = "Xác nhận thành công" });
+        }
+
+        [HttpPut("details/{id}/cooking-status")]
+        public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
+        {
+            var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            return Ok(new { message = "Cập nhật trạng thái thành công" });
+        }
     }
 }
