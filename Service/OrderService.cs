@@ -174,9 +174,9 @@ namespace MenuGoBE.Service
 
             order.Status = "Paid";
             
-            if (order.TableId.HasValue)
+            if (order.TableId > 0)
             {
-                var table = await _tableRepo.GetByIdAsync(order.TableId.Value);
+                var table = await _tableRepo.GetByIdAsync(order.TableId);
                 if (table != null)
                 {
                     table.Status = "Cleaning";
