@@ -80,10 +80,22 @@ namespace MenuGoBE.Service
             if (fatherOrder == null) return false;
 
             if (dto.ChildOrderId == dto.FatherOrderId) return false;
+            while (fatherOrder.FatherId != null)
+            {
+                fatherOrder = await _repo.GetByIdAsync(fatherOrder.FatherId.Value);
+                if (fatherOrder == null) return false;
+            }
 
-            if (fatherOrder.FatherId != null) return false;
+            if (childOrder.Id == fatherOrder.Id) return false;
 
-            childOrder.FatherId = dto.FatherOrderId;
+            var childrenOfChild = await _repo.GetChildOrdersAsync(childOrder.Id);
+            foreach (var c in childrenOfChild)
+            {
+                c.FatherId = fatherOrder.Id;
+                await _repo.UpdateAsync(c);
+            }
+
+            childOrder.FatherId = fatherOrder.Id;
 
             await _repo.UpdateAsync(childOrder);
             await _repo.SaveChangesAsync();
@@ -130,22 +142,32 @@ namespace MenuGoBE.Service
         public async Task<TableOrderSummaryDto> GetTableOrderSummaryAsync(long tableId)
         {
             var table = await _tableRepo.GetByIdAsync(tableId);
-            var order = await _repo.GetActiveOrderByTableIdAsync(tableId);
-
             var summary = new TableOrderSummaryDto
             {
                 TableId = tableId,
                 TableName = table?.Name ?? string.Empty,
                 TableStatus = table?.Status ?? string.Empty,
                 AreaName = table?.Area?.Name ?? string.Empty,
+                Items = new List<OrderItemDto>()
             };
 
+            var order = await _repo.GetActiveOrderByTableIdAsync(tableId);
             if (order == null)
             {
                 return summary;
             }
 
+            while (order.FatherId != null)
+            {
+                var fatherOrder = await _repo.GetActiveOrderByIdWithDetailsAsync(order.FatherId.Value);
+                if (fatherOrder == null) break;
+                order = fatherOrder;
+            }
+
             summary.ActiveOrderId = order.Id;
+
+            var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
+            bool isMerged = childOrders.Any();
 
             var items = order.OrderDetails
                 .Where(od => od.Status != "Cancelled")
@@ -153,16 +175,34 @@ namespace MenuGoBE.Service
                 {
                     OrderDetailId = od.Id,
                     OrderId = od.OrderId,
-                    ProductName = od.Product?.Name ?? "Không rõ",
+                    ProductName = isMerged ? $"{od.Product?.Name ?? "Không rõ"} ({order.Table?.Name})" : (od.Product?.Name ?? "Không rõ"),
                     Quantity = od.Quantity,
                     Price = od.Price,
                     Note = od.Note,
                     Status = od.Status,
                     CookingStatus = od.CookingStatus,
                     CreatedAt = od.CreatedAt,
-                })
-                .OrderByDescending(i => i.CreatedAt)
-                .ToList();
+                }).ToList();
+            foreach (var child in childOrders)
+            {
+                var childItems = child.OrderDetails
+                    .Where(od => od.Status != "Cancelled")
+                    .Select(od => new OrderItemDto
+                    {
+                        OrderDetailId = od.Id,
+                        OrderId = od.OrderId,
+                        ProductName = $"{od.Product?.Name ?? "Không rõ"} ({child.Table?.Name})",
+                        Quantity = od.Quantity,
+                        Price = od.Price,
+                        Note = od.Note,
+                        Status = od.Status,
+                        CookingStatus = od.CookingStatus,
+                        CreatedAt = od.CreatedAt,
+                    });
+                items.AddRange(childItems);
+            }
+
+            items = items.OrderByDescending(i => i.CreatedAt).ToList();
 
             summary.Items = items;
             summary.PendingConfirmCount = items.Count(i => i.Status == "CustomerPending");
