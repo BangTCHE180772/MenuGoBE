@@ -1,8 +1,10 @@
 using AutoMapper;
+using MenuGoBE.Data;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Service
 {
@@ -11,12 +13,14 @@ namespace MenuGoBE.Service
         private readonly IOrderRepository _repo;
         private readonly ITableRepository _tableRepo;
         private readonly IMapper _mapper;
+        private readonly ICustomerRepository _customerRepo;
 
-        public OrderService(IOrderRepository repo, ITableRepository tableRepo, IMapper mapper)
+        public OrderService(IOrderRepository repo, ITableRepository tableRepo, IMapper mapper, ICustomerRepository customerRepo)
         {
             _repo = repo;
             _tableRepo = tableRepo;
             _mapper = mapper;
+            _customerRepo = customerRepo;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -167,10 +171,45 @@ namespace MenuGoBE.Service
             return summary;
         }
 
-        public async Task<long?> PayOrderAsync(long orderId)
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null)
         {
-            var order = await _repo.GetByIdAsync(orderId);
-            if (order == null || order.Status != "Active") return null;
+            var paidTableIds = new List<long>();
+            var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
+            if (orderWithDetails == null) return paidTableIds;
+
+            var order = orderWithDetails;
+            
+            var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
+
+            decimal totalAmount = order.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
+            foreach (var child in childOrders)
+            {
+                totalAmount += child.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
+            }
+            var grandTotal = totalAmount + Math.Round(totalAmount * 0.08m);
+            int pointsEarned = (int)(grandTotal / 100000) * 100;
+            if (dto != null && !string.IsNullOrEmpty(dto.CustomerPhone))
+            {
+                var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
+                if (customer == null)
+                {
+                    customer = new Customer
+                    {
+                        Name = !string.IsNullOrEmpty(dto.CustomerName) ? dto.CustomerName : "Khách lẻ",
+                        Phone = dto.CustomerPhone,
+                        Point = pointsEarned,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _customerRepo.CreateAsync(customer);
+                    await _repo.SaveChangesAsync(); 
+                }
+                else
+                {
+                    customer.Point += pointsEarned;
+                    await _customerRepo.UpdateAsync(customer);
+                }
+                order.CustomerId = customer.Id;
+            }
 
             order.Status = "Paid";
             
@@ -180,11 +219,29 @@ namespace MenuGoBE.Service
                 if (table != null)
                 {
                     table.Status = "Cleaning";
+                    paidTableIds.Add(table.Id);
+                }
+            }
+
+            foreach (var child in childOrders)
+            {
+                if (child.Status == "Active")
+                {
+                    child.Status = "Paid";
+                    if (child.TableId > 0)
+                    {
+                        var childTable = await _tableRepo.GetByIdAsync(child.TableId);
+                        if (childTable != null)
+                        {
+                            childTable.Status = "Cleaning";
+                            paidTableIds.Add(childTable.Id);
+                        }
+                    }
                 }
             }
 
             await _repo.SaveChangesAsync();
-            return order.TableId;
+            return paidTableIds;
         }
     }
 }

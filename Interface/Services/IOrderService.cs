@@ -17,6 +17,6 @@ namespace MenuGoBE.Interface.Services
         Task<OrderMergedSummaryDto?> GetMergedSummaryAsync(long fatherOrderId);
 
         Task<TableOrderSummaryDto> GetTableOrderSummaryAsync(long tableId);
-        Task<long?> PayOrderAsync(long orderId);
+        Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null);
     }
 }
