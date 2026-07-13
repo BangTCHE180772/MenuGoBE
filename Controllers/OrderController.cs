@@ -70,6 +70,27 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Xóa thành công" });
         }
 
+        [HttpPost("{id}/pay")]
+        public async Task<IActionResult> Pay(long id)
+        {
+            var tableId = await _service.PayOrderAsync(id);
+
+            if (tableId == null)
+                return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
+
+            if (tableId.HasValue)
+            {
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                {
+                    TableId = tableId.Value,
+                    Type = "Payment",
+                    Message = "Thanh toán thành công. Bàn cần dọn dẹp!"
+                });
+            }
+
+            return Ok(new { message = "Thanh toán thành công" });
+        }
+
         [HttpPost("merge")]
         public async Task<IActionResult> Merge([FromBody] OrderMergeDto dto)
         {

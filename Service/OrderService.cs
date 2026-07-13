@@ -166,5 +166,25 @@ namespace MenuGoBE.Service
 
             return summary;
         }
+
+        public async Task<long?> PayOrderAsync(long orderId)
+        {
+            var order = await _repo.GetByIdAsync(orderId);
+            if (order == null || order.Status != "Active") return null;
+
+            order.Status = "Paid";
+            
+            if (order.TableId.HasValue)
+            {
+                var table = await _tableRepo.GetByIdAsync(order.TableId.Value);
+                if (table != null)
+                {
+                    table.Status = "Cleaning";
+                }
+            }
+
+            await _repo.SaveChangesAsync();
+            return order.TableId;
+        }
     }
 }
