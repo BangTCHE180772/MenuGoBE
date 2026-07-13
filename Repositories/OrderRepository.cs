@@ -35,6 +35,16 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<Order>> GetChildOrdersWithDetailsAsync(long fatherId)
+        {
+            return await _context.Orders
+                .Where(o => o.FatherId == fatherId && o.Status == "Active")
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                .Include(o => o.Table)
+                .ToListAsync();
+        }
+
         public async Task<Order?> GetActiveOrderByTableIdAsync(long tableId)
         {
             return await _context.Orders
@@ -44,6 +54,17 @@ namespace MenuGoBE.Repositories
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
                 .OrderByDescending(o => o.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<Order?> GetActiveOrderByIdWithDetailsAsync(long orderId)
+        {
+            return await _context.Orders
+                .Where(o => o.Id == orderId && o.Status == "Active")
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
                 .FirstOrDefaultAsync();
         }
 
