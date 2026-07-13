@@ -71,18 +71,18 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost("{id}/pay")]
-        public async Task<IActionResult> Pay(long id)
+        public async Task<IActionResult> Pay(long id, [FromBody] OrderPayDto? dto)
         {
-            var tableId = await _service.PayOrderAsync(id);
+            var paidTableIds = await _service.PayOrderAsync(id, dto);
 
-            if (tableId == null)
+            if (paidTableIds == null || !paidTableIds.Any())
                 return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
 
-            if (tableId.HasValue)
+            foreach (var tableId in paidTableIds)
             {
                 await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
                 {
-                    TableId = tableId.Value,
+                    TableId = tableId,
                     Type = "Payment",
                     Message = "Thanh toán thành công. Bàn cần dọn dẹp!"
                 });
@@ -98,6 +98,12 @@ namespace MenuGoBE.Controllers
 
             if (!result)
                 return BadRequest(new { message = "Không thể gộp đơn. Kiểm tra lại OrderId hoặc đơn cha đã bị gộp vào đơn khác." });
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                Type = "Payment", 
+                Message = "Gộp bàn thành công!"
+            });
 
             return Ok(new { message = "Gộp đơn thành công" });
         }
