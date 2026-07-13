@@ -1,6 +1,8 @@
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Controllers
 {
@@ -10,11 +12,15 @@ namespace MenuGoBE.Controllers
     {
         private readonly IOrderService _service;
         private readonly IOrderDetailService _detailService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly ITableService _tableService;
 
-        public OrderController(IOrderService service, IOrderDetailService detailService)
+        public OrderController(IOrderService service, IOrderDetailService detailService, IHubContext<NotificationHub> hubContext, ITableService tableService)
         {
             _service = service;
             _detailService = detailService;
+            _hubContext = hubContext;
+            _tableService = tableService;
         }
 
         [HttpGet]
@@ -130,6 +136,27 @@ namespace MenuGoBE.Controllers
             try
             {
                 var result = await _detailService.CreateAsync(dto);
+
+                if (dto.Status == "CustomerPending")
+                {
+                    var order = await _service.GetByIdAsync(orderId);
+                    if (order != null)
+                    {
+                        var table = await _tableService.GetByIdAsync(order.TableId);
+                        if (table != null)
+                        {
+                            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
+                            { 
+                                type = "new-order", 
+                                tableId = table.Id, 
+                                tableName = table.Name,
+                                message = $"Bàn {table.Name} vừa đặt món mới!",
+                                timestamp = System.DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -160,6 +187,33 @@ namespace MenuGoBE.Controllers
                 return NotFound(new { message = "Không tìm thấy OrderDetail để xóa" });
 
             return Ok(new { message = "Xóa thành công" });
+        }
+
+        [HttpGet("by-table/{tableId}")]
+        public async Task<IActionResult> GetTableOrderSummary(long tableId)
+        {
+            var summary = await _service.GetTableOrderSummaryAsync(tableId);
+            return Ok(summary);
+        }
+
+        [HttpPut("details/{id}/confirm")]
+        public async Task<IActionResult> ConfirmOrderDetail(long id)
+        {
+            var result = await _detailService.ConfirmAsync(id);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            return Ok(new { message = "Xác nhận thành công" });
+        }
+
+        [HttpPut("details/{id}/cooking-status")]
+        public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
+        {
+            var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            return Ok(new { message = "Cập nhật trạng thái thành công" });
         }
     }
 }

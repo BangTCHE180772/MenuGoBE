@@ -35,6 +35,18 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<Order?> GetActiveOrderByTableIdAsync(long tableId)
+        {
+            return await _context.Orders
+                .Where(o => o.TableId == tableId && o.Status == "Active")
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                .OrderByDescending(o => o.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task CreateAsync(Order entity)
         {
             await _context.Orders.AddAsync(entity);

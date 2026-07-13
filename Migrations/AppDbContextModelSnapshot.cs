@@ -586,7 +586,7 @@ namespace MenuGoBE.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
-                    b.Property<long>("RecipeId")
+                    b.Property<long?>("RecipeId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Status")
@@ -1199,8 +1199,7 @@ namespace MenuGoBE.Migrations
                     b.HasOne("MenuGoBE.Models.Recipe", "Recipe")
                         .WithMany("OrderDetails")
                         .HasForeignKey("RecipeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Order");
 
