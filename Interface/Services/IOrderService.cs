@@ -15,5 +15,7 @@ namespace MenuGoBE.Interface.Services
         Task<bool> UnmergeAsync(long childOrderId);
         Task<List<OrderViewDto>> GetChildOrdersAsync(long fatherOrderId);
         Task<OrderMergedSummaryDto?> GetMergedSummaryAsync(long fatherOrderId);
+
+        Task<TableOrderSummaryDto> GetTableOrderSummaryAsync(long tableId);
     }
 }

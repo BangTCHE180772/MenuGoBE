@@ -54,7 +54,7 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
-                    throw new Exception($"Không tìm thấy công thức Active cho ProductId = {dto.ProductId}");
+                    entity.RecipeId = null;
                 }
             }
             else
@@ -102,6 +102,26 @@ namespace MenuGoBE.Service
                 await RecalculateTotalAmountAsync(order);
 
             return true;
+        }
+
+        public async Task<bool> ConfirmAsync(long orderDetailId)
+        {
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Confirmed");
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+            }
+            return result;
+        }
+
+        public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus)
+        {
+            var result = await _detailRepo.UpdateCookingStatusAsync(orderDetailId, cookingStatus);
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+            }
+            return result;
         }
 
         private async Task RecalculateTotalAmountAsync(Order order)
