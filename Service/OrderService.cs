@@ -9,11 +9,13 @@ namespace MenuGoBE.Service
     public class OrderService : IOrderService
     {
         private readonly IOrderRepository _repo;
+        private readonly ITableRepository _tableRepo;
         private readonly IMapper _mapper;
 
-        public OrderService(IOrderRepository repo, IMapper mapper)
+        public OrderService(IOrderRepository repo, ITableRepository tableRepo, IMapper mapper)
         {
             _repo = repo;
+            _tableRepo = tableRepo;
             _mapper = mapper;
         }
 
@@ -123,11 +125,15 @@ namespace MenuGoBE.Service
 
         public async Task<TableOrderSummaryDto> GetTableOrderSummaryAsync(long tableId)
         {
+            var table = await _tableRepo.GetByIdAsync(tableId);
             var order = await _repo.GetActiveOrderByTableIdAsync(tableId);
 
             var summary = new TableOrderSummaryDto
             {
                 TableId = tableId,
+                TableName = table?.Name ?? string.Empty,
+                TableStatus = table?.Status ?? string.Empty,
+                AreaName = table?.Area?.Name ?? string.Empty,
             };
 
             if (order == null)
@@ -135,9 +141,6 @@ namespace MenuGoBE.Service
                 return summary;
             }
 
-            summary.TableName = order.Table?.Name ?? string.Empty;
-            summary.TableStatus = order.Table?.Status ?? string.Empty;
-            summary.AreaName = order.Table?.Area?.Name ?? string.Empty;
             summary.ActiveOrderId = order.Id;
 
             var items = order.OrderDetails
