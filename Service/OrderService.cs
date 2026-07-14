@@ -133,6 +133,29 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        public async Task<bool> MoveTableAsync(long orderId, long newTableId)
+        {
+            var order = await _repo.GetByIdAsync(orderId);
+            if (order == null || order.Status != "Active") return false;
+
+            var newTable = await _tableRepo.GetByIdAsync(newTableId);
+            if (newTable == null || newTable.Status != "Empty") return false;
+
+            var oldTable = await _tableRepo.GetByIdAsync(order.TableId);
+
+            order.TableId = newTableId;
+            await _repo.UpdateAsync(order);
+
+            if (oldTable != null)
+            {
+                oldTable.Status = "Empty";
+            }
+            newTable.Status = "Occupied";
+
+            await _repo.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<List<OrderViewDto>> GetChildOrdersAsync(long fatherOrderId)
         {
             var data = await _repo.GetChildOrdersAsync(fatherOrderId);
