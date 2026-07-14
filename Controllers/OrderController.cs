@@ -119,6 +119,17 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Tách đơn thành công" });
         }
 
+        [HttpPost("{orderId}/move")]
+        public async Task<IActionResult> MoveOrder(long orderId, [FromBody] OrderMoveDto dto)
+        {
+            var result = await _service.MoveTableAsync(orderId, dto.NewTableId);
+
+            if (!result)
+                return BadRequest(new { message = "Không thể chuyển bàn. Vui lòng kiểm tra trạng thái bàn mới và đơn hàng." });
+
+            return Ok(new { message = "Chuyển bàn thành công" });
+        }
+
         [HttpGet("{fatherId}/children")]
         public async Task<IActionResult> GetChildren(long fatherId)
         {
