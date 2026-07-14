@@ -7,6 +7,8 @@ namespace MenuGoBE.Dtos.Order
         public string TableStatus { get; set; } = string.Empty;
         public string AreaName { get; set; } = string.Empty;
         public long? ActiveOrderId { get; set; }
+        public long? OriginalOrderId { get; set; }
+        public bool IsMerged { get; set; }
         public int PendingConfirmCount { get; set; } 
         public int ReadyToServeCount { get; set; }    
         public List<OrderItemDto> Items { get; set; } = new();

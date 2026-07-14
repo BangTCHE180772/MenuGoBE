@@ -70,6 +70,27 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Xóa thành công" });
         }
 
+        [HttpPost("{id}/pay")]
+        public async Task<IActionResult> Pay(long id, [FromBody] OrderPayDto? dto)
+        {
+            var paidTableIds = await _service.PayOrderAsync(id, dto);
+
+            if (paidTableIds == null || !paidTableIds.Any())
+                return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
+
+            foreach (var tableId in paidTableIds)
+            {
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                {
+                    TableId = tableId,
+                    Type = "Payment",
+                    Message = "Thanh toán thành công. Bàn cần dọn dẹp!"
+                });
+            }
+
+            return Ok(new { message = "Thanh toán thành công" });
+        }
+
         [HttpPost("merge")]
         public async Task<IActionResult> Merge([FromBody] OrderMergeDto dto)
         {
@@ -77,6 +98,12 @@ namespace MenuGoBE.Controllers
 
             if (!result)
                 return BadRequest(new { message = "Không thể gộp đơn. Kiểm tra lại OrderId hoặc đơn cha đã bị gộp vào đơn khác." });
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                Type = "Payment", 
+                Message = "Gộp bàn thành công!"
+            });
 
             return Ok(new { message = "Gộp đơn thành công" });
         }
@@ -90,6 +117,17 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Không thể tách đơn. Đơn này chưa được gộp." });
 
             return Ok(new { message = "Tách đơn thành công" });
+        }
+
+        [HttpPost("{orderId}/move")]
+        public async Task<IActionResult> MoveOrder(long orderId, [FromBody] OrderMoveDto dto)
+        {
+            var result = await _service.MoveTableAsync(orderId, dto.NewTableId);
+
+            if (!result)
+                return BadRequest(new { message = "Không thể chuyển bàn. Vui lòng kiểm tra trạng thái bàn mới và đơn hàng." });
+
+            return Ok(new { message = "Chuyển bàn thành công" });
         }
 
         [HttpGet("{fatherId}/children")]
