@@ -103,16 +103,33 @@ namespace MenuGoBE.Service
             return true;
         }
 
-        public async Task<bool> UnmergeAsync(long childOrderId)
+        public async Task<bool> UnmergeAsync(long orderId)
         {
-            var childOrder = await _repo.GetByIdAsync(childOrderId);
-            if (childOrder == null || childOrder.FatherId == null) return false;
+            var order = await _repo.GetByIdAsync(orderId);
+            if (order == null) return false;
 
-            childOrder.FatherId = null;
+            if (order.FatherId != null) 
+            {
+                order.FatherId = null;
+                await _repo.UpdateAsync(order);
+            } 
+            else 
+            {
+                var childOrders = await _repo.GetChildOrdersAsync(order.Id);
+                if (!childOrders.Any()) return false;
 
-            await _repo.UpdateAsync(childOrder);
+                var newRoot = childOrders.First();
+                newRoot.FatherId = null;
+                await _repo.UpdateAsync(newRoot);
+
+                foreach (var child in childOrders.Skip(1))
+                {
+                    child.FatherId = newRoot.Id;
+                    await _repo.UpdateAsync(child);
+                }
+            }
+
             await _repo.SaveChangesAsync();
-
             return true;
         }
 
@@ -157,6 +174,9 @@ namespace MenuGoBE.Service
                 return summary;
             }
 
+            summary.OriginalOrderId = order.Id;
+            bool isChild = order.FatherId != null;
+
             while (order.FatherId != null)
             {
                 var fatherOrder = await _repo.GetActiveOrderByIdWithDetailsAsync(order.FatherId.Value);
@@ -168,6 +188,7 @@ namespace MenuGoBE.Service
 
             var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
             bool isMerged = childOrders.Any();
+            summary.IsMerged = isChild || isMerged;
 
             var items = order.OrderDetails
                 .Where(od => od.Status != "Cancelled")
