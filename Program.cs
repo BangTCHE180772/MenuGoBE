@@ -9,6 +9,9 @@ using MenuGoBE.Repositories;
 using MenuGoBE.Mapper;
 using MenuGoBE.Exceptions;
 using AutoMapper;
+using Microsoft.AspNetCore.OData;
+using Microsoft.OData.ModelBuilder;
+using MenuGoBE.Models;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -97,7 +100,14 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddOData(options =>
+{
+    var odataBuilder = new ODataConventionModelBuilder();
+    odataBuilder.EntitySet<Customer>("Customer");
+    odataBuilder.EntitySet<Product>("Product");
+    options.Select().Filter().OrderBy().Expand().Count().SetMaxTop(100)
+           .AddRouteComponents("odata", odataBuilder.GetEdmModel());
+});
 
 var app = builder.Build();
 
