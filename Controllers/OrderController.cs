@@ -253,5 +253,25 @@ namespace MenuGoBE.Controllers
 
             return Ok(new { message = "Cập nhật trạng thái thành công" });
         }
+
+        [HttpPut("{orderId}/cancel")]
+        public async Task<IActionResult> CancelOrder(long orderId)
+        {
+            var result = await _service.CancelOrderAsync(orderId);
+            if (!result)
+                return BadRequest(new { message = "Không thể hủy đơn. Có món đang được chuẩn bị hoặc đã phục vụ." });
+
+            return Ok(new { message = "Hủy đơn hàng thành công" });
+        }
+
+        [HttpPut("details/{id}/cancel")]
+        public async Task<IActionResult> CancelOrderDetail(long id)
+        {
+            var result = await _detailService.CancelOrderDetailAsync(id);
+            if (!result)
+                return BadRequest(new { message = "Không thể hủy món. Món đã được nhận bởi bếp hoặc đã bị hủy trước đó." });
+
+            return Ok(new { message = "Hủy món thành công" });
+        }
     }
 }
