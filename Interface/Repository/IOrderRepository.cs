@@ -6,6 +6,7 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<List<Order>> GetAllAsync();
         Task<Order?> GetByIdAsync(long id);
+        Task<Order?> GetOrderByIdWithDetailsAsync(long orderId);
         Task<List<Order>> GetChildOrdersAsync(long fatherId);
         Task<List<Order>> GetChildOrdersWithDetailsAsync(long fatherId);
         Task<Order?> GetActiveOrderByTableIdAsync(long tableId);
