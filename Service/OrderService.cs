@@ -327,5 +327,39 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
             return paidTableIds;
         }
+
+        public async Task<bool> CancelOrderAsync(long orderId)
+        {
+            var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
+            if (orderWithDetails == null) return false;
+
+            if (orderWithDetails.OrderDetails.Any(od => od.Status != "Cancelled" && od.CookingStatus != "Waiting"))
+            {
+                return false;
+            }
+
+            orderWithDetails.Status = "Cancelled";
+            foreach (var detail in orderWithDetails.OrderDetails)
+            {
+                if (detail.Status != "Cancelled")
+                {
+                    detail.Status = "Cancelled";
+                }
+            }
+
+            if (orderWithDetails.TableId > 0)
+            {
+                var table = await _tableRepo.GetByIdAsync(orderWithDetails.TableId);
+                if (table != null)
+                {
+                    table.Status = "Empty";
+                }
+            }
+
+            await _repo.UpdateAsync(orderWithDetails);
+            await _repo.SaveChangesAsync();
+
+            return true;
+        }
     }
 }
