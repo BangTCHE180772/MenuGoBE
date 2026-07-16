@@ -22,6 +22,13 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("sellable")]
+        public async Task<IActionResult> GetSellable()
+        {
+            var result = await _service.GetSellableAsync();
+            return Ok(result);
+        }
+
         [HttpGet("{id:long}")]
         public async Task<IActionResult> GetById(long id)
         {

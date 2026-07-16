@@ -729,6 +729,46 @@ namespace MenuGoBE.Migrations
                     b.ToTable("RecipesDetaileds");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("NumberOfGuests")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ReservationTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("Reservations");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Role", b =>
                 {
                     b.Property<long>("Id")
@@ -1262,6 +1302,24 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Table", b =>

@@ -5,6 +5,7 @@ namespace MenuGoBE.Interface.Services
     public interface IGroupService
     {
         Task<List<GroupViewDto>> GetAllAsync();
+        Task<List<GroupViewDto>> GetSellableAsync();
         Task<GroupViewDto?> GetByIdAsync(long id);
         Task<GroupViewDto> CreateAsync(GroupCreateDto dto);
         Task<bool> UpdateAsync(GroupUpdateDto dto);
