@@ -39,5 +39,8 @@ public class Order
     [InverseProperty("Father")]
     public ICollection<Order> ChildOrders { get; set; } = new List<Order>();
 
+    [InverseProperty("Order")]
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 }
