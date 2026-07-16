@@ -68,6 +68,17 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync();
         }
 
+        public async Task<Order?> GetOrderByIdWithDetailsAsync(long orderId)
+        {
+            return await _context.Orders
+                .Where(o => o.Id == orderId)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                .FirstOrDefaultAsync();
+        }
+
         public async Task CreateAsync(Order entity)
         {
             await _context.Orders.AddAsync(entity);
