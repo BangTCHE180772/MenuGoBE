@@ -10,6 +10,7 @@ using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Dtos.Contract;
 using MenuGoBE.Dtos.Branch;
+using MenuGoBE.Dtos.Shift;
 using MenuGoBE.Dtos.Image;
 using MenuGoBE.Dtos.Group;
 using MenuGoBE.Dtos.Menu;
@@ -64,6 +65,11 @@ namespace MenuGoBE.Mapper
             CreateMap<Contract, ContractViewDto>();
             CreateMap<ContractCreateDto, Contract>();
             CreateMap<ContractUpdateDto, Contract>();
+
+            //Shift
+            CreateMap<Shift, ShiftViewDto>();
+            CreateMap<ShiftCreateDto, Shift>();
+            CreateMap<ShiftUpdateDto, Shift>();
             //Image
             CreateMap<Models.Image, ImageViewDto>();
             CreateMap<ImageCreateDto, Models.Image>();
