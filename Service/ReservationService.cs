@@ -195,10 +195,15 @@ public class ReservationService : IReservationService
             
             if (fatherOrder != null)
             {
+                var fatherTable = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
+                if (fatherTable != null && fatherTable.Status == "Occupied")
+                {
+                    return false;
+                }
+
                 fatherOrder.Status = "Active";
                 await _orderRepo.UpdateAsync(fatherOrder);
 
-                var fatherTable = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
                 if (fatherTable != null)
                 {
                     fatherTable.Status = "Occupied";
@@ -261,8 +266,11 @@ public class ReservationService : IReservationService
                 var fatherTable = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
                 if (fatherTable != null)
                 {
-                    fatherTable.Status = "Empty";
-                    await _tableRepo.UpdateAsync(fatherTable);
+                    if (fatherTable.Status == "Reserved")
+                    {
+                        fatherTable.Status = "Empty";
+                        await _tableRepo.UpdateAsync(fatherTable);
+                    }
                 }
 
                 var details = await _detailRepo.GetByOrderIdAsync(fatherOrder.Id);
@@ -280,8 +288,11 @@ public class ReservationService : IReservationService
                     var childTable = await _tableRepo.GetByIdAsync(child.TableId);
                     if (childTable != null)
                     {
-                        childTable.Status = "Empty";
-                        await _tableRepo.UpdateAsync(childTable);
+                        if (childTable.Status == "Reserved")
+                        {
+                            childTable.Status = "Empty";
+                            await _tableRepo.UpdateAsync(childTable);
+                        }
                     }
                 }
 
@@ -292,6 +303,47 @@ public class ReservationService : IReservationService
         }
 
         await _reservationRepo.SaveChangesAsync();
+        _signalService.TriggerSignal();
+        return true;
+    }
+
+    public async Task<bool> ChangeTableAsync(long reservationId, long newTableId)
+    {
+        var reservation = await _reservationRepo.GetByIdAsync(reservationId);
+        if (reservation == null || reservation.Status != "Pending") return false;
+
+        var newTable = await _tableRepo.GetByIdAsync(newTableId);
+        if (newTable == null || (newTable.Status != "Empty" && newTable.Status != "Available")) return false;
+
+        if (reservation.OrderId.HasValue)
+        {
+            var order = await _orderRepo.GetActiveOrderByIdWithDetailsAsync(reservation.OrderId.Value)
+                        ?? await _orderRepo.GetByIdAsync(reservation.OrderId.Value);
+            
+            if (order != null)
+            {
+                var oldTable = await _tableRepo.GetByIdAsync(order.TableId);
+                if (oldTable != null && oldTable.Status == "Reserved")
+                {
+                    oldTable.Status = "Empty";
+                    await _tableRepo.UpdateAsync(oldTable);
+                }
+
+                order.TableId = newTableId;
+                await _orderRepo.UpdateAsync(order);
+
+                // Lock new table if it's within 2 hours
+                if (DateTime.UtcNow >= reservation.ReservationTime.AddHours(-2) && DateTime.UtcNow < reservation.ReservationTime.AddMinutes(30))
+                {
+                    newTable.Status = "Reserved";
+                }
+                await _tableRepo.UpdateAsync(newTable);
+
+                await _orderRepo.SaveChangesAsync();
+                await _tableRepo.SaveChangesAsync();
+            }
+        }
+
         _signalService.TriggerSignal();
         return true;
     }

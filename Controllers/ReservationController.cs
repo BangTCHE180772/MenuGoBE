@@ -33,7 +33,7 @@ public class ReservationController : ControllerBase
     public async Task<IActionResult> CheckIn(long id)
     {
         var result = await _service.CheckInAsync(id);
-        if (!result) return BadRequest(new { message = "Không thể check-in. Vui lòng kiểm tra trạng thái." });
+        if (!result) return BadRequest(new { message = "Không thể check-in. Bàn có thể đang có khách ngồi hoặc trạng thái không hợp lệ." });
         return Ok(new { message = "Khách đã đến. Bàn đã được mở." });
     }
 
@@ -44,4 +44,17 @@ public class ReservationController : ControllerBase
         if (!result) return BadRequest(new { message = "Không thể hủy đơn đặt bàn này." });
         return Ok(new { message = "Đã hủy đơn đặt bàn thành công." });
     }
+
+    [HttpPut("{id}/change-table")]
+    public async Task<IActionResult> ChangeTable(long id, [FromBody] ChangeTableRequest request)
+    {
+        var result = await _service.ChangeTableAsync(id, request.NewTableId);
+        if (!result) return BadRequest(new { message = "Không thể đổi bàn. Bàn dự phòng có thể đã được sử dụng." });
+        return Ok(new { message = "Đổi bàn dự phòng thành công." });
+    }
+}
+
+public class ChangeTableRequest
+{
+    public long NewTableId { get; set; }
 }

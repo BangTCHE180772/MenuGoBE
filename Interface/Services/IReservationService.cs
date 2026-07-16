@@ -8,4 +8,5 @@ public interface IReservationService
     Task<ReservationViewDto> CreateAsync(ReservationCreateDto dto);
     Task<bool> CheckInAsync(long id);
     Task<bool> CancelAsync(long id);
+    Task<bool> ChangeTableAsync(long reservationId, long newTableId);
 }
