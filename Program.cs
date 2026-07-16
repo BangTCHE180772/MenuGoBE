@@ -9,6 +9,9 @@ using MenuGoBE.Repositories;
 using MenuGoBE.Mapper;
 using MenuGoBE.Exceptions;
 using AutoMapper;
+using Microsoft.AspNetCore.OData;
+using Microsoft.OData.ModelBuilder;
+using MenuGoBE.Models;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -53,6 +56,7 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IOrderDetailRepository, OrderDetailRepository>();
 builder.Services.AddScoped<IAccountRepository, AccountRepository>();
 builder.Services.AddScoped<IWorkScheduleRepository, WorkScheduleRepository>();
+builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<IContractRepository, ContractRepository>();
 builder.Services.AddScoped<IBranchRepository, BranchRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
@@ -61,6 +65,7 @@ builder.Services.AddScoped<IMenuRepository, MenuRepository>();
 builder.Services.AddScoped<IUnitRepository, UnitRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
+builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -78,20 +83,35 @@ builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
+builder.Services.AddScoped<IReservationService, ReservationService>();
+
+// Signal & Monitor Services for Reservation
+builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
+builder.Services.AddHostedService<ReservationMonitorService>();
+
+builder.Services.AddSignalR();
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", builder =>
     {
-        builder.AllowAnyOrigin()
+        builder.SetIsOriginAllowed(_ => true)
                .AllowAnyMethod()
-               .AllowAnyHeader();
+               .AllowAnyHeader()
+               .AllowCredentials();
     });
 });
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddOData(options =>
+{
+    var odataBuilder = new ODataConventionModelBuilder();
+    odataBuilder.EntitySet<Customer>("CustomerOData");
+    odataBuilder.EntitySet<Product>("ProductOData");
+    options.Select().Filter().OrderBy().Expand().Count().SetMaxTop(100)
+           .AddRouteComponents("odata", odataBuilder.GetEdmModel());
+});
 
 var app = builder.Build();
 
@@ -111,6 +131,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<MenuGoBE.Hubs.NotificationHub>("/notificationHub");
 
 app.Run();
 

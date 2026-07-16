@@ -19,6 +19,13 @@ namespace MenuGoBE.Repositories
             return await _context.Groups.ToListAsync();
         }
 
+        public async Task<List<Group>> GetSellableAsync()
+        {
+            return await _context.Groups
+                .Where(g => g.Products.Any(p => p.IsSellable))
+                .ToListAsync();
+        }
+
         public async Task<Group?> GetByIdAsync(long id)
         {
             return await _context.Groups.FindAsync(id);

@@ -10,5 +10,9 @@ namespace MenuGoBE.Interface.Services
         Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto);
         Task<bool> UpdateAsync(OrderDetailUpdateDto dto);
         Task<bool> DeleteAsync(long id);
+
+        Task<bool> ConfirmAsync(long orderDetailId);
+        Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus);
+        Task<bool> CancelOrderDetailAsync(long orderDetailId);
     }
 }

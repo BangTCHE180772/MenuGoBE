@@ -13,7 +13,7 @@ public class OrderDetail
 
     public long ProductId { get; set; }
 
-    public long RecipeId { get; set; }
+    public long? RecipeId { get; set; }
 
     public int Quantity { get; set; }
 
@@ -36,5 +36,5 @@ public class OrderDetail
     public Product Product { get; set; } = null!;
 
     [ForeignKey("RecipeId")]
-    public Recipe Recipe { get; set; } = null!;
+    public Recipe? Recipe { get; set; }
 }
