@@ -15,6 +15,7 @@ public class ReservationService : IReservationService
     private readonly IProductRepository _productRepo;
     private readonly ICustomerRepository _customerRepo;
     private readonly IMapper _mapper;
+    private readonly IReservationSignalService _signalService;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -23,7 +24,8 @@ public class ReservationService : IReservationService
         IOrderDetailRepository detailRepo,
         IProductRepository productRepo,
         ICustomerRepository customerRepo,
-        IMapper mapper)
+        IMapper mapper,
+        IReservationSignalService signalService)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -32,6 +34,7 @@ public class ReservationService : IReservationService
         _productRepo = productRepo;
         _customerRepo = customerRepo;
         _mapper = mapper;
+        _signalService = signalService;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -117,12 +120,8 @@ public class ReservationService : IReservationService
             await _orderRepo.CreateAsync(fatherOrder);
             await _orderRepo.SaveChangesAsync();
 
-            var fatherTable = await _tableRepo.GetByIdAsync(fatherTableId);
-            if (fatherTable != null)
-            {
-                fatherTable.Status = "Reserved";
-                await _tableRepo.UpdateAsync(fatherTable);
-            }
+            // Do NOT forcefully lock the table status here.
+            // Let the ReservationMonitorService smart task handle the lock 2 hours prior!
 
             decimal totalAmount = 0;
             if (dto.PreOrderItems != null && dto.PreOrderItems.Any())
@@ -164,17 +163,9 @@ public class ReservationService : IReservationService
                     CreatedAt = DateTime.UtcNow
                 };
                 await _orderRepo.CreateAsync(childOrder);
-                
-                var childTable = await _tableRepo.GetByIdAsync(childTableId);
-                if (childTable != null)
-                {
-                    childTable.Status = "Reserved";
-                    await _tableRepo.UpdateAsync(childTable);
-                }
             }
 
             await _orderRepo.SaveChangesAsync();
-            await _tableRepo.SaveChangesAsync();
             await _detailRepo.SaveChangesAsync();
 
             reservation.OrderId = fatherOrder.Id;
@@ -182,6 +173,9 @@ public class ReservationService : IReservationService
 
         await _reservationRepo.CreateAsync(reservation);
         await _reservationRepo.SaveChangesAsync();
+
+        // Notify Background Task to recalculate the sleep timer
+        _signalService.TriggerSignal();
 
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
@@ -242,6 +236,7 @@ public class ReservationService : IReservationService
         }
 
         await _reservationRepo.SaveChangesAsync();
+        _signalService.TriggerSignal();
         return true;
     }
 
@@ -297,6 +292,7 @@ public class ReservationService : IReservationService
         }
 
         await _reservationRepo.SaveChangesAsync();
+        _signalService.TriggerSignal();
         return true;
     }
 }
