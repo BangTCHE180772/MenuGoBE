@@ -75,12 +75,6 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IWorkScheduleService, WorkScheduleService>();
-builder.Services.AddScoped<IOpenFdaCacheService, OpenFdaCacheService>();
-
-// Signal & Monitor Services for Reservation
-builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
-builder.Services.AddHostedService<ReservationMonitorService>();
-
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<IBranchService, BranchService>();
 builder.Services.AddScoped<IImageService, ImageService>();
@@ -90,6 +84,10 @@ builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
+
+// Signal & Monitor Services for Reservation
+builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
+builder.Services.AddHostedService<ReservationMonitorService>();
 
 builder.Services.AddSignalR();
 
@@ -109,7 +107,6 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddControllers().AddOData(options =>
 {
     var odataBuilder = new ODataConventionModelBuilder();
-    odataBuilder.EnableLowerCamelCase();
     odataBuilder.EntitySet<Customer>("CustomerOData");
     odataBuilder.EntitySet<Product>("ProductOData");
     options.Select().Filter().OrderBy().Expand().Count().SetMaxTop(100)
