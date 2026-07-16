@@ -18,6 +18,7 @@ public class ReservationMonitorService : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly IReservationSignalService _signalService;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly HashSet<long> _warnedReservationIds = new HashSet<long>();
 
     public ReservationMonitorService(
         IServiceProvider serviceProvider, 
@@ -79,6 +80,32 @@ public class ReservationMonitorService : BackgroundService
                         updatedTableIds.Add(table.Id);
                     }
 
+                    // 3. Process conflict warnings: <= 30 mins away, table Occupied
+                    var toWarnList = pendingReservations
+                        .Where(r => r.Order!.Table!.Status == "Occupied" 
+                                    && now >= r.ReservationTime.AddMinutes(-30) 
+                                    && !_warnedReservationIds.Contains(r.Id))
+                        .ToList();
+
+                    foreach (var warnRes in toWarnList)
+                    {
+                        var table = warnRes.Order!.Table!;
+                        var area = await db.Areas.FirstOrDefaultAsync(a => a.Id == table.AreaId);
+                        long branchId = area?.BranchId ?? 0;
+
+                        // Send SignalR event
+                        await _hubContext.Clients.All.SendAsync("TableConflictWarning", new
+                        {
+                            ReservationId = warnRes.Id,
+                            TableId = table.Id,
+                            TableName = table.Name,
+                            BranchId = branchId,
+                            ReservationTime = warnRes.ReservationTime,
+                            Message = $"Bàn {table.Name} đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi! Vui lòng sắp xếp bàn dự phòng."
+                        });
+                        _warnedReservationIds.Add(warnRes.Id);
+                    }
+
                     if (expiredList.Any() || toLockList.Any())
                     {
                         await db.SaveChangesAsync(stoppingToken);
@@ -98,7 +125,11 @@ public class ReservationMonitorService : BackgroundService
                             .Where(r => r.ReservationTime.AddMinutes(30) > now)
                             .Select(r => r.ReservationTime.AddMinutes(30));
 
-                        var allFutureEvents = upcomingLocks.Concat(upcomingExpirations).ToList();
+                        var upcomingWarnings = pendingReservations
+                            .Where(r => r.Order!.Table!.Status == "Occupied" && r.ReservationTime.AddMinutes(-30) > now && !_warnedReservationIds.Contains(r.Id))
+                            .Select(r => r.ReservationTime.AddMinutes(-30));
+
+                        var allFutureEvents = upcomingLocks.Concat(upcomingExpirations).Concat(upcomingWarnings).ToList();
                         
                         if (allFutureEvents.Any())
                         {
