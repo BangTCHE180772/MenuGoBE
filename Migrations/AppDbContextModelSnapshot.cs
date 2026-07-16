@@ -604,6 +604,53 @@ namespace MenuGoBE.Migrations
                     b.ToTable("OrderDetails");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Payment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("CheckoutUrl")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PaymentLinkId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("QrCode")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TransactionId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.ToTable("Payments");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
                 {
                     b.Property<long>("Id")
@@ -1248,6 +1295,17 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Recipe");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Payment", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Order", "Order")
+                        .WithMany("Payments")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Chain", "Chain")
@@ -1508,6 +1566,8 @@ namespace MenuGoBE.Migrations
                     b.Navigation("ChildOrders");
 
                     b.Navigation("OrderDetails");
+
+                    b.Navigation("Payments");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
