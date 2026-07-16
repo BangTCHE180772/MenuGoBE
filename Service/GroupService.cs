@@ -24,6 +24,12 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<GroupViewDto>>(data);
         }
 
+        public async Task<List<GroupViewDto>> GetSellableAsync()
+        {
+            var data = await _repo.GetSellableAsync();
+            return _mapper.Map<List<GroupViewDto>>(data);
+        }
+
         public async Task<GroupViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);

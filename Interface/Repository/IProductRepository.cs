@@ -4,6 +4,7 @@ namespace MenuGoBE.Interface.Repository
 {
     public interface IProductRepository
     {
+        Task<Product?> GetByIdAsync(long id);
         Task<List<Product>> GetByTypeAsync(string type);
         Task<Product?> GetByIdAndTypeAsync(long id, string type);
         Task CreateAsync(Product entity);
