@@ -127,7 +127,7 @@ namespace MenuGoBE.Service
         private async Task RecalculateTotalAmountAsync(Order order)
         {
             var details = await _detailRepo.GetByOrderIdAsync(order.Id);
-            order.TotalAmount = details.Sum(d => d.Quantity * d.Price);
+            order.TotalAmount = details.Where(d => d.Status != "Cancelled").Sum(d => d.Quantity * d.Price);
 
             await _orderRepo.UpdateAsync(order);
             await _orderRepo.SaveChangesAsync();
