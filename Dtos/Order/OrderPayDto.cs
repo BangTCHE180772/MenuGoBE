@@ -4,5 +4,7 @@ namespace MenuGoBE.Dtos.Order
     {
         public string? CustomerName { get; set; }
         public string? CustomerPhone { get; set; }
+        public string? VoucherCode { get; set; }
+        public int PointsUsed { get; set; }
     }
 }
