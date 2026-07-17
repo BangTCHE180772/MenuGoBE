@@ -23,7 +23,18 @@ namespace MenuGoBE.Mapper
         public AutoMapperProfiles()
         {
             //Chain
-            CreateMap<Chain, ChainViewDto>();
+            CreateMap<Chain, ChainViewDto>()
+            .ForMember(
+                dest => dest.AddressName,
+                opt => opt.MapFrom
+                (src =>
+                    src.Address.NewWard != null
+                        ? $"{src.Address.NewWard.Name}, {src.Address.NewWard.NewProvince.Name}"
+                    : src.Address.OldWard != null
+                        ? $"{src.Address.OldWard.Name}, {src.Address.OldWard.OldDistrict.Name}"
+                    : "Chưa có địa chỉ"
+                )); ;
+
             CreateMap<ChainCreateDto, Chain>();
             CreateMap<ChainUpdateDto, Chain>();
 
