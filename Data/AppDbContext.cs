@@ -53,6 +53,7 @@ public class AppDbContext : DbContext
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
+    public DbSet<Voucher> Vouchers { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
