@@ -16,6 +16,7 @@ using MenuGoBE.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using PayOS;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,6 +67,7 @@ builder.Services.AddScoped<IUnitRepository, UnitRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
 builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -88,6 +90,17 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
 builder.Services.AddHostedService<ReservationMonitorService>();
+
+// PayOS setup
+var payOsConfig = builder.Configuration.GetSection("PayOS");
+builder.Services.AddSingleton(new PayOSClient(
+    payOsConfig["ClientId"] ?? string.Empty,
+    payOsConfig["ApiKey"] ?? string.Empty,
+    payOsConfig["ChecksumKey"] ?? string.Empty
+));
+
+// Payment Service
+builder.Services.AddScoped<IPaymentService,PaymentService>();
 
 builder.Services.AddSignalR();
 

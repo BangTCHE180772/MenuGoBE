@@ -14,13 +14,15 @@ namespace MenuGoBE.Service
         private readonly ITableRepository _tableRepo;
         private readonly IMapper _mapper;
         private readonly ICustomerRepository _customerRepo;
+        private readonly IPaymentRepository _paymentRepo;
 
-        public OrderService(IOrderRepository repo, ITableRepository tableRepo, IMapper mapper, ICustomerRepository customerRepo)
+        public OrderService(IOrderRepository repo, IMapper mapper, ITableRepository tableRepo, ICustomerRepository customerRepo, IPaymentRepository paymentRepo)
         {
             _repo = repo;
-            _tableRepo = tableRepo;
             _mapper = mapper;
+            _tableRepo = tableRepo;
             _customerRepo = customerRepo;
+            _paymentRepo = paymentRepo;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -255,7 +257,7 @@ namespace MenuGoBE.Service
             return summary;
         }
 
-        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null)
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash")
         {
             var paidTableIds = new List<long>();
             var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
@@ -296,6 +298,21 @@ namespace MenuGoBE.Service
             }
 
             order.Status = "Paid";
+            
+            var hasSuccessPayment = await _paymentRepo.HasSuccessPaymentAsync(order.Id);
+            if (!hasSuccessPayment && paymentMethod == "Cash")
+            {
+                var payment = new Payment
+                {
+                    OrderId = order.Id,
+                    Amount = grandTotal,
+                    Method = "Cash",
+                    Status = "Success",
+                    CreatedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
+                };
+                await _paymentRepo.CreateAsync(payment);
+            }
             
             if (order.TableId > 0)
             {
