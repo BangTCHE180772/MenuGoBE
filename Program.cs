@@ -102,6 +102,7 @@ builder.Services.AddSingleton(new PayOSClient(
 
 // Payment Service
 builder.Services.AddScoped<IPaymentService,PaymentService>();
+builder.Services.AddScoped<IVoucherService, VoucherService>();
 
 builder.Services.AddSignalR();
 
