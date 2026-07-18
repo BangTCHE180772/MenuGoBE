@@ -1,0 +1,13 @@
+using System.Threading.Tasks;
+using MenuGoBE.Models;
+
+namespace MenuGoBE.Interface.Repository
+{
+    public interface ICustomerRepository
+    {
+        Task<Customer?> GetByIdAsync(long id);
+        Task<Customer?> GetByPhoneAsync(string phone);
+        Task CreateAsync(Customer customer);
+        Task UpdateAsync(Customer customer);
+    }
+}

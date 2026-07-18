@@ -14,6 +14,11 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
+        public async Task<Product?> GetByIdAsync(long id)
+        {
+            return await _context.Products.FindAsync(id);
+        }
+
         public async Task<List<Product>> GetByTypeAsync(string type)
         {
             return await _context.Products
