@@ -14,13 +14,17 @@ namespace MenuGoBE.Service
         private readonly ITableRepository _tableRepo;
         private readonly IMapper _mapper;
         private readonly ICustomerRepository _customerRepo;
+        private readonly IPaymentRepository _paymentRepo;
+        private readonly IVoucherRepository _voucherRepo;
 
-        public OrderService(IOrderRepository repo, ITableRepository tableRepo, IMapper mapper, ICustomerRepository customerRepo)
+        public OrderService(IOrderRepository repo, IMapper mapper, ITableRepository tableRepo, ICustomerRepository customerRepo, IPaymentRepository paymentRepo, IVoucherRepository voucherRepo)
         {
             _repo = repo;
-            _tableRepo = tableRepo;
             _mapper = mapper;
+            _tableRepo = tableRepo;
             _customerRepo = customerRepo;
+            _paymentRepo = paymentRepo;
+            _voucherRepo = voucherRepo;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -255,14 +259,11 @@ namespace MenuGoBE.Service
             return summary;
         }
 
-        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null)
+        public async Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto)
         {
-            var paidTableIds = new List<long>();
             var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
-            if (orderWithDetails == null) return paidTableIds;
-
+            if (orderWithDetails == null) throw new Exception("Không tìm thấy đơn hàng hoặc đơn hàng đã thanh toán");
             var order = orderWithDetails;
-            
             var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
 
             decimal totalAmount = order.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
@@ -271,7 +272,7 @@ namespace MenuGoBE.Service
                 totalAmount += child.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
             }
             var grandTotal = totalAmount + Math.Round(totalAmount * 0.08m);
-            int pointsEarned = (int)(grandTotal / 100000) * 100;
+
             if (dto != null && !string.IsNullOrEmpty(dto.CustomerPhone))
             {
                 var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
@@ -281,21 +282,122 @@ namespace MenuGoBE.Service
                     {
                         Name = !string.IsNullOrEmpty(dto.CustomerName) ? dto.CustomerName : "Khách lẻ",
                         Phone = dto.CustomerPhone,
-                        Point = pointsEarned,
+                        Point = 0,
                         CreatedAt = DateTime.UtcNow
                     };
                     await _customerRepo.CreateAsync(customer);
-                    await _repo.SaveChangesAsync(); 
-                }
-                else
-                {
-                    customer.Point += pointsEarned;
-                    await _customerRepo.UpdateAsync(customer);
+                    await _repo.SaveChangesAsync();
                 }
                 order.CustomerId = customer.Id;
             }
 
+            decimal discountAmount = 0;
+            order.VoucherId = null;
+            if (dto != null && !string.IsNullOrEmpty(dto.VoucherCode))
+            {
+                var voucher = await _voucherRepo.GetByCodeAsync(dto.VoucherCode);
+                if (voucher != null && voucher.IsActive && voucher.StartDate <= DateTime.UtcNow && voucher.EndDate >= DateTime.UtcNow && voucher.UsedCount < voucher.Quantity && grandTotal >= voucher.MinOrderValue)
+                {
+                    if (voucher.DiscountType == "Fixed")
+                        discountAmount = voucher.DiscountValue;
+                    else
+                    {
+                        discountAmount = grandTotal * (voucher.DiscountValue / 100);
+                        if (voucher.MaxDiscount > 0 && discountAmount > voucher.MaxDiscount)
+                            discountAmount = voucher.MaxDiscount;
+                    }
+                    order.VoucherId = voucher.Id;
+                }
+            }
+
+            int pointsUsed = 0;
+            if (dto != null && dto.PointsUsed > 0 && order.CustomerId.HasValue)
+            {
+                var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
+                if (customer != null && customer.Point >= dto.PointsUsed)
+                {
+                    pointsUsed = dto.PointsUsed;
+                }
+            }
+
+            decimal totalDiscount = discountAmount + pointsUsed;
+            if (totalDiscount > grandTotal)
+            {
+                if (discountAmount > grandTotal) 
+                {
+                    discountAmount = grandTotal;
+                    pointsUsed = 0;
+                }
+                else
+                {
+                    pointsUsed = (int)(grandTotal - discountAmount);
+                }
+            }
+
+            order.DiscountAmount = discountAmount;
+            order.PointsUsed = pointsUsed;
+            order.TotalAmount = grandTotal - discountAmount - pointsUsed;
+
+            await _repo.UpdateAsync(order);
+            await _repo.SaveChangesAsync();
+
+            return order.TotalAmount;
+        }
+
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash")
+        {
+            var paidTableIds = new List<long>();
+            var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
+            if (orderWithDetails == null) return paidTableIds;
+
+            var order = orderWithDetails;
+            
+            if (paymentMethod == "Cash" || dto != null)
+            {
+                await PreparePaymentAsync(orderId, dto);
+                order = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
+                if (order == null) return paidTableIds;
+            }
+
+            var finalAmount = order.TotalAmount;
+            int pointsEarned = (int)(finalAmount / 100000) * 100;
+
+            if (order.CustomerId.HasValue)
+            {
+                var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
+                if (customer != null)
+                {
+                    customer.Point = customer.Point - order.PointsUsed + pointsEarned;
+                    await _customerRepo.UpdateAsync(customer);
+                }
+            }
+
+            if (order.VoucherId.HasValue)
+            {
+                var voucher = await _voucherRepo.GetByIdAsync(order.VoucherId.Value);
+                if (voucher != null)
+                {
+                    voucher.UsedCount += 1;
+                    await _voucherRepo.UpdateAsync(voucher);
+                }
+            }
+
             order.Status = "Paid";
+            
+            var hasSuccessPayment = await _paymentRepo.HasSuccessPaymentAsync(order.Id);
+            if (!hasSuccessPayment && paymentMethod == "Cash")
+            {
+                var payment = new Payment
+                {
+                    OrderId = order.Id,
+                    Amount = finalAmount,
+                    Method = "Cash",
+                    Status = "Success",
+                    CreatedAt = DateTime.UtcNow,
+                    CompletedAt = DateTime.UtcNow
+                };
+                await _paymentRepo.CreateAsync(payment);
+            }
             
             if (order.TableId > 0)
             {
@@ -307,6 +409,7 @@ namespace MenuGoBE.Service
                 }
             }
 
+            var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
             foreach (var child in childOrders)
             {
                 if (child.Status == "Active")

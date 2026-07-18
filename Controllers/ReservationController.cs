@@ -45,6 +45,14 @@ public class ReservationController : ControllerBase
         return Ok(new { message = "Đã hủy đơn đặt bàn thành công." });
     }
 
+    [HttpPut("{id}/extend")]
+    public async Task<IActionResult> Extend(long id, [FromQuery] int minutes = 30)
+    {
+        var result = await _service.ExtendAsync(id, minutes);
+        if (!result) return BadRequest(new { message = "Không thể gia hạn đơn đặt bàn này." });
+        return Ok(new { message = $"Đã gia hạn đơn đặt bàn thêm {minutes} phút thành công." });
+    }
+
     [HttpPut("{id}/change-table")]
     public async Task<IActionResult> ChangeTable(long id, [FromBody] ChangeTableRequest request)
     {
