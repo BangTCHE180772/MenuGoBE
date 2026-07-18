@@ -19,10 +19,17 @@ namespace MenuGoBE.Controllers
             _service = service;
         }
 
-        [HttpGet]
+        [HttpGet("all")]
         public async Task<IActionResult> GetAll()
         {
             var result = await _service.GetAllAsync();
+            return Ok(result);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetMainChain()
+        {
+            var result = await _service.GetMainChainAsync();
             return Ok(result);
         }
 

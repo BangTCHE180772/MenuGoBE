@@ -13,11 +13,15 @@ namespace MenuGoBE.Dtos.Order
 
         public long? FatherId { get; set; }
 
-        public string Method { get; set; } = string.Empty;
-
         public string Status { get; set; } = string.Empty;
 
         public long? CustomerId { get; set; }
+
+        public long? VoucherId { get; set; }
+
+        public decimal DiscountAmount { get; set; }
+
+        public int PointsUsed { get; set; }
 
         public decimal TotalAmount { get; set; }
 
