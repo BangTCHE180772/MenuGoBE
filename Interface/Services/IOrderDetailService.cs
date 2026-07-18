@@ -13,5 +13,6 @@ namespace MenuGoBE.Interface.Services
 
         Task<bool> ConfirmAsync(long orderDetailId);
         Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus);
+        Task<bool> CancelOrderDetailAsync(long orderDetailId);
     }
 }

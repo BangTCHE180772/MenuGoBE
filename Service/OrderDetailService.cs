@@ -124,6 +124,30 @@ namespace MenuGoBE.Service
             return result;
         }
 
+        public async Task<bool> CancelOrderDetailAsync(long orderDetailId)
+        {
+            var entity = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (entity == null) return false;
+
+            if (entity.CookingStatus != "Waiting" || entity.Status == "Cancelled")
+            {
+                return false;
+            }
+
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+                
+                var order = await _orderRepo.GetByIdAsync(entity.OrderId);
+                if (order != null)
+                {
+                    await RecalculateTotalAmountAsync(order);
+                }
+            }
+            return result;
+        }
+
         private async Task RecalculateTotalAmountAsync(Order order)
         {
             var details = await _detailRepo.GetByOrderIdAsync(order.Id);
