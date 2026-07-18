@@ -112,7 +112,6 @@ public class ReservationService : IReservationService
             {
                 TableId = fatherTableId,
                 FatherId = null,
-                Method = "DineIn",
                 Status = "Reserved",
                 TotalAmount = 0,
                 CreatedAt = DateTime.UtcNow
@@ -157,7 +156,6 @@ public class ReservationService : IReservationService
                 {
                     TableId = childTableId,
                     FatherId = fatherOrder.Id,
-                    Method = "DineIn",
                     Status = "Reserved",
                     TotalAmount = 0,
                     CreatedAt = DateTime.UtcNow
