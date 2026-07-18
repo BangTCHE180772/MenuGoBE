@@ -26,29 +26,17 @@ public class PaymentService : IPaymentService
         _orderService = orderService;
     }
 
-    public async Task<Payment> CreatePaymentLinkAsync(long orderId, string cancelUrl, string returnUrl)
+    public async Task<Payment> CreatePaymentLinkAsync(long orderId, string cancelUrl, string returnUrl, OrderPayDto? dto = null)
     {
-        // 1. Get total amount (including child orders and tax)
-        var order = await _orderRepo.GetActiveOrderByIdWithDetailsAsync(orderId) 
-                    ?? await _orderRepo.GetByIdAsync(orderId);
-
-        if (order == null) throw new Exception("Không tìm thấy đơn hàng");
-
-        var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(orderId);
+        // Calculate and prepare the payment on Order (apply voucher, points)
+        decimal finalAmount = await _orderService.PreparePaymentAsync(orderId, dto);
         
-        decimal subTotal = order.OrderDetails?.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity) ?? order.TotalAmount;
-        foreach (var child in childOrders)
-        {
-            subTotal += child.OrderDetails?.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity) ?? child.TotalAmount;
-        }
-        
-        decimal totalAmount = subTotal + Math.Round(subTotal * 0.08m);
-        if (totalAmount <= 0) throw new Exception("Đơn hàng không có số tiền cần thanh toán");
+        if (finalAmount <= 0) throw new Exception("Đơn hàng không có số tiền cần thanh toán qua PayOS (hoặc đã được miễn phí hoàn toàn).");
 
         // 2. Check if there's already a pending PayOS payment for this order
         var existingPayment = await _paymentRepo.GetLatestPendingByOrderIdAsync(orderId);
 
-        if (existingPayment != null && existingPayment.Amount == totalAmount)
+        if (existingPayment != null && existingPayment.Amount == finalAmount)
         {
             // Re-use existing QR Code instead of calling API again to avoid generating multiple payment links
             return existingPayment;
@@ -68,7 +56,7 @@ public class PaymentService : IPaymentService
         var paymentData = new CreatePaymentLinkRequest
         {
             OrderCode = orderCode,
-            Amount = (int)totalAmount,
+            Amount = (int)finalAmount,
             Description = $"Thanh toan don {orderId}",
             CancelUrl = cancelUrl,
             ReturnUrl = returnUrl
@@ -80,7 +68,7 @@ public class PaymentService : IPaymentService
         var payment = new Payment
         {
             OrderId = orderId,
-            Amount = totalAmount,
+            Amount = finalAmount,
             Method = "PayOS",
             Status = "Pending",
             TransactionId = orderCode.ToString(),

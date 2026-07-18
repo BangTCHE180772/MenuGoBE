@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PayOS.Models.Webhooks;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using MenuGoBE.Dtos.Order;
 
 namespace MenuGoBE.Controllers;
 
@@ -20,12 +21,12 @@ public class PaymentController : ControllerBase
     }
 
     [HttpPost("create-payment-link/{orderId}")]
-    public async Task<IActionResult> CreatePaymentLink(long orderId)
+    public async Task<IActionResult> CreatePaymentLink(long orderId, [FromBody] OrderPayDto? dto = null)
     {
         try
         {
             var domain = $"{Request.Scheme}://{Request.Host}";
-            var payment = await _paymentService.CreatePaymentLinkAsync(orderId, $"{domain}/cancel", $"{domain}/success");
+            var payment = await _paymentService.CreatePaymentLinkAsync(orderId, $"{domain}/cancel", $"{domain}/success", dto);
             
             return Ok(new
             {
