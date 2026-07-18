@@ -19,6 +19,7 @@ public class ReservationMonitorService : BackgroundService
     private readonly IReservationSignalService _signalService;
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly HashSet<long> _warnedReservationIds = new HashSet<long>();
+    private readonly HashSet<long> _lateWarnedReservationIds = new HashSet<long>();
 
     public ReservationMonitorService(
         IServiceProvider serviceProvider, 
@@ -104,6 +105,32 @@ public class ReservationMonitorService : BackgroundService
                             Message = $"Bàn {table.Name} đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi! Vui lòng sắp xếp bàn dự phòng."
                         });
                         _warnedReservationIds.Add(warnRes.Id);
+                    }
+
+                    // 4. Process late warnings: 15 mins late
+                    var lateWarningThreshold = now.AddMinutes(-15);
+                    var lateWarnCandidates = await db.Reservations
+                        .Include(r => r.Order).ThenInclude(o => o!.Table)
+                        .Where(r => r.Status == "Pending" && r.ReservationTime <= lateWarningThreshold && r.ReservationTime > expiredTime)
+                        .ToListAsync(stoppingToken);
+
+                    var toLateWarnList = lateWarnCandidates.Where(r => !_lateWarnedReservationIds.Contains(r.Id)).ToList();
+
+                    foreach (var lateWarn in toLateWarnList)
+                    {
+                        var table = lateWarn.Order?.Table;
+                        long tableId = table?.Id ?? 0;
+                        string tableName = table?.Name ?? "Không rõ";
+
+                        await _hubContext.Clients.All.SendAsync("ReservationLateWarning", new
+                        {
+                            ReservationId = lateWarn.Id,
+                            TableId = tableId,
+                            TableName = tableName,
+                            ReservationTime = lateWarn.ReservationTime,
+                            Message = $"Khách đặt bàn {tableName} lúc {lateWarn.ReservationTime:HH:mm} đã trễ hơn 15 phút. Bạn có muốn gia hạn thời gian giữ bàn không?"
+                        });
+                        _lateWarnedReservationIds.Add(lateWarn.Id);
                     }
 
                     if (expiredList.Any() || toLockList.Any())
