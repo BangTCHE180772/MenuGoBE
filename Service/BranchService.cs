@@ -37,6 +37,13 @@ namespace MenuGoBE.Service
             return _mapper.Map<BranchViewDto>(branch);
         }
 
+        public async Task<List<BranchViewDto>> SearchFilteredBranchesAsync(BranchQueryDto dto)
+        {
+            var branches = await _repo.SearchFilteredBranchesAsync(dto);
+
+            return _mapper.Map<List<BranchViewDto>>(branches);
+        }
+
         public async Task<BranchViewDto> CreateAsync(BranchCreateDto dto)
         {
             var entity = _mapper.Map<Branch>(dto);

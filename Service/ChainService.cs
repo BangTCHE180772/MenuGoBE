@@ -27,6 +27,12 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<ChainViewDto>>(data);
         }
 
+        public async Task<ChainViewDto?> GetMainChainAsync()
+        {
+            var chain = await _repo.GetMainChainAsync();
+            return _mapper.Map<ChainViewDto>(chain);
+        }
+
         public async Task<ChainViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);

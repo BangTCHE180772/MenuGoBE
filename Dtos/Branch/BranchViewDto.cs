@@ -13,6 +13,8 @@ namespace MenuGoBE.Dtos.Branch
 
         public long AddressId { get; set; }
 
+        public string AddressName { get; set; } = string.Empty;
+
         public string Name { get; set; } = string.Empty;
 
         public string Type { get; set; } = string.Empty;
