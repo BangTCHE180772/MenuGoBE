@@ -305,6 +305,19 @@ public class ReservationService : IReservationService
         return true;
     }
 
+    public async Task<bool> ExtendAsync(long id, int minutes)
+    {
+        var reservation = await _reservationRepo.GetByIdAsync(id);
+        if (reservation == null || reservation.Status != "Pending") return false;
+
+        reservation.ReservationTime = reservation.ReservationTime.AddMinutes(minutes);
+        await _reservationRepo.UpdateAsync(reservation);
+        await _reservationRepo.SaveChangesAsync();
+
+        _signalService.TriggerSignal();
+        return true;
+    }
+
     public async Task<bool> ChangeTableAsync(long reservationId, long newTableId)
     {
         var reservation = await _reservationRepo.GetByIdAsync(reservationId);
@@ -330,8 +343,8 @@ public class ReservationService : IReservationService
                 order.TableId = newTableId;
                 await _orderRepo.UpdateAsync(order);
 
-                // Lock new table if it's within 2 hours
-                if (DateTime.UtcNow >= reservation.ReservationTime.AddHours(-2) && DateTime.UtcNow < reservation.ReservationTime.AddMinutes(30))
+                // Lock new table if it's within 30 minutes
+                if (DateTime.UtcNow >= reservation.ReservationTime.AddMinutes(-30) && DateTime.UtcNow < reservation.ReservationTime.AddMinutes(30))
                 {
                     newTable.Status = "Reserved";
                 }
