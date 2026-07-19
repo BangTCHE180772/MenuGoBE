@@ -1,7 +1,9 @@
 using System;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Interface.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers
@@ -80,6 +82,18 @@ namespace MenuGoBE.Controllers
                 return NotFound(new { message = "Không tìm thấy WorkSchedule để xóa" });
 
             return Ok(new { message = "Xóa thành công" });
+        }
+
+        [Authorize]
+        [HttpGet("mine")]
+        public async Task<IActionResult> GetMySchedule()
+        {
+            var accountIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
+                return Unauthorized(new { message = "Không xác định được tài khoản." });
+
+            var result = await _service.GetByAccountIdAsync(accountId);
+            return Ok(result);
         }
     }
 }

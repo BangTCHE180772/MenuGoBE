@@ -16,5 +16,6 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> BranchExistsAsync(long branchId);
         Task<bool> ShiftExistsAsync(long shiftId);
         Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds);
+        Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId);
     }
 }
