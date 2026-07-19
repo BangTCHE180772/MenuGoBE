@@ -4,5 +4,6 @@ namespace MenuGoBE.Dtos.Device
     {
         public string Name { get; set; } = string.Empty;
         public string DeviceType { get; set; } = string.Empty;
+        public long? BranchId { get; set; }
     }
 }
