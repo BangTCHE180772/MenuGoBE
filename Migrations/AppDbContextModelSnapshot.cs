@@ -314,6 +314,50 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Customer");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Device", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastActiveAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("SetupBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("SetupBy");
+
+                    b.ToTable("Devices");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Group", b =>
                 {
                     b.Property<long>("Id")
@@ -1253,6 +1297,25 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Device", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "SetupByAccount")
+                        .WithMany()
+                        .HasForeignKey("SetupBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("SetupByAccount");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.MenuProduct", b =>
