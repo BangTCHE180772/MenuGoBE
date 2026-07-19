@@ -816,7 +816,7 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<long??>("CustomerId")
+                    b.Property<long?>("CustomerId")
                         .HasColumnType("bigint");
 
                     b.Property<decimal>("DiscountAmount")
