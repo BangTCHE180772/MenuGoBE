@@ -8,6 +8,7 @@ namespace MenuGoBE.Interface.Repository
     public interface IChainRepository
     {
         Task<List<Chain>> GetAllAsync();
+        Task<Chain?> GetMainChainAsync();
         Task<Chain?> GetByIdAsync(long id);
 
         Task CreateAsync(Chain entity);

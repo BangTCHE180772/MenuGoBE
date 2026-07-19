@@ -46,6 +46,24 @@ namespace MenuGoBE.Repositories
             }
         }
 
+        public async Task<bool> UpdateStatusAsync(long id, string status)
+        {
+            var entity = await _context.OrderDetails.FindAsync(id);
+            if (entity == null) return false;
+
+            entity.Status = status;
+            return true;
+        }
+
+        public async Task<bool> UpdateCookingStatusAsync(long id, string cookingStatus)
+        {
+            var entity = await _context.OrderDetails.FindAsync(id);
+            if (entity == null) return false;
+
+            entity.CookingStatus = cookingStatus;
+            return true;
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

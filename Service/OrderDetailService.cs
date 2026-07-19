@@ -54,7 +54,7 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
-                    throw new Exception($"Không tìm thấy công thức Active cho ProductId = {dto.ProductId}");
+                    entity.RecipeId = null;
                 }
             }
             else
@@ -104,10 +104,54 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        public async Task<bool> ConfirmAsync(long orderDetailId)
+        {
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Confirmed");
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+            }
+            return result;
+        }
+
+        public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus)
+        {
+            var result = await _detailRepo.UpdateCookingStatusAsync(orderDetailId, cookingStatus);
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+            }
+            return result;
+        }
+
+        public async Task<bool> CancelOrderDetailAsync(long orderDetailId)
+        {
+            var entity = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (entity == null) return false;
+
+            if (entity.CookingStatus != "Waiting" || entity.Status == "Cancelled")
+            {
+                return false;
+            }
+
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
+            if (result)
+            {
+                await _detailRepo.SaveChangesAsync();
+                
+                var order = await _orderRepo.GetByIdAsync(entity.OrderId);
+                if (order != null)
+                {
+                    await RecalculateTotalAmountAsync(order);
+                }
+            }
+            return result;
+        }
+
         private async Task RecalculateTotalAmountAsync(Order order)
         {
             var details = await _detailRepo.GetByOrderIdAsync(order.Id);
-            order.TotalAmount = details.Sum(d => d.Quantity * d.Price);
+            order.TotalAmount = details.Where(d => d.Status != "Cancelled").Sum(d => d.Quantity * d.Price);
 
             await _orderRepo.UpdateAsync(order);
             await _orderRepo.SaveChangesAsync();

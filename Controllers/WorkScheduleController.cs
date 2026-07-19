@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Interface.Services;
@@ -36,8 +37,29 @@ namespace MenuGoBE.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] WorkScheduleCreateDto dto)
         {
-            var result = await _service.CreateAsync(dto);
-            return Ok(result);
+            try
+            {
+                var result = await _service.CreateAsync(dto);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("assign")]
+        public async Task<IActionResult> AssignBulk([FromBody] WorkScheduleAssignDto dto)
+        {
+            try
+            {
+                var result = await _service.AssignBulkAsync(dto);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut]

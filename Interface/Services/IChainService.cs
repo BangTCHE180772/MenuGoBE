@@ -9,6 +9,7 @@ namespace MenuGoBE.Interface.Services
     public interface IChainService
     {
         Task<List<ChainViewDto>> GetAllAsync();
+        Task<ChainViewDto?> GetMainChainAsync();
         Task<ChainViewDto?> GetByIdAsync(long id);
 
         Task<ChainViewDto> CreateAsync(ChainCreateDto dto);
