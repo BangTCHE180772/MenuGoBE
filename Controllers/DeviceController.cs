@@ -21,7 +21,7 @@ namespace MenuGoBE.Controllers
         [Authorize(Roles = "Manager,Admin,Owner")]
         public async Task<IActionResult> Setup([FromBody] DeviceSetupDto dto)
         {
-            var accountIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var accountIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
             if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
                 return Unauthorized(new { message = "Không xác định được tài khoản." });
 
