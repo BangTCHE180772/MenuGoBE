@@ -6,7 +6,6 @@ namespace MenuGoBE.Dtos.Order
 
         public List<OrderViewDto> ChildOrders { get; set; } = new();
 
-        // Tổng thanh toán = FatherOrder.TotalAmount + Σ ChildOrders.TotalAmount
         public decimal GrandTotal { get; set; }
     }
 }

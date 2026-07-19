@@ -1,6 +1,8 @@
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Controllers
 {
@@ -10,11 +12,15 @@ namespace MenuGoBE.Controllers
     {
         private readonly IOrderService _service;
         private readonly IOrderDetailService _detailService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly ITableService _tableService;
 
-        public OrderController(IOrderService service, IOrderDetailService detailService)
+        public OrderController(IOrderService service, IOrderDetailService detailService, IHubContext<NotificationHub> hubContext, ITableService tableService)
         {
             _service = service;
             _detailService = detailService;
+            _hubContext = hubContext;
+            _tableService = tableService;
         }
 
         [HttpGet]
@@ -64,6 +70,27 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Xóa thành công" });
         }
 
+        [HttpPost("{id}/pay")]
+        public async Task<IActionResult> Pay(long id, [FromBody] OrderPayDto? dto)
+        {
+            var paidTableIds = await _service.PayOrderAsync(id, dto);
+
+            if (paidTableIds == null || !paidTableIds.Any())
+                return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
+
+            foreach (var tableId in paidTableIds)
+            {
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                {
+                    TableId = tableId,
+                    Type = "Payment",
+                    Message = "Thanh toán thành công. Bàn cần dọn dẹp!"
+                });
+            }
+
+            return Ok(new { message = "Thanh toán thành công" });
+        }
+
         [HttpPost("merge")]
         public async Task<IActionResult> Merge([FromBody] OrderMergeDto dto)
         {
@@ -71,6 +98,12 @@ namespace MenuGoBE.Controllers
 
             if (!result)
                 return BadRequest(new { message = "Không thể gộp đơn. Kiểm tra lại OrderId hoặc đơn cha đã bị gộp vào đơn khác." });
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                Type = "Payment", 
+                Message = "Gộp bàn thành công!"
+            });
 
             return Ok(new { message = "Gộp đơn thành công" });
         }
@@ -84,6 +117,17 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Không thể tách đơn. Đơn này chưa được gộp." });
 
             return Ok(new { message = "Tách đơn thành công" });
+        }
+
+        [HttpPost("{orderId}/move")]
+        public async Task<IActionResult> MoveOrder(long orderId, [FromBody] OrderMoveDto dto)
+        {
+            var result = await _service.MoveTableAsync(orderId, dto.NewTableId);
+
+            if (!result)
+                return BadRequest(new { message = "Không thể chuyển bàn. Vui lòng kiểm tra trạng thái bàn mới và đơn hàng." });
+
+            return Ok(new { message = "Chuyển bàn thành công" });
         }
 
         [HttpGet("{fatherId}/children")]
@@ -130,6 +174,27 @@ namespace MenuGoBE.Controllers
             try
             {
                 var result = await _detailService.CreateAsync(dto);
+
+                if (dto.Status == "CustomerPending")
+                {
+                    var order = await _service.GetByIdAsync(orderId);
+                    if (order != null)
+                    {
+                        var table = await _tableService.GetByIdAsync(order.TableId);
+                        if (table != null)
+                        {
+                            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
+                            { 
+                                type = "new-order", 
+                                tableId = table.Id, 
+                                tableName = table.Name,
+                                message = $"Bàn {table.Name} vừa đặt món mới!",
+                                timestamp = System.DateTime.UtcNow
+                            });
+                        }
+                    }
+                }
+
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -160,6 +225,53 @@ namespace MenuGoBE.Controllers
                 return NotFound(new { message = "Không tìm thấy OrderDetail để xóa" });
 
             return Ok(new { message = "Xóa thành công" });
+        }
+
+        [HttpGet("by-table/{tableId}")]
+        public async Task<IActionResult> GetTableOrderSummary(long tableId)
+        {
+            var summary = await _service.GetTableOrderSummaryAsync(tableId);
+            return Ok(summary);
+        }
+
+        [HttpPut("details/{id}/confirm")]
+        public async Task<IActionResult> ConfirmOrderDetail(long id)
+        {
+            var result = await _detailService.ConfirmAsync(id);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            return Ok(new { message = "Xác nhận thành công" });
+        }
+
+        [HttpPut("details/{id}/cooking-status")]
+        public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
+        {
+            var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            return Ok(new { message = "Cập nhật trạng thái thành công" });
+        }
+
+        [HttpPut("{orderId}/cancel")]
+        public async Task<IActionResult> CancelOrder(long orderId)
+        {
+            var result = await _service.CancelOrderAsync(orderId);
+            if (!result)
+                return BadRequest(new { message = "Không thể hủy đơn. Có món đang được chuẩn bị hoặc đã phục vụ." });
+
+            return Ok(new { message = "Hủy đơn hàng thành công" });
+        }
+
+        [HttpPut("details/{id}/cancel")]
+        public async Task<IActionResult> CancelOrderDetail(long id)
+        {
+            var result = await _detailService.CancelOrderDetailAsync(id);
+            if (!result)
+                return BadRequest(new { message = "Không thể hủy món. Món đã được nhận bởi bếp hoặc đã bị hủy trước đó." });
+
+            return Ok(new { message = "Hủy món thành công" });
         }
     }
 }

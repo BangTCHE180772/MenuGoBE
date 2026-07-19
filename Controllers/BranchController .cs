@@ -22,8 +22,21 @@ namespace MenuGoBE.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var result = await _service.GetAllAsync();
-            return Ok(result);
+            try
+            {
+                var result = await _service.GetAllAsync();
+                //200
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                //500
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách chi nhánh.",
+                    error = ex.Message
+                });
+            }
         }
 
         [HttpGet("{id:long}")]
@@ -40,32 +53,73 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] BranchQueryDto dto)
+        {
+            try
+            {
+                var result = await _service.SearchFilteredBranchesAsync(dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách chi nhánh.",
+                    error = ex.Message
+                });
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] BranchCreateDto dto)
         {
-            var result = await _service.CreateAsync(dto);
-
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = result.Id },
-                result);
+            try
+            {
+                var result = await _service.CreateAsync(dto);
+                //201
+                return CreatedAtAction(
+                    nameof(GetById),
+                    new { id = result.Id },
+                    result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(400, new
+                {
+                    message = "Đã xảy ra lỗi khi thêm chi nhánh.",
+                    error = ex.Message
+                });
+            }
         }
 
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] BranchUpdateDto dto)
         {
-            var success = await _service.UpdateAsync(dto);
 
-            if (!success)
-                return NotFound(new
-                {
-                    message = $"Không tìm thấy Branch có Id = {dto.Id}"
-                });
-
-            return Ok(new
+            try
             {
-                message = "Cập nhật Branch thành công"
-            });
+                var success = await _service.UpdateAsync(dto);
+
+                if (!success)
+                    return NotFound(new
+                    {
+                        message = $"Không tìm thấy Branch có Id = {dto.Id}"
+                    });
+
+                return Ok(new
+                {
+                    message = "Cập nhật Branch thành công"
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(400, new
+                {
+                    message = "Đã xảy ra lỗi khi sửa chi nhánh.",
+                    error = ex.Message
+                });
+            }
         }
 
         [HttpDelete("{id:long}")]
