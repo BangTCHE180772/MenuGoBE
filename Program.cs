@@ -70,6 +70,7 @@ builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
 builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
+builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -89,6 +90,9 @@ builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
+builder.Services.AddScoped<IVoucherService, VoucherService>();
+builder.Services.AddScoped<IDeviceService, DeviceService>();
+
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
@@ -103,8 +107,8 @@ builder.Services.AddSingleton(new PayOSClient(
 ));
 
 // Payment Service
-builder.Services.AddScoped<IPaymentService,PaymentService>();
-builder.Services.AddScoped<IVoucherService, VoucherService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+
 
 builder.Services.AddSignalR();
 

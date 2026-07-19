@@ -55,6 +55,9 @@ public class AppDbContext : DbContext
     public DbSet<Payment> Payments { get; set; } = null!;
     public DbSet<Voucher> Vouchers { get; set; } = null!;
 
+    // 8. Device Module
+    public DbSet<Device> Devices { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
