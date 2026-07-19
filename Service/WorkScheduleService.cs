@@ -152,5 +152,11 @@ namespace MenuGoBE.Service
 
             return true;
         }
+
+        public async Task<List<WorkScheduleViewDto>> GetByAccountIdAsync(long accountId)
+        {
+            var data = await _repo.GetByAccountIdAsync(accountId);
+            return _mapper.Map<List<WorkScheduleViewDto>>(data);
+        }
     }
 }

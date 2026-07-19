@@ -70,6 +70,13 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId)
+        {
+            return await _context.WorkSchedules
+                .Where(ws => ws.AccountId == accountId)
+                .ToListAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
