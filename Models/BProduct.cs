@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
@@ -13,18 +14,20 @@ public class BProduct
 
     public long ProductId { get; set; }
 
-    public string Type { get; set; } = string.Empty;
+    public BProductType Type { get; set; }
 
-    [Column(TypeName = "decimal(27,9)")]
-    public decimal PricePerBaseUnit { get; set; }
+    [Column(TypeName = "decimal(30,12)")]
+    public decimal Avg { get; set; }
 
-    /// <summary>Tiền leftover (tồn dư giá trị)</summary>
-    [Column(TypeName = "decimal(27,9)")]
+    [Column(TypeName = "decimal(30,12)")]
     public decimal LeftOver { get; set; }
 
-    public bool ChainActive { get; set; } = true;
+    [Column(TypeName = "decimal(21,3)")]
+    public decimal Quantity { get; set; }
 
-    public bool BranchActive { get; set; } = true;
+    public bool ChainActive { get; set; }
+
+    public bool BranchActive { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -35,6 +38,6 @@ public class BProduct
     [ForeignKey("ProductId")]
     public Product Product { get; set; } = null!;
 
-    public ICollection<BProductBatch> BProductBatches { get; set; } = new List<BProductBatch>();
+    public ICollection<BProductHistory> BProductHistories { get; set; } = new List<BProductHistory>();
     public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
 }
