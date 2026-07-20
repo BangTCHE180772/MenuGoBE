@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using MenuGoBE.Dtos.Address;
 
 namespace MenuGoBE.Dtos.Chain
 {
     public class ChainUpdateDto
     {
         public long Id { get; set; }
+        
         public TimeOnly OpenTime { get; set; }
 
         public TimeOnly CloseTime { get; set; }
@@ -18,6 +20,8 @@ namespace MenuGoBE.Dtos.Chain
 
         public string Name { get; set; } = string.Empty;
 
-        public long AddressId { get; set; }
+        // public long AddressId { get; set; }
+        public AddressUpdateDto Address { get; set; } = new();
+
     }
 }
