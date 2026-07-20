@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,11 +18,11 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<Account>> GetAccountsWithRoleRangeAsync(int minRole, int maxRole)
+        public async Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles)
         {
             return await _context.Accounts
                 .Include(a => a.Contracts)
-                .Where(a => a.Contracts.Any(c => c.RoleId >= minRole && c.RoleId <= maxRole))
+                .Where(a => !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)))
                 .ToListAsync();
         }
 

@@ -20,9 +20,9 @@ namespace MenuGoBE.Service
             _mapper = mapper;
         }
 
-        public async Task<List<AccountViewDto>> GetAccountsWithRoleRangeAsync(int minRole, int maxRole)
+        public async Task<List<AccountViewDto>> GetAccountsExcludeRolesAsync(List<long> excludedRoles)
         {
-            var accounts = await _repo.GetAccountsWithRoleRangeAsync(minRole, maxRole);
+            var accounts = await _repo.GetAccountsExcludeRolesAsync(excludedRoles);
             return _mapper.Map<List<AccountViewDto>>(accounts);
         }
 
@@ -30,6 +30,7 @@ namespace MenuGoBE.Service
         {
             var account = await _repo.GetByIdAsync(id);
             if (account == null) return null;
+
             return _mapper.Map<AccountViewDto>(account);
         }
 

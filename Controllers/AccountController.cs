@@ -1,7 +1,11 @@
 using System.Threading.Tasks;
+using System.Security.Claims;
+using System.Linq;
+using System.Collections.Generic;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MenuGoBE.Controllers
 {
@@ -16,11 +20,11 @@ namespace MenuGoBE.Controllers
             _service = service;
         }
 
-        [HttpGet("role-range")]
-        public async Task<IActionResult> GetAccountsByRoleRange()
+        [HttpGet("exclude-roles")]
+        public async Task<IActionResult> GetAccountsExcludeRoles()
         {
-            // Fetch accounts with RoleID from 3 to 6
-            var result = await _service.GetAccountsWithRoleRangeAsync(3, 6);
+            // Fetch accounts excluding role 1, 2 and 3
+            var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 });
             return Ok(result);
         }
 
