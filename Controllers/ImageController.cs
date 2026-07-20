@@ -9,10 +9,12 @@ namespace MenuGoBE.Controllers
     public class ImageController : ControllerBase
     {
         private readonly IImageService _service;
+        private readonly IPhotoService _photoService;
 
-        public ImageController(IImageService service)
+        public ImageController(IImageService service, IPhotoService photoService)
         {
             _service = service;
+            _photoService = photoService;
         }
 
         [HttpGet]
@@ -36,6 +38,26 @@ namespace MenuGoBE.Controllers
         {
             var result = await _service.CreateAsync(dto);
             return Ok(result);
+        }
+
+        [HttpPost("upload")]
+        public async Task<IActionResult> UploadImage(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { message = "Vui lòng chọn file ảnh để tải lên." });
+
+            var result = await _photoService.AddPhotoAsync(file);
+
+            if (result.Error != null)
+                return BadRequest(new { message = result.Error.Message });
+
+            var imageDto = new ImageCreateDto
+            {
+                ImageLink = result.SecureUrl.ToString()
+            };
+
+            var createdImage = await _service.CreateAsync(imageDto);
+            return Ok(createdImage);
         }
 
         [HttpPut]
