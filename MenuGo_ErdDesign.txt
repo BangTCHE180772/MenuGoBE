@@ -46,9 +46,16 @@ Tickets:        Id, AccountId, BranchId, Reason, PenaltyAmount, CreatedBy, Creat
 Areas:          Id, BranchId, Name, Status, IsActive, CreatedAt
 Tables:         Id, AreaId, Name, Status, IsActive, CreatedAt
 Customer:       Id, Name, Phone, Point, CreatedAt
+Reservations:   Id, CustomerId, ReservationTime, NumberOfGuests, Note, Status, OrderId, CreatedAt
 Orders:         Id, TableId, FatherId, Method, Status, CustomerId, TotalAmount, CreatedBy, CreatedAt
 OrderDetails:   Id, OrderId, ProductId, RecipeId, Quantity, Price, Note, Status, CookingStatus, CreatedAt
+Payments:       Id, OrderId, Amount, Method, Status, TransactionId, PaymentLinkId, CheckoutUrl, QrCode, CreatedAt, CompletedAt
 
+-- PROMOTIONS MODULE
+Voucher:        Id, Code, Name, DiscountType, DiscountValue, MaxDiscount, MinOrderValue, BranchId, StartDate, EndDate, Quantity, UsedCount, IsActive
+
+-- DEVICE MANAGEMENT MODULE
+Devices:        Id, BranchId, Name, DeviceType, Token, IsActive, SetupBy, CreatedAt, LastActiveAt
 
 ================================================================
 FOREIGN KEYS & RELATIONSHIPS
@@ -111,6 +118,16 @@ Orders.CustomerId               -> Customer.Id                  [N-1]
 OrderDetails.OrderId            -> Orders.Id                    [N-1]
 OrderDetails.ProductId          -> Products.Id                  [N-1]
 OrderDetails.RecipeId           -> Recipes.Id                   [N-1]
+Reservations.CustomerId         -> Customer.Id                  [N-1]
+Reservations.OrderId            -> Orders.Id                    [N-1]
+Payments.OrderId                -> Orders.Id                    [N-1]
+
+--- PROMOTIONS ---
+Voucher.BranchId                -> Branches.Id                  [N-1] (nullable)
+
+--- DEVICE MANAGEMENT ---
+Devices.BranchId                -> Branches.Id                  [N-1]
+Devices.SetupBy                 -> Accounts.Id                  [N-1]
 
 
 ================================================================
