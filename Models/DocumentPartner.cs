@@ -13,10 +13,10 @@ public class DocumentPartner
 
     public long PartnerId { get; set; }
 
-    [Column(TypeName = "decimal(27,9)")]
+    [Column(TypeName = "decimal(30,12)")]
     public decimal Cost { get; set; }
 
-    public string Note { get; set; } = string.Empty;
+    public string? Note { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -26,4 +26,6 @@ public class DocumentPartner
 
     [ForeignKey("PartnerId")]
     public Partner Partner { get; set; } = null!;
+
+    public ICollection<CashFlowDetail> CashFlowDetails { get; set; } = new List<CashFlowDetail>();
 }

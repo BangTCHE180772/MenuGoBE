@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
@@ -11,44 +12,46 @@ public class Document
 
     public long BranchId { get; set; }
 
-    /// <summary>Self-reference: parent document (nullable)</summary>
     public long? FatherId { get; set; }
 
-    public string Type { get; set; } = string.Empty;
+    [Required]
+    [MaxLength(100)]
+    public string Code { get; set; } = string.Empty;
 
-    public string Status { get; set; } = string.Empty;
+    public DocumentType Type { get; set; }
 
-    public string TransferStatus { get; set; } = string.Empty;
+    public DocumentStatus Status { get; set; }
 
-    [Column(TypeName = "decimal(27,9)")]
-    public decimal TotalAmount { get; set; }
+    public DocumentTransferStatus TransferStatus { get; set; }
 
-    /// <summary>Self-reference: the original document this reverses (nullable)</summary>
-    public long? ReversalOfDocumentId { get; set; }
+    [Column(TypeName = "decimal(30,12)")]
+    public decimal TotalPrice { get; set; }
+
+    public long? CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    public DateTime? DeletedAt { get; set; }
+    public bool IsDeleted { get; set; } = false;
 
     public long? DeletedBy { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
 
     // Navigation
     [ForeignKey("BranchId")]
     public Branch Branch { get; set; } = null!;
 
     [ForeignKey("FatherId")]
-    [InverseProperty("ChildDocuments")]
     public Document? Father { get; set; }
+
+    [ForeignKey("CreatedBy")]
+    public Account? Creator { get; set; }
+
+    [ForeignKey("DeletedBy")]
+    public Account? Deleter { get; set; }
 
     [InverseProperty("Father")]
     public ICollection<Document> ChildDocuments { get; set; } = new List<Document>();
-
-    [ForeignKey("ReversalOfDocumentId")]
-    [InverseProperty("ReversalDocuments")]
-    public Document? ReversalOfDocument { get; set; }
-
-    [InverseProperty("ReversalOfDocument")]
-    public ICollection<Document> ReversalDocuments { get; set; } = new List<Document>();
 
     public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
     public ICollection<DocumentPartner> DocumentPartners { get; set; } = new List<DocumentPartner>();

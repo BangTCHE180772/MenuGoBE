@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
@@ -11,18 +12,16 @@ public class CashFlowDetail
 
     public long CashFlowId { get; set; }
 
-    public long? DocumentId { get; set; }
+    public long? DocumentPartnerId { get; set; }
 
-    public long? PartnerId { get; set; }
+    public CashFlowDetailType Type { get; set; }
 
-    public string Type { get; set; } = string.Empty;
+    public PaymentMethod PaymentMethod { get; set; }
 
-    public string PaymentMethod { get; set; } = string.Empty;
-
-    [Column(TypeName = "decimal(27,9)")]
+    [Column(TypeName = "decimal(30,12)")]
     public decimal Amount { get; set; }
 
-    public string Note { get; set; } = string.Empty;
+    public string? Note { get; set; }
 
     public long? DeletedBy { get; set; }
 
@@ -32,9 +31,9 @@ public class CashFlowDetail
     [ForeignKey("CashFlowId")]
     public CashFlow CashFlow { get; set; } = null!;
 
-    [ForeignKey("DocumentId")]
-    public Document? Document { get; set; }
+    [ForeignKey("DocumentPartnerId")]
+    public DocumentPartner? DocumentPartner { get; set; }
 
-    [ForeignKey("PartnerId")]
-    public Partner? Partner { get; set; }
+    [ForeignKey("DeletedBy")]
+    public Account? Deleter { get; set; }
 }
