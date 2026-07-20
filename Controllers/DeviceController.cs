@@ -16,12 +16,14 @@ namespace MenuGoBE.Controllers
         private readonly IDeviceService _service;
         private readonly IDeviceAuthService _authService;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IWorkScheduleService _workScheduleService;
 
-        public DeviceController(IDeviceService service, IDeviceAuthService authService, IHubContext<NotificationHub> hubContext)
+        public DeviceController(IDeviceService service, IDeviceAuthService authService, IHubContext<NotificationHub> hubContext, IWorkScheduleService workScheduleService)
         {
             _service = service;
             _authService = authService;
             _hubContext = hubContext;
+            _workScheduleService = workScheduleService;
         }
 
         [HttpGet("debug-claims")]
@@ -225,6 +227,32 @@ namespace MenuGoBE.Controllers
                     success = true,
                     isPos = true,
                     message = "Đã gửi yêu cầu đăng nhập POS."
+                });
+            }
+            else if (device.DeviceType == "Attendance")
+            {
+                var accountIdStr = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub" || c.Type == "id" || c.Type == "AccountId")?.Value;
+                if (string.IsNullOrEmpty(accountIdStr) || !long.TryParse(accountIdStr, out var accountId))
+                {
+                    return BadRequest(new { message = "Không xác định được ID tài khoản." });
+                }
+
+                var (success, msg, action) = await _workScheduleService.RecordAttendanceAsync(accountId, device.BranchId);
+                
+                _authService.RemoveChallenge(dto.ChallengeId);
+                
+                if (success)
+                {
+                    await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
+                        .SendAsync("AttendanceSuccess", new { name, action, message = msg });
+                }
+
+                return Ok(new
+                {
+                    success = success,
+                    isPos = false,
+                    branchId = device.BranchId,
+                    message = msg
                 });
             }
             else

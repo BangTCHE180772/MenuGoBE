@@ -67,5 +67,43 @@ namespace MenuGoBE.Service
 
             return true;
         }
+
+        public async Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+            
+            var schedule = await _repo.GetTodayScheduleAsync(accountId, branchId, today);
+            
+            if (schedule == null)
+            {
+                return (false, "Bạn không có ca làm việc hôm nay tại chi nhánh này.", "");
+            }
+
+            if (schedule.CheckInAt == null)
+            {
+                // Check-in
+                schedule.CheckInAt = DateTime.UtcNow;
+                schedule.Status = "Working";
+                await _repo.UpdateAsync(schedule);
+                await _repo.SaveChangesAsync();
+                return (true, "Check-in thành công", "checkin");
+            }
+            else
+            {
+                // Check-out (or update Check-out if have Check-out before)
+                schedule.CheckOutAt = DateTime.UtcNow;
+                
+                // Calculate ActualHours
+                var duration = schedule.CheckOutAt.Value - schedule.CheckInAt.Value;
+                schedule.ActualHours = (decimal)duration.TotalHours;
+                
+                schedule.Status = "Completed";
+                
+                await _repo.UpdateAsync(schedule);
+                await _repo.SaveChangesAsync();
+                
+                return (true, "Check-out thành công", "checkout");
+            }
+        }
     }
 }
