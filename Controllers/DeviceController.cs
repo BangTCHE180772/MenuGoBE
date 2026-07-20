@@ -189,9 +189,9 @@ namespace MenuGoBE.Controllers
             });
         }
 
-        [HttpPost("auth/scan")]
-        [Authorize(Roles = "Manager,Admin,Owner")]
-        public async Task<IActionResult> ScanAuthChallenge([FromBody] DeviceScanChallengeDto dto)
+        [HttpPost("personal-login")]
+        [Authorize]
+        public async Task<IActionResult> PersonalLogin([FromBody] DeviceScanChallengeDto dto)
         {
             var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
             var name = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "name")?.Value;
@@ -199,21 +199,45 @@ namespace MenuGoBE.Controllers
             if (string.IsNullOrEmpty(email))
                 return Unauthorized(new { message = "Không xác định được email tài khoản." });
 
-            var success = _authService.MarkAsScanned(dto.ChallengeId, email, name!);
-            if (!success)
+            var challenge = _authService.GetChallenge(dto.ChallengeId);
+            if (challenge == null)
             {
                 return BadRequest(new { message = "Mã QR đã hết hạn hoặc không hợp lệ." });
             }
 
-            var challenge = _authService.GetChallenge(dto.ChallengeId);
-            if (challenge != null)
+            var device = await _service.GetDeviceByTokenAsync(challenge.DeviceToken);
+            if (device == null)
             {
-                // Push SignalR event to the device
-                await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
-                    .SendAsync("DeviceAuthScanned", new { email, name });
+                return BadRequest(new { message = "Thiết bị cấp mã QR không hợp lệ." });
             }
 
-            return Ok(new { message = "Đã yêu cầu đăng nhập trên thiết bị." });
+            if (device.DeviceType == "POS")
+            {
+                var success = _authService.MarkAsScanned(dto.ChallengeId, email, name!);
+                if (!success)
+                    return BadRequest(new { message = "Mã QR đã hết hạn." });
+
+                await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
+                    .SendAsync("DeviceAuthScanned", new { email, name });
+
+                return Ok(new
+                {
+                    success = true,
+                    isPos = true,
+                    message = "Đã gửi yêu cầu đăng nhập POS."
+                });
+            }
+            else
+            {
+                _authService.RemoveChallenge(dto.ChallengeId);
+                return Ok(new
+                {
+                    success = true,
+                    isPos = false,
+                    branchId = device.BranchId,
+                    message = "Đã nhận ca phục vụ thành công."
+                });
+            }
         }
     }
 }
