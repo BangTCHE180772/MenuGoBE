@@ -6,7 +6,7 @@ namespace MenuGoBE.Interface.Repository
 {
     public interface IAccountRepository
     {
-        Task<List<Account>> GetAccountsWithRoleRangeAsync(int minRole, int maxRole);
+        Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles);
         Task<Account?> GetByIdAsync(long id);
         Task CreateAsync(Account entity);
         Task UpdateAsync(Account entity);
