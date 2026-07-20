@@ -38,7 +38,7 @@ namespace MenuGoBE.Repositories
         public async Task<List<Order>> GetChildOrdersWithDetailsAsync(long fatherId)
         {
             return await _context.Orders
-                .Where(o => o.FatherId == fatherId && o.Status == "Active")
+                .Where(o => o.FatherId == fatherId && (o.Status == "Active" || o.Status == "Reserved"))
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
