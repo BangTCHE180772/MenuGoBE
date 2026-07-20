@@ -12,5 +12,6 @@ namespace MenuGoBE.Interface.Repository
         Task UpdateAsync(WorkSchedule entity);
         Task DeleteAsync(long id);
         Task SaveChangesAsync();
+        Task<WorkSchedule?> GetTodayScheduleAsync(long accountId, long branchId, DateOnly date);
     }
 }
