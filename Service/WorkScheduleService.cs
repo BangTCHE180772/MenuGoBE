@@ -110,8 +110,8 @@ namespace MenuGoBE.Service
                         ShiftId = dto.ShiftId,
                         WorkDate = workDate,
                         Code = $"WS-{dto.BranchId}-{dto.ShiftId}-{accountId}-{workDate:yyyyMMdd}",
-                        Status = "PENDING",
-                        ManagerApproved = false,
+                        Status = "APPROVED",
+                        ManagerApproved = true,
                         CreatedBy = dto.CreatedBy,
                         CreatedAt = DateTime.UtcNow
                     };
