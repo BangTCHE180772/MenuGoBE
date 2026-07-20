@@ -18,5 +18,6 @@ namespace MenuGoBE.Dtos.Contract
         public int BaseWorkDay { get; set; }
         public long CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string AccountName { get; set; } = string.Empty;
     }
 }

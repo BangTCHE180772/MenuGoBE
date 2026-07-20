@@ -85,7 +85,8 @@ namespace MenuGoBE.Mapper
             CreateMap<WorkScheduleCreateDto, WorkSchedule>();
             CreateMap<WorkScheduleUpdateDto, WorkSchedule>();
 
-            CreateMap<Contract, ContractViewDto>();
+            CreateMap<Contract, ContractViewDto>()
+                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty));
             CreateMap<ContractCreateDto, Contract>();
             CreateMap<ContractUpdateDto, Contract>();
 
