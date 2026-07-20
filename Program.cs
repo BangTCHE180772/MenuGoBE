@@ -149,7 +149,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // REMOVED to fix CORS / Token stripping on redirect
 
 app.UseAuthentication();
 app.UseAuthorization();
