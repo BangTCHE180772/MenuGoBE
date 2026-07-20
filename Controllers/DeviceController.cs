@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using MenuGoBE.Dtos.Device;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Service;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Controllers
 {
@@ -11,17 +14,31 @@ namespace MenuGoBE.Controllers
     public class DeviceController : ControllerBase
     {
         private readonly IDeviceService _service;
+        private readonly IDeviceAuthService _authService;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public DeviceController(IDeviceService service)
+        public DeviceController(IDeviceService service, IDeviceAuthService authService, IHubContext<NotificationHub> hubContext)
         {
             _service = service;
+            _authService = authService;
+            _hubContext = hubContext;
+        }
+
+        [HttpGet("debug-claims")]
+        [Authorize]
+        public IActionResult DebugClaims()
+        {
+            var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+            var isAdmin = User.IsInRole("Admin");
+            var isOwner = User.IsInRole("Owner");
+            return Ok(new { claims, isAdmin, isOwner });
         }
 
         [HttpPost("setup")]
         [Authorize(Roles = "Manager,Admin,Owner")]
         public async Task<IActionResult> Setup([FromBody] DeviceSetupDto dto)
         {
-            var accountIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+            var accountIdClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub" || c.Type == "id")?.Value;
             if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
                 return Unauthorized(new { message = "Không xác định được tài khoản." });
 
@@ -153,6 +170,50 @@ namespace MenuGoBE.Controllers
                     
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpPost("auth/challenge")]
+        [AllowAnonymous]
+        public IActionResult CreateChallenge([FromBody] DeviceCreateChallengeDto dto)
+        {
+            if (string.IsNullOrEmpty(dto.DeviceToken))
+            {
+                return BadRequest(new { message = "Thiếu DeviceToken." });
+            }
+
+            var challenge = _authService.CreateChallenge(dto.DeviceToken);
+            return Ok(new DeviceAuthChallengeDto
+            {
+                ChallengeId = challenge.ChallengeId,
+                ExpiresAt = challenge.ExpiresAt
+            });
+        }
+
+        [HttpPost("auth/scan")]
+        [Authorize(Roles = "Manager,Admin,Owner")]
+        public async Task<IActionResult> ScanAuthChallenge([FromBody] DeviceScanChallengeDto dto)
+        {
+            var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
+            var name = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "name")?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return Unauthorized(new { message = "Không xác định được email tài khoản." });
+
+            var success = _authService.MarkAsScanned(dto.ChallengeId, email, name!);
+            if (!success)
+            {
+                return BadRequest(new { message = "Mã QR đã hết hạn hoặc không hợp lệ." });
+            }
+
+            var challenge = _authService.GetChallenge(dto.ChallengeId);
+            if (challenge != null)
+            {
+                // Push SignalR event to the device
+                await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
+                    .SendAsync("DeviceAuthScanned", new { email, name });
+            }
+
+            return Ok(new { message = "Đã yêu cầu đăng nhập trên thiết bị." });
         }
     }
 }
