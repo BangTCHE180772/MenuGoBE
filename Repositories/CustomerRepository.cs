@@ -15,6 +15,11 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
+        public async Task<Customer?> GetByIdAsync(long id)
+        {
+            return await _context.Customers.FindAsync(id);
+        }
+
         public async Task<Customer?> GetByPhoneAsync(string phone)
         {
             return await _context.Customers.FirstOrDefaultAsync(c => c.Phone == phone);

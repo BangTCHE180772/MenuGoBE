@@ -17,6 +17,10 @@ namespace MenuGoBE.Validator.Branch
 
             RuleFor(x => x.Type)
                 .MaximumLength(50);
+
+            RuleFor(x => x.OpenTime)
+                .LessThan(x => x.CloseTime)
+                .WithMessage("Giờ mở cửa phải nhỏ hơn giờ đóng cửa.");
         }
     }
 }

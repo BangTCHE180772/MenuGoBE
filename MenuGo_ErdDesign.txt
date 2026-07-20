@@ -49,6 +49,25 @@ Customer:       Id, Name, Phone, Point, CreatedAt
 Orders:         Id, TableId, FatherId, Method, Status, CustomerId, TotalAmount, CreatedBy, CreatedAt
 OrderDetails:   Id, OrderId, ProductId, RecipeId, Quantity, Price, Note, Status, CookingStatus, CreatedAt
 
+-- OPERATION INVENTORY MODULE
+Inventories:        Id, BranchId, Name, Type, CreatedAt
+BProducts:          Id, BranchId, ProductId, Type, PricePerBaseUnit(DECIMAL 27,9), LeftOver(DECIMAL 27,9),
+                    ChainActive, BranchActive, CreatedAt
+BProductBatches:    Id, BProductId, InventoryId, Name, ExpiryDate, Quantity(DECIMAL 21,3),
+                    IsActive, UpdatedAt, CreatedAt
+BBatchesHistories:  Id, BProductBatchId, DocumentDetailId, ChangeType,
+                    Quantity(DECIMAL 21,3), QuantityBefore(DECIMAL 21,3), QuantityAfter(DECIMAL 21,3),
+                    AvgCostAtTime(DECIMAL 27,9), ValueBefore(DECIMAL 27,9), ValueAfter(DECIMAL 27,9), CreatedAt
+Documents:          Id, BranchId, FatherId, Type, Status, TransferStatus,
+                    TotalAmount(DECIMAL 27,9), ReversalOfDocumentId, CreatedAt, DeletedAt, DeletedBy
+DocumentDetails:    Id, DocumentId, BProductId, BProductBatchId, InventoryId,
+                    Quantity(DECIMAL 21,3), UnitPrice(DECIMAL 27,9), ExpiredAt, Note, CreatedAt
+CashFlows:          Id, BranchId, Code(UNIQUE), Direction, TotalAmount(DECIMAL 27,9), DeletedBy, CreatedAt
+CashFlowDetails:    Id, CashFlowId, DocumentId, PartnerId, Type, PaymentMethod,
+                    Amount(DECIMAL 27,9), Note, DeletedBy, CreatedAt
+Partners:           Id, BranchId, Type, Name, AddressId, Phone, Email, CreatedBy, CreatedAt
+DocumentPartners:   Id, DocumentId, PartnerId, Cost(DECIMAL 27,9), Note, CreatedAt
+
 
 ================================================================
 FOREIGN KEYS & RELATIONSHIPS
@@ -112,6 +131,32 @@ OrderDetails.OrderId            -> Orders.Id                    [N-1]
 OrderDetails.ProductId          -> Products.Id                  [N-1]
 OrderDetails.RecipeId           -> Recipes.Id                   [N-1]
 
+--- OPERATION INVENTORY ---
+Inventories.BranchId                    -> Branches.Id                  [N-1]
+BProducts.BranchId                      -> Branches.Id                  [N-1]
+BProducts.ProductId                     -> Products.Id                  [N-1]
+BProductBatches.BProductId              -> BProducts.Id                 [N-1]
+BProductBatches.InventoryId             -> Inventories.Id               [N-1]
+BBatchesHistories.BProductBatchId       -> BProductBatches.Id           [N-1]
+BBatchesHistories.DocumentDetailId      -> DocumentDetails.Id           [N-1]
+Documents.BranchId                      -> Branches.Id                  [N-1]
+Documents.FatherId                      -> Documents.Id                 [N-1] (self-ref, nullable)
+Documents.ReversalOfDocumentId          -> Documents.Id                 [N-1] (self-ref, nullable)
+DocumentDetails.DocumentId              -> Documents.Id                 [N-1]
+DocumentDetails.BProductId              -> BProducts.Id                 [N-1]
+DocumentDetails.BProductBatchId         -> BProductBatches.Id           [N-1]
+DocumentDetails.InventoryId             -> Inventories.Id               [N-1]
+CashFlows.BranchId                      -> Branches.Id                  [N-1]
+-- CashFlows.Code: UNIQUE constraint
+CashFlowDetails.CashFlowId              -> CashFlows.Id                 [N-1]
+CashFlowDetails.DocumentId              -> Documents.Id                 [N-1] (nullable)
+CashFlowDetails.PartnerId               -> Partners.Id                  [N-1] (nullable)
+Partners.BranchId                       -> Branches.Id                  [N-1]
+Partners.AddressId                      -> Addresses.Id                 [N-1] (nullable)
+Partners.CreatedBy                      -> Accounts.Id                  [N-1]
+DocumentPartners.DocumentId             -> Documents.Id                 [N-1]
+DocumentPartners.PartnerId              -> Partners.Id                  [N-1]
+
 
 ================================================================
 REMOVED ENTITIES (from previous schema)
@@ -121,12 +166,14 @@ REMOVED ENTITIES (from previous schema)
 --   Reason: Replaced by the Products/Groups/Images catalog module.
 
 -- REMOVED: BVariants, BVariantBatches, BVariantBatchDetailds
--- REMOVED: Inventories
+--   Note: BProductBatches.BProductId (formerly BVariantId) now references BProducts directly.
+
 -- REMOVED: Suppliers, SuppliersTransactions, BInInventoryTransactionDetailds
 -- REMOVED: Transports
 -- REMOVED: InventoryTransactions, InventoryTransactionBatches, InventoryTransactionDetailds
 -- REMOVED: TransportClaims, Evidences
 -- REMOVED: BInventoryCheck, InventoryCheckDetailds, InventoryCheckDetailedQuantities
---   Reason: All warehouse/inventory/supplier/transport logic removed from Branch.
---           Branch now only manages HR (Contracts, WorkSchedules, Tickets)
---           and the physical layout (Areas -> Tables -> Orders).
+--   Reason: Replaced by the new Operation Inventory module
+--           (Inventories, BProducts, BProductBatches, BBatchesHistories,
+--            Documents, DocumentDetails, CashFlows, CashFlowDetails,
+--            Partners, DocumentPartners).
