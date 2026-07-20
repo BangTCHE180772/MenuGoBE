@@ -10,6 +10,7 @@ using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Dtos.Contract;
 using MenuGoBE.Dtos.Branch;
+using MenuGoBE.Dtos.Shift;
 using MenuGoBE.Dtos.Image;
 using MenuGoBE.Dtos.Group;
 using MenuGoBE.Dtos.Menu;
@@ -23,12 +24,33 @@ namespace MenuGoBE.Mapper
         public AutoMapperProfiles()
         {
             //Chain
-            CreateMap<Chain, ChainViewDto>();
+            CreateMap<Chain, ChainViewDto>()
+            .ForMember(
+                dest => dest.AddressName,
+                opt => opt.MapFrom
+                (src =>
+                    src.Address.NewWard != null
+                        ? $"{src.Address.NewWard.Name}, {src.Address.NewWard.NewProvince.Name}"
+                    : src.Address.OldWard != null
+                        ? $"{src.Address.OldWard.Name}, {src.Address.OldWard.OldDistrict.Name}"
+                    : "Chưa có địa chỉ"
+                )); ;
+
             CreateMap<ChainCreateDto, Chain>();
             CreateMap<ChainUpdateDto, Chain>();
 
             //Branch
-            CreateMap<Branch, BranchViewDto>();
+            CreateMap<Branch, BranchViewDto>()
+            .ForMember(
+                dest => dest.AddressName,
+                opt => opt.MapFrom
+                (src =>
+                    src.Address.NewWard != null
+                        ? $"{src.Address.NewWard.Name}, {src.Address.NewWard.NewProvince.Name}"
+                    : src.Address.OldWard != null
+                        ? $"{src.Address.OldWard.Name}, {src.Address.OldWard.OldDistrict.Name}"
+                    : "Chưa có địa chỉ"
+                )); ;
             CreateMap<BranchCreateDto, Branch>();
             CreateMap<BranchUpdateDto, Branch>();
 
@@ -66,6 +88,11 @@ namespace MenuGoBE.Mapper
             CreateMap<Contract, ContractViewDto>();
             CreateMap<ContractCreateDto, Contract>();
             CreateMap<ContractUpdateDto, Contract>();
+
+            //Shift
+            CreateMap<Shift, ShiftViewDto>();
+            CreateMap<ShiftCreateDto, Shift>();
+            CreateMap<ShiftUpdateDto, Shift>();
             //Image
             CreateMap<Models.Image, ImageViewDto>();
             CreateMap<ImageCreateDto, Models.Image>();

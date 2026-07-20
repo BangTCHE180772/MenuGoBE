@@ -13,11 +13,16 @@ public class Order
 
     public long? FatherId { get; set; }
 
-    public string Method { get; set; } = string.Empty;
-
     public string Status { get; set; } = string.Empty;
 
     public long? CustomerId { get; set; }
+
+    public long? VoucherId { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal DiscountAmount { get; set; }
+
+    public int PointsUsed { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
     public decimal TotalAmount { get; set; }
@@ -36,8 +41,14 @@ public class Order
     [ForeignKey("CustomerId")]
     public Customer? Customer { get; set; }
 
+    [ForeignKey("VoucherId")]
+    public Voucher? Voucher { get; set; }
+
     [InverseProperty("Father")]
     public ICollection<Order> ChildOrders { get; set; } = new List<Order>();
+
+    [InverseProperty("Order")]
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 }

@@ -20,12 +20,28 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Chain>> GetAllAsync()
         {
-            return await _context.Chains.ToListAsync();
+            return await _context.Chains
+            .Include(b => b.Address)
+                .ThenInclude(a => a.NewWard!)
+                    .ThenInclude(w => w.NewProvince)
+            .Include(b => b.Address)
+                .ThenInclude(a => a.OldWard!)
+                    .ThenInclude(w => w.OldDistrict)
+                        .ThenInclude(d => d.OldProvince)
+            .ToListAsync();
         }
 
         public async Task<Chain?> GetMainChainAsync()
         {
-            return await _context.Chains.FirstOrDefaultAsync();
+            return await _context.Chains
+            .Include(b => b.Address)
+                .ThenInclude(a => a.NewWard!)
+                    .ThenInclude(w => w.NewProvince)
+            .Include(b => b.Address)
+                .ThenInclude(a => a.OldWard!)
+                    .ThenInclude(w => w.OldDistrict)
+                        .ThenInclude(d => d.OldProvince)
+            .FirstOrDefaultAsync();
         }
 
         public async Task<Chain?> GetByIdAsync(long id)

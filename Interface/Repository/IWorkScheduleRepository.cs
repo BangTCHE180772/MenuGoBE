@@ -12,5 +12,9 @@ namespace MenuGoBE.Interface.Repository
         Task UpdateAsync(WorkSchedule entity);
         Task DeleteAsync(long id);
         Task SaveChangesAsync();
+        Task<bool> ExistsAsync(long accountId, long shiftId, System.DateOnly workDate);
+        Task<bool> BranchExistsAsync(long branchId);
+        Task<bool> ShiftExistsAsync(long shiftId);
+        Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds);
     }
 }

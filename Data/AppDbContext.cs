@@ -52,6 +52,23 @@ public class AppDbContext : DbContext
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
+    public DbSet<Payment> Payments { get; set; } = null!;
+    public DbSet<Voucher> Vouchers { get; set; } = null!;
+
+    // 8. Device Module
+    public DbSet<Device> Devices { get; set; } = null!;
+
+    // 8. Operation Inventory Module
+    public DbSet<Inventory> Inventories { get; set; } = null!;
+    public DbSet<BProduct> BProducts { get; set; } = null!;
+    public DbSet<BProductBatch> BProductBatches { get; set; } = null!;
+    public DbSet<BBatchesHistory> BBatchesHistories { get; set; } = null!;
+    public DbSet<Document> Documents { get; set; } = null!;
+    public DbSet<DocumentDetail> DocumentDetails { get; set; } = null!;
+    public DbSet<CashFlow> CashFlows { get; set; } = null!;
+    public DbSet<CashFlowDetail> CashFlowDetails { get; set; } = null!;
+    public DbSet<Partner> Partners { get; set; } = null!;
+    public DbSet<DocumentPartner> DocumentPartners { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -79,6 +96,11 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.SKUCode)
+            .IsUnique();
+
+        // Unique index on CashFlows.Code
+        modelBuilder.Entity<CashFlow>()
+            .HasIndex(cf => cf.Code)
             .IsUnique();
 
         // Iterate over all entities and disable cascade deletes globally to avoid Multiple Cascade Path errors

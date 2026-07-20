@@ -21,7 +21,15 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Branch>> GetAllAsync()
         {
-            return await _context.Branches.ToListAsync();
+            return await _context.Branches
+                .Include(b => b.Address)
+                    .ThenInclude(a => a.NewWard!)
+                        .ThenInclude(w => w.NewProvince)
+                .Include(b => b.Address)
+                    .ThenInclude(a => a.OldWard!)
+                        .ThenInclude(w => w.OldDistrict)
+                            .ThenInclude(d => d.OldProvince)
+                .ToListAsync();
         }
 
         public async Task<Branch?> GetByIdAsync(long id)
@@ -35,6 +43,10 @@ namespace MenuGoBE.Repositories
                 .Include(b => b.Address)
                     .ThenInclude(a => a.NewWard!)
                         .ThenInclude(w => w.NewProvince)
+                .Include(b => b.Address)
+                    .ThenInclude(a => a.OldWard!)
+                        .ThenInclude(w => w.OldDistrict)
+                            .ThenInclude(d => d.OldProvince)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(dto.Keyword))
@@ -57,13 +69,29 @@ namespace MenuGoBE.Repositories
 
             query = dto.SortBy?.ToLowerInvariant() switch
             {
-                "Name" => dto.Desc
+                "id" => dto.Desc
+                    ? query.OrderByDescending(b => b.Id)
+                    : query.OrderBy(b => b.Id),
+
+                "name" => dto.Desc
                     ? query.OrderByDescending(b => b.Name)
                     : query.OrderBy(b => b.Name),
 
-                "CreatedAt" => dto.Desc
+                "createdat" => dto.Desc
                     ? query.OrderByDescending(b => b.CreatedAt)
                     : query.OrderBy(b => b.CreatedAt),
+
+                "opentime" => dto.Desc
+                    ? query.OrderByDescending(b => b.OpenTime)
+                    : query.OrderBy(b => b.OpenTime),
+
+                "closetime" => dto.Desc
+                    ? query.OrderByDescending(b => b.CloseTime)
+                    : query.OrderBy(b => b.CloseTime),
+
+                "addressname" => dto.Desc
+                    ? query.OrderByDescending(b => b.Address.NewWard!.Name)
+                    : query.OrderBy(b => b.Address.NewWard!.Name),
 
                 _ => query.OrderBy(b => b.Id)
             };
