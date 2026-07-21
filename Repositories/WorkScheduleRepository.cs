@@ -74,5 +74,13 @@ namespace MenuGoBE.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
+        public async Task<WorkSchedule?> GetTodayScheduleAsync(long accountId, long branchId, DateOnly date)
+        {
+            return await _context.WorkSchedules
+                .FirstOrDefaultAsync(ws => ws.AccountId == accountId 
+                                        && ws.BranchId == branchId 
+                                        && ws.WorkDate == date);
+        }
     }
 }

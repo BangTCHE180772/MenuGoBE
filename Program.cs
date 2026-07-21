@@ -102,11 +102,18 @@ builder.Services.AddScoped<IOldWardService, OldWardService>();
 builder.Services.AddScoped<INewProvinceService, NewProvinceService>();
 builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
 builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
+builder.Services.Configure<MenuGoBE.Helpers.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.AddScoped<IPhotoService, PhotoService>();
 
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
 builder.Services.AddHostedService<ReservationMonitorService>();
+
+// Device Auth Service (QR + SignalR)
+builder.Services.AddSingleton<DeviceAuthService>();
+builder.Services.AddSingleton<IDeviceAuthService>(provider => provider.GetRequiredService<DeviceAuthService>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<DeviceAuthService>());
 
 // PayOS setup
 var payOsConfig = builder.Configuration.GetSection("PayOS");
@@ -156,7 +163,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // REMOVED to fix CORS / Token stripping on redirect
 
 app.UseAuthentication();
 app.UseAuthorization();
