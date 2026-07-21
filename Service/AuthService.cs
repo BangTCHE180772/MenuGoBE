@@ -37,12 +37,6 @@ namespace MenuGoBE.Service
             }
 
             bool isPasswordValid = HashHelper.VerifyPassword(dto.Password, account.HashedPassword);
-            
-            if (!isPasswordValid)
-            {
-                // Fallback nếu DB đang lưu plain text (trong quá trình dev)
-                isPasswordValid = (dto.Password == account.HashedPassword);
-            }
 
             if (!isPasswordValid)
             {
