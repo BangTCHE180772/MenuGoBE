@@ -41,18 +41,32 @@ namespace MenuGoBE.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] AccountCreateDto dto)
         {
-            var result = await _service.CreateAsync(dto);
-            return Ok(result);
+            try
+            {
+                var result = await _service.CreateAsync(dto);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] AccountUpdateDto dto)
         {
-            var result = await _service.UpdateAsync(dto);
-            if (!result)
-                return NotFound(new { message = "Không tìm thấy Account để cập nhật" });
+            try
+            {
+                var result = await _service.UpdateAsync(dto);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy Account để cập nhật" });
 
-            return Ok(new { message = "Cập nhật thành công" });
+                return Ok(new { message = "Cập nhật thành công" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id}")]

@@ -73,5 +73,24 @@ namespace MenuGoBE.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
+        public async Task<bool> ExistsByPhoneAsync(string phone, long? excludeId = null)
+        {
+            return await _context.Accounts
+                .AnyAsync(a => a.Phone == phone && (!excludeId.HasValue || a.Id != excludeId.Value));
+        }
+
+        public async Task<bool> ExistsByEmailAsync(string email, long? excludeId = null)
+        {
+            return await _context.Accounts
+                .AnyAsync(a => a.Email == email && (!excludeId.HasValue || a.Id != excludeId.Value));
+        }
+
+        public async Task<bool> ExistsByCitizenIdCodeAsync(string citizenIdCode, long? excludeId = null)
+        {
+            if (string.IsNullOrEmpty(citizenIdCode)) return false;
+            return await _context.Accounts
+                .AnyAsync(a => a.CitizenIdCode == citizenIdCode && (!excludeId.HasValue || a.Id != excludeId.Value));
+        }
     }
 }
