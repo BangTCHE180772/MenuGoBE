@@ -52,4 +52,5 @@ public class Product
     public ICollection<RecipesDetailed> RecipesDetaileds { get; set; } = new List<RecipesDetailed>();
     public ICollection<UnitConversion> UnitConversions { get; set; } = new List<UnitConversion>();
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
+    public ICollection<BProduct> BProducts { get; set; } = new List<BProduct>();
 }

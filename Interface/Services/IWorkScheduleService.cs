@@ -14,5 +14,6 @@ namespace MenuGoBE.Interface.Services
         
         // (Check-in/Check-out)
         Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId);
+        Task<List<WorkScheduleViewDto>> AssignBulkAsync(WorkScheduleAssignDto dto);
     }
 }
