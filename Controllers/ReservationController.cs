@@ -22,6 +22,13 @@ public class ReservationController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("available-tables")]
+    public async Task<IActionResult> GetAvailableTables([FromQuery] long branchId, [FromQuery] DateTime reservationTime)
+    {
+        var result = await _service.GetAvailableTablesAsync(branchId, reservationTime);
+        return Ok(result);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ReservationCreateDto dto)
     {
