@@ -12,6 +12,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.OData;
 using Microsoft.OData.ModelBuilder;
 using MenuGoBE.Models;
+using MenuGoBE.Helpers;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -71,6 +72,11 @@ builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+builder.Services.AddScoped<INewWardRepository, NewWardRepository>();
+builder.Services.AddScoped<IOldWardRepository, OldWardRepository>();
+builder.Services.AddScoped<INewProvinceRepository, NewProvinceRepository>();
+builder.Services.AddScoped<IOldProvinceRepository, OldProvinceRepository>();
+builder.Services.AddScoped<IOldDistrictRepository, OldDistrictRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -79,6 +85,7 @@ builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWorkScheduleService, WorkScheduleService>();
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<IShiftService, ShiftService>();
@@ -92,11 +99,25 @@ builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
+builder.Services.AddScoped<INewWardService, NewWardService>();
+builder.Services.AddScoped<IOldWardService, OldWardService>();
+builder.Services.AddScoped<INewProvinceService, NewProvinceService>();
+builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
+builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
+builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services.AddScoped<IPhotoService, PhotoService>();
+builder.Services.AddScoped<IEmailService,EmailService>();
 
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
 builder.Services.AddHostedService<ReservationMonitorService>();
+
+// Device Auth Service (QR + SignalR)
+builder.Services.AddSingleton<DeviceAuthService>();
+builder.Services.AddSingleton<IDeviceAuthService>(provider => provider.GetRequiredService<DeviceAuthService>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<DeviceAuthService>());
 
 // PayOS setup
 var payOsConfig = builder.Configuration.GetSection("PayOS");
@@ -146,7 +167,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // REMOVED to fix CORS / Token stripping on redirect
 
 app.UseAuthentication();
 app.UseAuthorization();
