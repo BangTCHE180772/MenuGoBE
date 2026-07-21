@@ -37,22 +37,6 @@ namespace MenuGoBE.Controllers
             }
         }
 
-        [HttpPost("test-mail")]
-        public async Task<IActionResult> TestMail([FromQuery] string toEmail)
-        {
-            try
-            {
-                string subject = "Test Email từ MenuGo";
-                string body = "<h1>Chào bạn,</h1><p>Hệ thống MenuGo đã gửi email thành công tới bạn!</p>";
-                await _emailService.SendEmailAsync(toEmail, subject, body);
-                return Ok(new { message = $"Đã gửi email test tới {toEmail} thành công!" });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Lỗi khi gửi mail", error = ex.Message });
-            }
-        }
-
         [HttpPost("setup-2fa")]
         public async Task<IActionResult> Setup2FA([FromBody] Setup2FADto dto)
         {
