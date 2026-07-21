@@ -253,5 +253,11 @@ namespace MenuGoBE.Service
                 }
             }
         }
+
+        public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
+        {
+            return await _repo.GetActiveRoleIdsAsync(accountId);
+        }
     }
 }
+

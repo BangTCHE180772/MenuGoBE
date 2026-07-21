@@ -1,4 +1,6 @@
 using System;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.WorkSchedule;
@@ -8,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class WorkScheduleController : ControllerBase
@@ -22,16 +25,43 @@ namespace MenuGoBE.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var result = await _service.GetAllAsync();
-            return Ok(result);
+            var accountIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
+                return Unauthorized(new { message = "Không xác định được tài khoản." });
+
+            var roleIds = await _service.GetActiveRoleIdsAsync(accountId);
+            bool isRestricted = roleIds.Intersect(new[] { 4L, 5L, 6L }).Any() && !roleIds.Intersect(new[] { 1L, 2L }).Any();
+
+            if (isRestricted)
+            {
+                var result = await _service.GetByAccountIdAsync(accountId);
+                return Ok(result);
+            }
+            else
+            {
+                var result = await _service.GetAllAsync();
+                return Ok(result);
+            }
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(long id)
         {
+            var accountIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
+                return Unauthorized(new { message = "Không xác định được tài khoản." });
+
+            var roleIds = await _service.GetActiveRoleIdsAsync(accountId);
+            bool isRestricted = roleIds.Intersect(new[] { 4L, 5L, 6L }).Any() && !roleIds.Intersect(new[] { 1L, 2L }).Any();
+
             var result = await _service.GetByIdAsync(id);
             if (result == null)
                 return NotFound(new { message = "Không tìm thấy WorkSchedule" });
+
+            if (isRestricted && result.AccountId != accountId)
+            {
+                return Forbid();
+            }
 
             return Ok(result);
         }
@@ -88,7 +118,7 @@ namespace MenuGoBE.Controllers
         [HttpGet("mine")]
         public async Task<IActionResult> GetMySchedule()
         {
-            var accountIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var accountIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
             if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
                 return Unauthorized(new { message = "Không xác định được tài khoản." });
 
