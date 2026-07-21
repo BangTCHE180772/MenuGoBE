@@ -11,6 +11,9 @@ namespace MenuGoBE.Interface.Services
         Task<WorkScheduleViewDto> CreateAsync(WorkScheduleCreateDto dto);
         Task<bool> UpdateAsync(WorkScheduleUpdateDto dto);
         Task<bool> DeleteAsync(long id);
+        
+        // (Check-in/Check-out)
+        Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId);
         Task<List<WorkScheduleViewDto>> AssignBulkAsync(WorkScheduleAssignDto dto);
     }
 }

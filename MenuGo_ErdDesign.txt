@@ -46,9 +46,16 @@ Tickets:        Id, AccountId, BranchId, Reason, PenaltyAmount, CreatedBy, Creat
 Areas:          Id, BranchId, Name, Status, IsActive, CreatedAt
 Tables:         Id, AreaId, Name, Status, IsActive, CreatedAt
 Customer:       Id, Name, Phone, Point, CreatedAt
+Reservations:   Id, CustomerId, ReservationTime, NumberOfGuests, Note, Status, OrderId, CreatedAt
 Orders:         Id, TableId, FatherId, Method, Status, CustomerId, TotalAmount, CreatedBy, CreatedAt
 OrderDetails:   Id, OrderId, ProductId, RecipeId, Quantity, Price, Note, Status, CookingStatus, CreatedAt
+Payments:       Id, OrderId, Amount, Method, Status, TransactionId, PaymentLinkId, CheckoutUrl, QrCode, CreatedAt, CompletedAt
 
+-- PROMOTIONS MODULE
+Voucher:        Id, Code, Name, DiscountType, DiscountValue, MaxDiscount, MinOrderValue, BranchId, StartDate, EndDate, Quantity, UsedCount, IsActive
+
+-- DEVICE MANAGEMENT MODULE
+Devices:        Id, BranchId, Name, DeviceType, Token, IsActive, SetupBy, CreatedAt, LastActiveAt
 -- OPERATION INVENTORY MODULE  [UPDATED: 2026-07-20 – New DBML Schema]
 -- Rules: Currency/Price = decimal(30,12) | Quantity = decimal(21,3) | Code fields = UNIQUE
 BProducts:          Id, BranchId, ProductId, Type(enum:BProductType), Avg(DECIMAL 30,12),
@@ -75,9 +82,7 @@ CashFlowDetails:    Id, CashFlowId, DocumentPartnerId(nullable FK->DocumentPartn
 -- Inventories, BProductBatches, BBatchesHistories
 
 
-================================================================
 FOREIGN KEYS & RELATIONSHIPS
-================================================================
 
 -- [1-N] = 1 bên trái có nhiều bên phải
 -- [N-1] = nhiều bên trái thuộc 1 bên phải  (FK nằm ở bảng trái)
@@ -163,9 +168,7 @@ CashFlowDetails.DocumentPartnerId      -> DocumentPartners.Id           [N-1] (n
 CashFlowDetails.DeletedBy              -> Accounts.Id                   [N-1] (nullable)
 
 
-================================================================
 REMOVED ENTITIES (from previous schema)
-================================================================
 
 -- REMOVED: Items, Variants, Categories
 --   Reason: Replaced by the Products/Groups/Images catalog module.
@@ -245,6 +248,16 @@ Orders.CustomerId               -> Customer.Id                  [N-1]
 OrderDetails.OrderId            -> Orders.Id                    [N-1]
 OrderDetails.ProductId          -> Products.Id                  [N-1]
 OrderDetails.RecipeId           -> Recipes.Id                   [N-1]
+Reservations.CustomerId         -> Customer.Id                  [N-1]
+Reservations.OrderId            -> Orders.Id                    [N-1]
+Payments.OrderId                -> Orders.Id                    [N-1]
+
+--- PROMOTIONS ---
+Voucher.BranchId                -> Branches.Id                  [N-1] (nullable)
+
+--- DEVICE MANAGEMENT ---
+Devices.BranchId                -> Branches.Id                  [N-1]
+Devices.SetupBy                 -> Accounts.Id                  [N-1]
 
 --- OPERATION INVENTORY ---
 Inventories.BranchId                    -> Branches.Id                  [N-1]
