@@ -16,5 +16,6 @@ namespace MenuGoBE.Interface.Services
         Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId);
         Task<List<WorkScheduleViewDto>> AssignBulkAsync(WorkScheduleAssignDto dto);
         Task<List<WorkScheduleViewDto>> GetByAccountIdAsync(long accountId);
+        Task<List<long>> GetActiveRoleIdsAsync(long accountId);
     }
 }

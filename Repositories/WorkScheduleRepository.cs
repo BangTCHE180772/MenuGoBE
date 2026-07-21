@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository;
@@ -91,6 +92,26 @@ namespace MenuGoBE.Repositories
                           && ws.WorkDate == date)
                 .OrderBy(ws => ws.Shift.StartTime)
                 .ToListAsync();
+        }
+
+        public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
+        {
+            var now = DateTime.UtcNow;
+            var today = DateOnly.FromDateTime(now);
+
+            var activeContracts = await _context.Contracts
+                .Where(c => c.AccountId == accountId && c.Status == "Active" && c.StartDate <= today && (c.EndDate == null || c.EndDate >= today))
+                .Select(c => c.RoleId)
+                .Distinct()
+                .ToListAsync();
+
+            var activeTempRoles = await _context.TempRoles
+                .Where(tr => tr.AccountId == accountId && tr.Status == "Active" && tr.StartTime <= now && tr.EndTime >= now)
+                .Select(tr => tr.RoleId)
+                .Distinct()
+                .ToListAsync();
+
+            return activeContracts.Union(activeTempRoles).ToList();
         }
     }
 }
