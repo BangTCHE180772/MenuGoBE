@@ -1,13 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using MenuGoBE.Data;
-using MenuGoBE.Models;
+using System;
+using System.Threading.Tasks;
 using MenuGoBE.Dtos.Auth;
-using Google.Authenticator;
+using MenuGoBE.Interface.Services; 
 
 namespace MenuGoBE.Controllers
 {
@@ -15,224 +10,109 @@ namespace MenuGoBE.Controllers
     [ApiController]
     public class AuthController : ControllerBase
     {
-        private readonly AppDbContext _context;
-        private readonly IConfiguration _configuration;
+        private readonly IAuthService _authService;
+        private readonly IEmailService _emailService;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(IAuthService authService, IEmailService emailService)
         {
-            _context = context;
-            _configuration = configuration;
+            _authService = authService;
+            _emailService = emailService;
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
-            var account = await _context.Accounts
-                .FirstOrDefaultAsync(a => a.Email == dto.Email && a.IsActive);
-
-            if (account == null)
-            {
-                return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
-            }
-
-            bool isPasswordValid = false;
             try
             {
-                isPasswordValid = BCrypt.Net.BCrypt.Verify(dto.Password, account.HashedPassword);
+                var result = await _authService.LoginAsync(dto);
+                return Ok(result);
             }
-            catch
+            catch (UnauthorizedAccessException ex)
             {
-                // Fallback nếu DB đang lưu plain text (trong quá trình dev)
-                isPasswordValid = (dto.Password == account.HashedPassword);
+                return Unauthorized(new { message = ex.Message });
             }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
+        }
 
-            if (!isPasswordValid)
+        [HttpPost("test-mail")]
+        public async Task<IActionResult> TestMail([FromQuery] string toEmail)
+        {
+            try
             {
-                return Unauthorized(new { message = "Email hoặc mật khẩu không đúng." });
+                string subject = "Test Email từ MenuGo";
+                string body = "<h1>Chào bạn,</h1><p>Hệ thống MenuGo đã gửi email thành công tới bạn!</p>";
+                await _emailService.SendEmailAsync(toEmail, subject, body);
+                return Ok(new { message = $"Đã gửi email test tới {toEmail} thành công!" });
             }
-
-            if (string.IsNullOrEmpty(account.TwoFACode))
+            catch (Exception ex)
             {
-                return Ok(new
-                {
-                    status = "setup_2fa_required",
-                    accountId = account.Id,
-                    message = "Tài khoản của bạn chưa cài đặt bảo mật 2 lớp. Bắt buộc cài đặt để tiếp tục."
-                });
+                return StatusCode(500, new { message = "Lỗi khi gửi mail", error = ex.Message });
             }
-
-            return Ok(new
-            {
-                status = "verify_2fa_required",
-                accountId = account.Id,
-                message = "Vui lòng nhập mã 6 số từ Google Authenticator."
-            });
         }
 
         [HttpPost("setup-2fa")]
         public async Task<IActionResult> Setup2FA([FromBody] Setup2FADto dto)
         {
-            var account = await _context.Accounts.FindAsync(dto.AccountId);
-            if (account == null) return NotFound("Account not found");
-
-            var tfa = new TwoFactorAuthenticator();
-            string secretKey = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10).ToUpper();
-            
-            var setupInfo = tfa.GenerateSetupCode("MenuGo", account.Email, secretKey, false, 3);
-            
-            return Ok(new
+            try
             {
-                secretKey = secretKey,
-                qrCodeUrl = setupInfo.QrCodeSetupImageUrl,
-                manualEntryKey = setupInfo.ManualEntryKey
-            });
+                var result = await _authService.Setup2FAAsync(dto);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
         }
 
         [HttpPost("confirm-setup-2fa")]
         public async Task<IActionResult> ConfirmSetup2FA([FromBody] ConfirmSetup2FADto dto)
         {
-            var account = await _context.Accounts
-                .Include(a => a.TempRoles)
-                    .ThenInclude(tr => tr.Role)
-                .Include(a => a.Contracts)
-                    .ThenInclude(c => c.Role)
-                .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
-
-            if (account == null) return NotFound("Account not found");
-
-            var tfa = new TwoFactorAuthenticator();
-            bool isCorrectPin = tfa.ValidateTwoFactorPIN(dto.SecretKey, dto.Code);
-
-            if (!isCorrectPin)
+            try
             {
-                return BadRequest(new { message = "Mã xác thực không chính xác." });
+                var result = await _authService.ConfirmSetup2FAAsync(dto);
+                return Ok(result);
             }
-
-            account.TwoFACode = dto.SecretKey;
-            await _context.SaveChangesAsync();
-
-            var (activeRoles, branchIds) = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles, branchIds);
-
-            return Ok(new
+            catch (ArgumentException ex)
             {
-                status = "success",
-                token = token,
-                user = new
-                {
-                    id = account.Id,
-                    name = account.Name,
-                    email = account.Email,
-                    roles = activeRoles,
-                    branchIds = branchIds
-                }
-            });
+                return NotFound(ex.Message);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
         }
 
         [HttpPost("verify-2fa")]
         public async Task<IActionResult> Verify2FA([FromBody] Verify2FADto dto)
         {
-            var account = await _context.Accounts
-                .Include(a => a.TempRoles)
-                    .ThenInclude(tr => tr.Role)
-                .Include(a => a.Contracts)
-                    .ThenInclude(c => c.Role)
-                .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
-
-            if (account == null) return NotFound("Account not found");
-
-            var tfa = new TwoFactorAuthenticator();
-            bool isCorrectPin = tfa.ValidateTwoFactorPIN(account.TwoFACode, dto.Code);
-
-            if (!isCorrectPin)
+            try
             {
-                return BadRequest(new { message = "Mã xác thực không chính xác." });
+                var result = await _authService.Verify2FAAsync(dto);
+                return Ok(result);
             }
-
-            var (activeRoles, branchIds) = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles, branchIds);
-
-            return Ok(new
+            catch (ArgumentException ex)
             {
-                status = "success",
-                token = token,
-                user = new
-                {
-                    id = account.Id,
-                    name = account.Name,
-                    email = account.Email,
-                    roles = activeRoles,
-                    branchIds = branchIds
-                }
-            });
-        }
-
-        private (List<string> roles, List<long> branchIds) GetActiveRoles(Account account)
-        {
-            var now = DateTime.UtcNow;
-            var today = DateOnly.FromDateTime(now);
-
-            var activeContracts = account.Contracts
-                .Where(c => c.Status == "Active" && c.StartDate <= today && (c.EndDate == null || c.EndDate >= today))
-                .ToList();
-
-            if (!activeContracts.Any())
-            {
-                return (new List<string>(), new List<long>());
+                return NotFound(ex.Message);
             }
-
-            var branchIds = activeContracts
-                .Where(c => c.BranchId != null && c.BranchId > 0)
-                .Select(c => (long)c.BranchId!)
-                .Distinct()
-                .ToList();
-
-            var activeTempRoles = account.TempRoles
-                .Where(tr => tr.Status == "Active" && tr.StartTime <= now && tr.EndTime >= now)
-                .Select(tr => tr.Role.Name)
-                .Distinct()
-                .ToList();
-
-            if (activeTempRoles.Any())
+            catch (UnauthorizedAccessException ex)
             {
-                return (activeTempRoles, branchIds);
+                return BadRequest(new { message = ex.Message });
             }
-
-            var contractRoles = activeContracts.Select(c => c.Role.Name).Distinct().ToList();
-            return (contractRoles, branchIds);
-        }
-
-        private string GenerateJwtToken(Account account, List<string> roles, List<long> branchIds)
-        {
-            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
-            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
-            var claims = new List<Claim>
+            catch (Exception ex)
             {
-                new Claim(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, account.Email),
-                new Claim("name", account.Name)
-            };
-
-            foreach (var role in roles)
-            {
-                claims.Add(new Claim(ClaimTypes.Role, role));
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
             }
-
-            foreach (var branchId in branchIds)
-            {
-                claims.Add(new Claim("branchId", branchId.ToString()));
-            }
-
-            var token = new JwtSecurityToken(
-                issuer: _configuration["Jwt:Issuer"],
-                audience: _configuration["Jwt:Audience"],
-                claims: claims,
-                expires: DateTime.Now.AddHours(24),
-                signingCredentials: credentials);
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }
-
