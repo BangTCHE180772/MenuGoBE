@@ -8,6 +8,8 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles);
         Task<Account?> GetByIdAsync(long id);
+        Task<Account?> GetAccountByEmailAsync(string email);
+        Task<Account?> GetAccountWithRolesAsync(long id);
         Task CreateAsync(Account entity);
         Task UpdateAsync(Account entity);
         Task DeleteAsync(long id);

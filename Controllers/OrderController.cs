@@ -244,12 +244,37 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Xác nhận thành công" });
         }
 
+        [HttpGet("kitchen-items")]
+        public async Task<IActionResult> GetKitchenItems()
+        {
+            var result = await _detailService.GetKitchenItemsAsync();
+            return Ok(result);
+        }
+
         [HttpPut("details/{id}/cooking-status")]
         public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
         {
+            long? tableId = null;
+            var detail = await _detailService.GetByIdAsync(id);
+            if (detail != null)
+            {
+                var order = await _service.GetByIdAsync(detail.OrderId);
+                tableId = order?.TableId;
+            }
+
             var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                type = "cooking-status-changed",
+                orderDetailId = id,
+                cookingStatus = dto.CookingStatus,
+                tableId = tableId,
+                message = $"Trạng thái chế biến món #{id} đã đổi sang {dto.CookingStatus}",
+                timestamp = DateTime.UtcNow
+            });
 
             return Ok(new { message = "Cập nhật trạng thái thành công" });
         }
@@ -261,6 +286,14 @@ namespace MenuGoBE.Controllers
             if (!result)
                 return BadRequest(new { message = "Không thể hủy đơn. Có món đang được chuẩn bị hoặc đã phục vụ." });
 
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                type = "order-cancelled",
+                orderId = orderId,
+                message = $"Đơn hàng #{orderId} đã bị hủy!",
+                timestamp = DateTime.UtcNow
+            });
+
             return Ok(new { message = "Hủy đơn hàng thành công" });
         }
 
@@ -270,6 +303,14 @@ namespace MenuGoBE.Controllers
             var result = await _detailService.CancelOrderDetailAsync(id);
             if (!result)
                 return BadRequest(new { message = "Không thể hủy món. Món đã được nhận bởi bếp hoặc đã bị hủy trước đó." });
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                type = "item-cancelled",
+                orderDetailId = id,
+                message = $"Món #{id} đã bị hủy!",
+                timestamp = DateTime.UtcNow
+            });
 
             return Ok(new { message = "Hủy món thành công" });
         }

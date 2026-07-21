@@ -146,6 +146,96 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Areas");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.BProduct", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Avg")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<bool>("BranchActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("ChainActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("LeftOver")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("BProducts");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.BProductHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AvgAfter")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<decimal>("AvgBefore")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<long>("BProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ChangeType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("DocumentDetailId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.Property<decimal>("QuantityAfter")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.Property<decimal>("QuantityBefore")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BProductId");
+
+                    b.HasIndex("DocumentDetailId");
+
+                    b.ToTable("BProductHistories");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Branch", b =>
                 {
                     b.Property<long>("Id")
@@ -184,6 +274,92 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("ChainId");
 
                     b.ToTable("Branches");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.CashFlow", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("DeletedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Direction")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DeletedBy");
+
+                    b.ToTable("CashFlows");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.CashFlowDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<long>("CashFlowId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("DeletedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("DocumentPartnerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashFlowId");
+
+                    b.HasIndex("DeletedBy");
+
+                    b.HasIndex("DocumentPartnerId");
+
+                    b.ToTable("CashFlowDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Chain", b =>
@@ -356,6 +532,146 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("SetupBy");
 
                     b.ToTable("Devices");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Document", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("DeletedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("FatherId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalPrice")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<string>("TransferStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("DeletedBy");
+
+                    b.HasIndex("FatherId");
+
+                    b.ToTable("Documents");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.DocumentDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DocumentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsLeftOver")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.Property<long?>("RecipeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BProductId");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("RecipeId");
+
+                    b.ToTable("DocumentDetails");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.DocumentPartner", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Cost")
+                        .HasColumnType("decimal(30,12)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DocumentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<long>("PartnerId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("PartnerId");
+
+                    b.ToTable("DocumentPartners");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Group", b =>
@@ -653,6 +969,54 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("RecipeId");
 
                     b.ToTable("OrderDetails");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Partner", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AddressId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddressId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.ToTable("Partners");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Payment", b =>
@@ -1242,6 +1606,43 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Branch");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.BProduct", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany("BProducts")
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Product", "Product")
+                        .WithMany("BProducts")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.BProductHistory", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.BProduct", "BProduct")
+                        .WithMany("BProductHistories")
+                        .HasForeignKey("BProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.DocumentDetail", "DocumentDetail")
+                        .WithMany("BProductHistories")
+                        .HasForeignKey("DocumentDetailId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("BProduct");
+
+                    b.Navigation("DocumentDetail");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Branch", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Address", "Address")
@@ -1259,6 +1660,49 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Address");
 
                     b.Navigation("Chain");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.CashFlow", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany("CashFlows")
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Deleter")
+                        .WithMany("DeletedCashFlows")
+                        .HasForeignKey("DeletedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Deleter");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.CashFlowDetail", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.CashFlow", "CashFlow")
+                        .WithMany("CashFlowDetails")
+                        .HasForeignKey("CashFlowId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Deleter")
+                        .WithMany("DeletedCashFlowDetails")
+                        .HasForeignKey("DeletedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.DocumentPartner", "DocumentPartner")
+                        .WithMany("CashFlowDetails")
+                        .HasForeignKey("DocumentPartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CashFlow");
+
+                    b.Navigation("Deleter");
+
+                    b.Navigation("DocumentPartner");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Chain", b =>
@@ -1316,6 +1760,83 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("SetupByAccount");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Document", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany("Documents")
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany("CreatedDocuments")
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Account", "Deleter")
+                        .WithMany("DeletedDocuments")
+                        .HasForeignKey("DeletedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Document", "Father")
+                        .WithMany("ChildDocuments")
+                        .HasForeignKey("FatherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Deleter");
+
+                    b.Navigation("Father");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.DocumentDetail", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.BProduct", "BProduct")
+                        .WithMany("DocumentDetails")
+                        .HasForeignKey("BProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Document", "Document")
+                        .WithMany("DocumentDetails")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Recipe", "Recipe")
+                        .WithMany("DocumentDetails")
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("BProduct");
+
+                    b.Navigation("Document");
+
+                    b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.DocumentPartner", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Document", "Document")
+                        .WithMany("DocumentPartners")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Partner", "Partner")
+                        .WithMany("DocumentPartners")
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+
+                    b.Navigation("Partner");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.MenuProduct", b =>
@@ -1426,6 +1947,31 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Partner", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Address", "Address")
+                        .WithMany()
+                        .HasForeignKey("AddressId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany("Partners")
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany("CreatedPartners")
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Address");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Creator");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Payment", b =>
@@ -1629,6 +2175,16 @@ namespace MenuGoBE.Migrations
                 {
                     b.Navigation("Contracts");
 
+                    b.Navigation("CreatedDocuments");
+
+                    b.Navigation("CreatedPartners");
+
+                    b.Navigation("DeletedCashFlowDetails");
+
+                    b.Navigation("DeletedCashFlows");
+
+                    b.Navigation("DeletedDocuments");
+
                     b.Navigation("TempRoles");
 
                     b.Navigation("Tickets");
@@ -1641,15 +2197,35 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Tables");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.BProduct", b =>
+                {
+                    b.Navigation("BProductHistories");
+
+                    b.Navigation("DocumentDetails");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Branch", b =>
                 {
                     b.Navigation("Areas");
 
+                    b.Navigation("BProducts");
+
+                    b.Navigation("CashFlows");
+
                     b.Navigation("Contracts");
+
+                    b.Navigation("Documents");
+
+                    b.Navigation("Partners");
 
                     b.Navigation("Tickets");
 
                     b.Navigation("WorkSchedules");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.CashFlow", b =>
+                {
+                    b.Navigation("CashFlowDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Chain", b =>
@@ -1662,6 +2238,25 @@ namespace MenuGoBE.Migrations
             modelBuilder.Entity("MenuGoBE.Models.Customer", b =>
                 {
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Document", b =>
+                {
+                    b.Navigation("ChildDocuments");
+
+                    b.Navigation("DocumentDetails");
+
+                    b.Navigation("DocumentPartners");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.DocumentDetail", b =>
+                {
+                    b.Navigation("BProductHistories");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.DocumentPartner", b =>
+                {
+                    b.Navigation("CashFlowDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Group", b =>
@@ -1713,8 +2308,15 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Payments");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Partner", b =>
+                {
+                    b.Navigation("DocumentPartners");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
                 {
+                    b.Navigation("BProducts");
+
                     b.Navigation("MenuProducts");
 
                     b.Navigation("OrderDetails");
@@ -1728,6 +2330,8 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Recipe", b =>
                 {
+                    b.Navigation("DocumentDetails");
+
                     b.Navigation("OrderDetails");
 
                     b.Navigation("RecipesDetaileds");

@@ -175,5 +175,15 @@ namespace MenuGoBE.Service
                 }
             };
         }
+
+        public async Task<Device?> GetDeviceByTokenAsync(string token)
+        {
+            return await _context.Devices.FirstOrDefaultAsync(d => d.Token == token);
+        }
+
+        public Task<object?> PersonalLoginAsync(string challengeId)
+        {
+            throw new NotImplementedException("Not used, controller handles it directly.");
+        }
     }
 }
