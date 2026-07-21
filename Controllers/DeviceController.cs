@@ -251,6 +251,7 @@ namespace MenuGoBE.Controllers
                 {
                     success = success,
                     isPos = false,
+                    isAttendance = true,
                     branchId = device.BranchId,
                     message = msg
                 });
