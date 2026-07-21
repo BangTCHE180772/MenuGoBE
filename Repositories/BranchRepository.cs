@@ -34,7 +34,9 @@ namespace MenuGoBE.Repositories
 
         public async Task<Branch?> GetByIdAsync(long id)
         {
-            return await _context.Branches.FindAsync(id);
+            return await _context.Branches
+                .Include(b => b.Address)
+                .FirstOrDefaultAsync(b => b.Id == id);
         }
 
         public async Task<List<Branch>> SearchFilteredBranchesAsync(BranchQueryDto dto)
@@ -97,7 +99,7 @@ namespace MenuGoBE.Repositories
             };
 
             query = query.Skip((dto.Page - 1) * dto.PageSize)
-                         .Take(dto.PageSize);
+                        .Take(dto.PageSize);
 
             return await query.ToListAsync();
         }

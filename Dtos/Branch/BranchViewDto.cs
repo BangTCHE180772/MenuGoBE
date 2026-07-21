@@ -13,7 +13,9 @@ namespace MenuGoBE.Dtos.Branch
 
         public long AddressId { get; set; }
 
-        public string AddressName { get; set; } = string.Empty;
+        public string NewAddressName { get; set; } = string.Empty;
+       
+        public string OldAddressName { get; set; } = string.Empty;
 
         public string Name { get; set; } = string.Empty;
 

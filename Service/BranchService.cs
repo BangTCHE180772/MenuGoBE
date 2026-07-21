@@ -48,6 +48,8 @@ namespace MenuGoBE.Service
         {
             var entity = _mapper.Map<Branch>(dto);
 
+            entity.Address.Type = "Chi Nhánh";
+            entity.Type = "Main";
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
 
@@ -62,6 +64,9 @@ namespace MenuGoBE.Service
                 return false;
 
             _mapper.Map(dto, entity);
+
+            entity.Address.Type = "Chi Nhánh";
+
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();

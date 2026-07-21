@@ -72,6 +72,11 @@ builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+builder.Services.AddScoped<INewWardRepository, NewWardRepository>();
+builder.Services.AddScoped<IOldWardRepository, OldWardRepository>();
+builder.Services.AddScoped<INewProvinceRepository, NewProvinceRepository>();
+builder.Services.AddScoped<IOldProvinceRepository, OldProvinceRepository>();
+builder.Services.AddScoped<IOldDistrictRepository, OldDistrictRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -94,8 +99,12 @@ builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
-builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
-builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services.AddScoped<INewWardService, NewWardService>();
+builder.Services.AddScoped<IOldWardService, OldWardService>();
+builder.Services.AddScoped<INewProvinceService, NewProvinceService>();
+builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
+builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
+builder.Services.Configure<MenuGoBE.Helpers.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
 
