@@ -58,5 +58,21 @@ namespace MenuGoBE.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
+        public async Task<bool> HasActiveManagerAsync(long branchId, long excludeContractId = 0)
+        {
+            return await _context.Contracts
+                .Include(c => c.Role)
+                .AnyAsync(c => c.BranchId == branchId 
+                            && c.Role.Name == "Manager" 
+                            && c.Status == "Active"
+                            && c.Id != excludeContractId);
+        }
+
+        public async Task<bool> IsManagerRoleAsync(long roleId)
+        {
+            var role = await _context.Roles.FindAsync(roleId);
+            return role != null && role.Name == "Manager";
+        }
     }
 }

@@ -254,6 +254,14 @@ namespace MenuGoBE.Controllers
         [HttpPut("details/{id}/cooking-status")]
         public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
         {
+            long? tableId = null;
+            var detail = await _detailService.GetByIdAsync(id);
+            if (detail != null)
+            {
+                var order = await _service.GetByIdAsync(detail.OrderId);
+                tableId = order?.TableId;
+            }
+
             var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
@@ -263,6 +271,7 @@ namespace MenuGoBE.Controllers
                 type = "cooking-status-changed",
                 orderDetailId = id,
                 cookingStatus = dto.CookingStatus,
+                tableId = tableId,
                 message = $"Trạng thái chế biến món #{id} đã đổi sang {dto.CookingStatus}",
                 timestamp = DateTime.UtcNow
             });
