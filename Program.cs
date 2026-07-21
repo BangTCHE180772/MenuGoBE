@@ -100,6 +100,11 @@ builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
 builder.Services.AddHostedService<ReservationMonitorService>();
 
+// Device Auth Service (QR + SignalR)
+builder.Services.AddSingleton<DeviceAuthService>();
+builder.Services.AddSingleton<IDeviceAuthService>(provider => provider.GetRequiredService<DeviceAuthService>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<DeviceAuthService>());
+
 // PayOS setup
 var payOsConfig = builder.Configuration.GetSection("PayOS");
 builder.Services.AddSingleton(new PayOSClient(
@@ -148,7 +153,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // REMOVED to fix CORS / Token stripping on redirect
 
 app.UseAuthentication();
 app.UseAuthorization();
