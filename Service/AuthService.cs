@@ -36,12 +36,9 @@ namespace MenuGoBE.Service
                 throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
             }
 
-            bool isPasswordValid = false;
-            try
-            {
-                isPasswordValid = HashHelper.VerifyPassword(dto.Password, account.HashedPassword);
-            }
-            catch
+            bool isPasswordValid = HashHelper.VerifyPassword(dto.Password, account.HashedPassword);
+            
+            if (!isPasswordValid)
             {
                 // Fallback nếu DB đang lưu plain text (trong quá trình dev)
                 isPasswordValid = (dto.Password == account.HashedPassword);
