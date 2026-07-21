@@ -25,6 +25,22 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<Account?> GetAccountByEmailAsync(string email)
+        {
+            return await _context.Accounts
+                .FirstOrDefaultAsync(a => a.Email == email && a.IsActive);
+        }
+
+        public async Task<Account?> GetAccountWithRolesAsync(long id)
+        {
+            return await _context.Accounts
+                .Include(a => a.TempRoles)
+                    .ThenInclude(tr => tr.Role)
+                .Include(a => a.Contracts)
+                    .ThenInclude(c => c.Role)
+                .FirstOrDefaultAsync(a => a.Id == id);
+        }
+
         public async Task<Account?> GetByIdAsync(long id)
         {
             return await _context.Accounts
