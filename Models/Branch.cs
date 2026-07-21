@@ -35,4 +35,10 @@ public class Branch
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
     public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
+
+    // 9. Inventory Module
+    public ICollection<BProduct> BProducts { get; set; } = new List<BProduct>();
+    public ICollection<Document> Documents { get; set; } = new List<Document>();
+    public ICollection<Partner> Partners { get; set; } = new List<Partner>();
+    public ICollection<CashFlow> CashFlows { get; set; } = new List<CashFlow>();
 }

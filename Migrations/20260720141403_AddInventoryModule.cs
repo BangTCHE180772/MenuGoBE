@@ -7,19 +7,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MenuGoBE.Migrations
 {
     /// <inheritdoc />
-    public partial class AddOperationInventoryModule : Migration
+    public partial class AddInventoryModule : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AlterColumn<long>(
-                name: "CustomerId",
-                table: "Orders",
-                type: "bigint",
-                nullable: true,
-                oldClrType: typeof(long),
-                oldType: "bigint");
-
             migrationBuilder.CreateTable(
                 name: "BProducts",
                 columns: table => new
@@ -29,8 +21,8 @@ namespace MenuGoBE.Migrations
                     BranchId = table.Column<long>(type: "bigint", nullable: false),
                     ProductId = table.Column<long>(type: "bigint", nullable: false),
                     Type = table.Column<string>(type: "text", nullable: false),
-                    PricePerBaseUnit = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    LeftOver = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
+                    Avg = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
+                    LeftOver = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
                     ChainActive = table.Column<bool>(type: "boolean", nullable: false),
                     BranchActive = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
@@ -59,15 +51,21 @@ namespace MenuGoBE.Migrations
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     BranchId = table.Column<long>(type: "bigint", nullable: false),
-                    Code = table.Column<string>(type: "text", nullable: false),
+                    Code = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Direction = table.Column<string>(type: "text", nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
+                    TotalAmount = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
                     DeletedBy = table.Column<long>(type: "bigint", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_CashFlows", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CashFlows_Accounts_DeletedBy",
+                        column: x => x.DeletedBy,
+                        principalTable: "Accounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_CashFlows_Branches_BranchId",
                         column: x => x.BranchId,
@@ -84,18 +82,32 @@ namespace MenuGoBE.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     BranchId = table.Column<long>(type: "bigint", nullable: false),
                     FatherId = table.Column<long>(type: "bigint", nullable: true),
+                    Code = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Type = table.Column<string>(type: "text", nullable: false),
                     Status = table.Column<string>(type: "text", nullable: false),
                     TransferStatus = table.Column<string>(type: "text", nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    ReversalOfDocumentId = table.Column<long>(type: "bigint", nullable: true),
+                    TotalPrice = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
+                    CreatedBy = table.Column<long>(type: "bigint", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<long>(type: "bigint", nullable: true)
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
+                    DeletedBy = table.Column<long>(type: "bigint", nullable: true),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Documents", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Documents_Accounts_CreatedBy",
+                        column: x => x.CreatedBy,
+                        principalTable: "Accounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Documents_Accounts_DeletedBy",
+                        column: x => x.DeletedBy,
+                        principalTable: "Accounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Documents_Branches_BranchId",
                         column: x => x.BranchId,
@@ -108,34 +120,6 @@ namespace MenuGoBE.Migrations
                         principalTable: "Documents",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Documents_Documents_ReversalOfDocumentId",
-                        column: x => x.ReversalOfDocumentId,
-                        principalTable: "Documents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Inventories",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    BranchId = table.Column<long>(type: "bigint", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    Type = table.Column<string>(type: "text", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Inventories", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Inventories_Branches_BranchId",
-                        column: x => x.BranchId,
-                        principalTable: "Branches",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -146,11 +130,11 @@ namespace MenuGoBE.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     BranchId = table.Column<long>(type: "bigint", nullable: false),
                     Type = table.Column<string>(type: "text", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
                     AddressId = table.Column<long>(type: "bigint", nullable: true),
-                    Phone = table.Column<string>(type: "text", nullable: false),
-                    Email = table.Column<string>(type: "text", nullable: false),
-                    CreatedBy = table.Column<long>(type: "bigint", nullable: false),
+                    Phone = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
+                    Email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    CreatedBy = table.Column<long>(type: "bigint", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -177,72 +161,39 @@ namespace MenuGoBE.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "BProductBatches",
+                name: "DocumentDetails",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DocumentId = table.Column<long>(type: "bigint", nullable: false),
                     BProductId = table.Column<long>(type: "bigint", nullable: false),
-                    InventoryId = table.Column<long>(type: "bigint", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    ExpiryDate = table.Column<DateOnly>(type: "date", nullable: true),
+                    RecipeId = table.Column<long>(type: "bigint", nullable: true),
+                    IsLeftOver = table.Column<bool>(type: "boolean", nullable: false),
                     Quantity = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UnitPrice = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
+                    Note = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_BProductBatches", x => x.Id);
+                    table.PrimaryKey("PK_DocumentDetails", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_BProductBatches_BProducts_BProductId",
+                        name: "FK_DocumentDetails_BProducts_BProductId",
                         column: x => x.BProductId,
                         principalTable: "BProducts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_BProductBatches_Inventories_InventoryId",
-                        column: x => x.InventoryId,
-                        principalTable: "Inventories",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CashFlowDetails",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    CashFlowId = table.Column<long>(type: "bigint", nullable: false),
-                    DocumentId = table.Column<long>(type: "bigint", nullable: true),
-                    PartnerId = table.Column<long>(type: "bigint", nullable: true),
-                    Type = table.Column<string>(type: "text", nullable: false),
-                    PaymentMethod = table.Column<string>(type: "text", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    Note = table.Column<string>(type: "text", nullable: false),
-                    DeletedBy = table.Column<long>(type: "bigint", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CashFlowDetails", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CashFlowDetails_CashFlows_CashFlowId",
-                        column: x => x.CashFlowId,
-                        principalTable: "CashFlows",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_CashFlowDetails_Documents_DocumentId",
+                        name: "FK_DocumentDetails_Documents_DocumentId",
                         column: x => x.DocumentId,
                         principalTable: "Documents",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_CashFlowDetails_Partners_PartnerId",
-                        column: x => x.PartnerId,
-                        principalTable: "Partners",
+                        name: "FK_DocumentDetails_Recipes_RecipeId",
+                        column: x => x.RecipeId,
+                        principalTable: "Recipes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -255,8 +206,8 @@ namespace MenuGoBE.Migrations
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
                     DocumentId = table.Column<long>(type: "bigint", nullable: false),
                     PartnerId = table.Column<long>(type: "bigint", nullable: false),
-                    Cost = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    Note = table.Column<string>(type: "text", nullable: false),
+                    Cost = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
+                    Note = table.Column<string>(type: "text", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
@@ -277,103 +228,85 @@ namespace MenuGoBE.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "DocumentDetails",
+                name: "BProductHistories",
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    DocumentId = table.Column<long>(type: "bigint", nullable: false),
                     BProductId = table.Column<long>(type: "bigint", nullable: false),
-                    BProductBatchId = table.Column<long>(type: "bigint", nullable: false),
-                    InventoryId = table.Column<long>(type: "bigint", nullable: false),
+                    DocumentDetailId = table.Column<long>(type: "bigint", nullable: true),
+                    ChangeType = table.Column<string>(type: "text", nullable: false),
                     Quantity = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
-                    UnitPrice = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    ExpiredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    Note = table.Column<string>(type: "text", nullable: false),
+                    QuantityBefore = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
+                    QuantityAfter = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
+                    AvgBefore = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
+                    AvgAfter = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_DocumentDetails", x => x.Id);
+                    table.PrimaryKey("PK_BProductHistories", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_DocumentDetails_BProductBatches_BProductBatchId",
-                        column: x => x.BProductBatchId,
-                        principalTable: "BProductBatches",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_DocumentDetails_BProducts_BProductId",
+                        name: "FK_BProductHistories_BProducts_BProductId",
                         column: x => x.BProductId,
                         principalTable: "BProducts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_DocumentDetails_Documents_DocumentId",
-                        column: x => x.DocumentId,
-                        principalTable: "Documents",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_DocumentDetails_Inventories_InventoryId",
-                        column: x => x.InventoryId,
-                        principalTable: "Inventories",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BBatchesHistories",
-                columns: table => new
-                {
-                    Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    BProductBatchId = table.Column<long>(type: "bigint", nullable: false),
-                    DocumentDetailId = table.Column<long>(type: "bigint", nullable: false),
-                    ChangeType = table.Column<string>(type: "text", nullable: false),
-                    Quantity = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
-                    QuantityBefore = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
-                    QuantityAfter = table.Column<decimal>(type: "numeric(21,3)", nullable: false),
-                    AvgCostAtTime = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    ValueBefore = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    ValueAfter = table.Column<decimal>(type: "numeric(27,9)", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BBatchesHistories", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BBatchesHistories_BProductBatches_BProductBatchId",
-                        column: x => x.BProductBatchId,
-                        principalTable: "BProductBatches",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_BBatchesHistories_DocumentDetails_DocumentDetailId",
+                        name: "FK_BProductHistories_DocumentDetails_DocumentDetailId",
                         column: x => x.DocumentDetailId,
                         principalTable: "DocumentDetails",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
 
-            migrationBuilder.CreateIndex(
-                name: "IX_BBatchesHistories_BProductBatchId",
-                table: "BBatchesHistories",
-                column: "BProductBatchId");
+            migrationBuilder.CreateTable(
+                name: "CashFlowDetails",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CashFlowId = table.Column<long>(type: "bigint", nullable: false),
+                    DocumentPartnerId = table.Column<long>(type: "bigint", nullable: true),
+                    Type = table.Column<string>(type: "text", nullable: false),
+                    PaymentMethod = table.Column<string>(type: "text", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(30,12)", nullable: false),
+                    Note = table.Column<string>(type: "text", nullable: true),
+                    DeletedBy = table.Column<long>(type: "bigint", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CashFlowDetails", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CashFlowDetails_Accounts_DeletedBy",
+                        column: x => x.DeletedBy,
+                        principalTable: "Accounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_CashFlowDetails_CashFlows_CashFlowId",
+                        column: x => x.CashFlowId,
+                        principalTable: "CashFlows",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_CashFlowDetails_DocumentPartners_DocumentPartnerId",
+                        column: x => x.DocumentPartnerId,
+                        principalTable: "DocumentPartners",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
 
             migrationBuilder.CreateIndex(
-                name: "IX_BBatchesHistories_DocumentDetailId",
-                table: "BBatchesHistories",
-                column: "DocumentDetailId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BProductBatches_BProductId",
-                table: "BProductBatches",
+                name: "IX_BProductHistories_BProductId",
+                table: "BProductHistories",
                 column: "BProductId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_BProductBatches_InventoryId",
-                table: "BProductBatches",
-                column: "InventoryId");
+                name: "IX_BProductHistories_DocumentDetailId",
+                table: "BProductHistories",
+                column: "DocumentDetailId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_BProducts_BranchId",
@@ -391,14 +324,14 @@ namespace MenuGoBE.Migrations
                 column: "CashFlowId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CashFlowDetails_DocumentId",
+                name: "IX_CashFlowDetails_DeletedBy",
                 table: "CashFlowDetails",
-                column: "DocumentId");
+                column: "DeletedBy");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CashFlowDetails_PartnerId",
+                name: "IX_CashFlowDetails_DocumentPartnerId",
                 table: "CashFlowDetails",
-                column: "PartnerId");
+                column: "DocumentPartnerId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_CashFlows_BranchId",
@@ -412,9 +345,9 @@ namespace MenuGoBE.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentDetails_BProductBatchId",
-                table: "DocumentDetails",
-                column: "BProductBatchId");
+                name: "IX_CashFlows_DeletedBy",
+                table: "CashFlows",
+                column: "DeletedBy");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentDetails_BProductId",
@@ -427,9 +360,9 @@ namespace MenuGoBE.Migrations
                 column: "DocumentId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DocumentDetails_InventoryId",
+                name: "IX_DocumentDetails_RecipeId",
                 table: "DocumentDetails",
-                column: "InventoryId");
+                column: "RecipeId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentPartners_DocumentId",
@@ -447,19 +380,25 @@ namespace MenuGoBE.Migrations
                 column: "BranchId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Documents_Code",
+                table: "Documents",
+                column: "Code",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Documents_CreatedBy",
+                table: "Documents",
+                column: "CreatedBy");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Documents_DeletedBy",
+                table: "Documents",
+                column: "DeletedBy");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Documents_FatherId",
                 table: "Documents",
                 column: "FatherId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Documents_ReversalOfDocumentId",
-                table: "Documents",
-                column: "ReversalOfDocumentId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Inventories_BranchId",
-                table: "Inventories",
-                column: "BranchId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Partners_AddressId",
@@ -481,13 +420,10 @@ namespace MenuGoBE.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "BBatchesHistories");
+                name: "BProductHistories");
 
             migrationBuilder.DropTable(
                 name: "CashFlowDetails");
-
-            migrationBuilder.DropTable(
-                name: "DocumentPartners");
 
             migrationBuilder.DropTable(
                 name: "DocumentDetails");
@@ -496,29 +432,16 @@ namespace MenuGoBE.Migrations
                 name: "CashFlows");
 
             migrationBuilder.DropTable(
-                name: "Partners");
-
-            migrationBuilder.DropTable(
-                name: "BProductBatches");
-
-            migrationBuilder.DropTable(
-                name: "Documents");
+                name: "DocumentPartners");
 
             migrationBuilder.DropTable(
                 name: "BProducts");
 
             migrationBuilder.DropTable(
-                name: "Inventories");
+                name: "Documents");
 
-            migrationBuilder.AlterColumn<long>(
-                name: "CustomerId",
-                table: "Orders",
-                type: "bigint",
-                nullable: false,
-                defaultValue: 0L,
-                oldClrType: typeof(long),
-                oldType: "bigint",
-                oldNullable: true);
+            migrationBuilder.DropTable(
+                name: "Partners");
         }
     }
 }

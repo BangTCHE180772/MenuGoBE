@@ -148,6 +148,37 @@ namespace MenuGoBE.Service
             return result;
         }
 
+        public async Task<List<KitchenItemDto>> GetKitchenItemsAsync()
+        {
+            var activeOrders = await _orderRepo.GetActiveKitchenOrdersWithDetailsAsync();
+            var result = new List<KitchenItemDto>();
+
+            foreach (var order in activeOrders)
+            {
+                var tableName = order.Table?.Name ?? $"Bàn #{order.TableId}";
+                var items = order.OrderDetails
+                    .Where(od => od.Status != "Cancelled")
+                    .Select(od => new KitchenItemDto
+                    {
+                        OrderDetailId = od.Id,
+                        OrderId = od.OrderId,
+                        TableId = order.TableId,
+                        TableName = tableName,
+                        ProductId = od.ProductId,
+                        ProductName = od.Product?.Name ?? "Mon ăn",
+                        Quantity = od.Quantity,
+                        Price = od.Price,
+                        Note = od.Note ?? string.Empty,
+                        Status = od.Status ?? "Confirmed",
+                        CookingStatus = string.IsNullOrEmpty(od.CookingStatus) ? "Waiting" : od.CookingStatus,
+                        CreatedAt = od.CreatedAt
+                    });
+                result.AddRange(items);
+            }
+
+            return result.OrderBy(x => x.CreatedAt).ToList();
+        }
+
         private async Task RecalculateTotalAmountAsync(Order order)
         {
             var details = await _detailRepo.GetByOrderIdAsync(order.Id);

@@ -13,19 +13,17 @@ public class DocumentDetail
 
     public long BProductId { get; set; }
 
-    public long BProductBatchId { get; set; }
+    public long? RecipeId { get; set; }
 
-    public long InventoryId { get; set; }
+    public bool IsLeftOver { get; set; }
 
     [Column(TypeName = "decimal(21,3)")]
     public decimal Quantity { get; set; }
 
-    [Column(TypeName = "decimal(27,9)")]
+    [Column(TypeName = "decimal(30,12)")]
     public decimal UnitPrice { get; set; }
 
-    public DateTime? ExpiredAt { get; set; }
-
-    public string Note { get; set; } = string.Empty;
+    public string? Note { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -36,11 +34,8 @@ public class DocumentDetail
     [ForeignKey("BProductId")]
     public BProduct BProduct { get; set; } = null!;
 
-    [ForeignKey("BProductBatchId")]
-    public BProductBatch BProductBatch { get; set; } = null!;
+    [ForeignKey("RecipeId")]
+    public Recipe? Recipe { get; set; }
 
-    [ForeignKey("InventoryId")]
-    public Inventory Inventory { get; set; } = null!;
-
-    public ICollection<BBatchesHistory> BBatchesHistories { get; set; } = new List<BBatchesHistory>();
+    public ICollection<BProductHistory> BProductHistories { get; set; } = new List<BProductHistory>();
 }
