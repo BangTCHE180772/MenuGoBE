@@ -12,5 +12,6 @@ namespace MenuGoBE.Dtos.Menu
 
         public long? GroupId { get; set; }
         public string GroupName { get; set; } = string.Empty;
+        public string ImageLink { get; set; } = string.Empty;
     }
 }
