@@ -46,7 +46,9 @@ namespace MenuGoBE.Repositories
 
         public async Task<Chain?> GetByIdAsync(long id)
         {
-            return await _context.Chains.FindAsync(id);
+            return await _context.Chains
+            .Include(b => b.Address)
+                .FirstOrDefaultAsync(b => b.Id == id);
         }
 
         public async Task CreateAsync(Chain entity)
