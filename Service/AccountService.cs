@@ -37,6 +37,14 @@ namespace MenuGoBE.Service
 
         public async Task<AccountViewDto> CreateAsync(AccountCreateDto dto)
         {
+            // Validate uniqueness
+            if (await _repo.ExistsByEmailAsync(dto.Email))
+                throw new InvalidOperationException("Email đã được sử dụng.");
+            if (await _repo.ExistsByPhoneAsync(dto.Phone))
+                throw new InvalidOperationException("Số điện thoại đã được sử dụng.");
+            if (await _repo.ExistsByCitizenIdCodeAsync(dto.CitizenIdCode))
+                throw new InvalidOperationException("Số CCCD đã được sử dụng.");
+
             var entity = _mapper.Map<Account>(dto);
             entity.HashedPassword = HashHelper.HashPassword(dto.Password);
             entity.CreatedAt = DateTime.UtcNow;
@@ -51,6 +59,14 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            // Validate uniqueness (exclude current account)
+            if (await _repo.ExistsByEmailAsync(dto.Email, dto.Id))
+                throw new InvalidOperationException("Email đã được sử dụng.");
+            if (await _repo.ExistsByPhoneAsync(dto.Phone, dto.Id))
+                throw new InvalidOperationException("Số điện thoại đã được sử dụng.");
+            if (await _repo.ExistsByCitizenIdCodeAsync(dto.CitizenIdCode, dto.Id))
+                throw new InvalidOperationException("Số CCCD đã được sử dụng.");
 
             _mapper.Map(dto, entity);
 

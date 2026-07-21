@@ -14,5 +14,8 @@ namespace MenuGoBE.Interface.Repository
         Task UpdateAsync(Account entity);
         Task DeleteAsync(long id);
         Task SaveChangesAsync();
+        Task<bool> ExistsByPhoneAsync(string phone, long? excludeId = null);
+        Task<bool> ExistsByEmailAsync(string email, long? excludeId = null);
+        Task<bool> ExistsByCitizenIdCodeAsync(string citizenIdCode, long? excludeId = null);
     }
 }

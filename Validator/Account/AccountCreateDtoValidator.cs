@@ -27,8 +27,8 @@ namespace MenuGoBE.Validator.Account
                 .MaximumLength(50).WithMessage("Mật khẩu không được vượt quá 50 ký tự.");
 
             RuleFor(x => x.CitizenIdCode)
-                .Must(code => string.IsNullOrEmpty(code) || System.Text.RegularExpressions.Regex.IsMatch(code, @"^\d{12}$"))
-                .WithMessage("Số CCCD phải bao gồm đúng 12 chữ số.");
+                .NotEmpty().WithMessage("Số CCCD không được để trống.")
+                .Matches(@"^\d{12}$").WithMessage("Số CCCD phải bao gồm đúng 12 chữ số.");
 
             RuleFor(x => x.Gender)
                 .MaximumLength(20).WithMessage("Giới tính không được vượt quá 20 ký tự.");
