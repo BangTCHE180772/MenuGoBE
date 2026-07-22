@@ -34,7 +34,6 @@ public class AppDbContext : DbContext
     public DbSet<UnitConversion> UnitConversions { get; set; } = null!;
 
     // 5. Recipes Module
-    public DbSet<Recipe> Recipes { get; set; } = null!;
     public DbSet<RecipesDetailed> RecipesDetaileds { get; set; } = null!;
 
     // 6. HR Module
@@ -69,8 +68,6 @@ public class AppDbContext : DbContext
     public DbSet<CashFlow> CashFlows { get; set; } = null!;
     public DbSet<CashFlowDetail> CashFlowDetails { get; set; } = null!;
 
-
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -99,6 +96,18 @@ public class AppDbContext : DbContext
             .HasIndex(p => p.SKUCode)
             .IsUnique();
 
+        // Direct Product Recipe Items configuration
+        modelBuilder.Entity<RecipesDetailed>()
+            .HasOne(rd => rd.ParentProduct)
+            .WithMany(p => p.RecipeItems)
+            .HasForeignKey(rd => rd.ParentProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RecipesDetailed>()
+            .HasOne(rd => rd.IngredientProduct)
+            .WithMany(p => p.UsedInRecipeItems)
+            .HasForeignKey(rd => rd.IngredientProductId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // ── 9. Inventory Module ─────────────────────────────────────────────
 
@@ -166,8 +175,11 @@ public class AppDbContext : DbContext
             .HasForeignKey(il => il.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
-
         // Store enums as string names (human-readable in DB, resilient to reordering)
+        modelBuilder.Entity<Product>()
+            .Property(p => p.Type)
+            .HasConversion<string>();
+
         modelBuilder.Entity<BInventory>()
             .Property(b => b.Type)
             .HasConversion<string>();

@@ -13,8 +13,6 @@ public class OrderDetail
 
     public long ProductId { get; set; }
 
-    public long? RecipeId { get; set; }
-
     public int Quantity { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
@@ -34,7 +32,4 @@ public class OrderDetail
 
     [ForeignKey("ProductId")]
     public Product Product { get; set; } = null!;
-
-    [ForeignKey("RecipeId")]
-    public Recipe? Recipe { get; set; }
 }

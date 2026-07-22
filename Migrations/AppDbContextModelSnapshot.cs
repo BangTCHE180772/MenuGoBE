@@ -995,9 +995,6 @@ namespace MenuGoBE.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
-                    b.Property<long?>("RecipeId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1007,8 +1004,6 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("OrderId");
 
                     b.HasIndex("ProductId");
-
-                    b.HasIndex("RecipeId");
 
                     b.ToTable("OrderDetails");
                 });
@@ -1135,12 +1130,6 @@ namespace MenuGoBE.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsBatchManage")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsSecret")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("IsSellable")
                         .HasColumnType("boolean");
 
@@ -1176,34 +1165,6 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Products");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.Recipe", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<long>("ProductId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("VersionName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.ToTable("Recipes");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.RecipesDetailed", b =>
                 {
                     b.Property<long>("Id")
@@ -1215,20 +1176,20 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("ProductId")
+                    b.Property<long>("IngredientProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ParentProductId")
                         .HasColumnType("bigint");
 
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18,4)");
 
-                    b.Property<long>("RecipeId")
-                        .HasColumnType("bigint");
-
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("IngredientProductId");
 
-                    b.HasIndex("RecipeId");
+                    b.HasIndex("ParentProductId");
 
                     b.ToTable("RecipesDetaileds");
                 });
@@ -1986,16 +1947,9 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MenuGoBE.Models.Recipe", "Recipe")
-                        .WithMany("OrderDetails")
-                        .HasForeignKey("RecipeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Order");
 
                     b.Navigation("Product");
-
-                    b.Navigation("Recipe");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Partner", b =>
@@ -2060,34 +2014,23 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Image");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.Recipe", b =>
-                {
-                    b.HasOne("MenuGoBE.Models.Product", "Product")
-                        .WithMany("Recipes")
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Product");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.RecipesDetailed", b =>
                 {
-                    b.HasOne("MenuGoBE.Models.Product", "Product")
-                        .WithMany("RecipesDetaileds")
-                        .HasForeignKey("ProductId")
+                    b.HasOne("MenuGoBE.Models.Product", "IngredientProduct")
+                        .WithMany("UsedInRecipeItems")
+                        .HasForeignKey("IngredientProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MenuGoBE.Models.Recipe", "Recipe")
-                        .WithMany("RecipesDetaileds")
-                        .HasForeignKey("RecipeId")
+                    b.HasOne("MenuGoBE.Models.Product", "ParentProduct")
+                        .WithMany("RecipeItems")
+                        .HasForeignKey("ParentProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Product");
+                    b.Navigation("IngredientProduct");
 
-                    b.Navigation("Recipe");
+                    b.Navigation("ParentProduct");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
@@ -2374,18 +2317,11 @@ namespace MenuGoBE.Migrations
 
                     b.Navigation("OrderDetails");
 
-                    b.Navigation("Recipes");
-
-                    b.Navigation("RecipesDetaileds");
+                    b.Navigation("RecipeItems");
 
                     b.Navigation("UnitConversions");
-                });
 
-            modelBuilder.Entity("MenuGoBE.Models.Recipe", b =>
-                {
-                    b.Navigation("OrderDetails");
-
-                    b.Navigation("RecipesDetaileds");
+                    b.Navigation("UsedInRecipeItems");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Role", b =>
