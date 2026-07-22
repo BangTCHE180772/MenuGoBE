@@ -22,6 +22,13 @@ namespace MenuGoBE.Service
             _context = context;
         }
 
+        public async Task<ProductViewDto?> GetByIdAsync(long id)
+        {
+            var data = await _repo.GetByIdAsync(id);
+            if (data == null) return null;
+            return _mapper.Map<ProductViewDto>(data);
+        }
+
         public async Task<List<ProductViewDto>> GetByTypeAsync(string type)
         {
             var data = await _repo.GetByTypeAsync(type);
