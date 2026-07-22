@@ -55,9 +55,9 @@ public class Account
     [InverseProperty("Deleter")]
     public ICollection<CashFlow> DeletedCashFlows { get; set; } = new List<CashFlow>();
 
-    [InverseProperty("Deleter")]
-    public ICollection<CashFlowDetail> DeletedCashFlowDetails { get; set; } = new List<CashFlowDetail>();
-
     [InverseProperty("Creator")]
     public ICollection<Partner> CreatedPartners { get; set; } = new List<Partner>();
+
+    [InverseProperty("Creator")]
+    public ICollection<InventoryLedger> CreatedInventoryLedgers { get; set; } = new List<InventoryLedger>();
 }
