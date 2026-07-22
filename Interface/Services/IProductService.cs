@@ -4,6 +4,7 @@ namespace MenuGoBE.Interface.Services
 {
     public interface IProductService
     {
+        Task<ProductViewDto?> GetByIdAsync(long id);
         Task<List<ProductViewDto>> GetByTypeAsync(string type);
         Task<ProductViewDto?> GetByIdAndTypeAsync(long id, string type);
         Task<ProductViewDto> CreateWithTypeAsync(ProductCreateDto dto, string type);
