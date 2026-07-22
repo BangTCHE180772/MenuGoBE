@@ -25,7 +25,7 @@ namespace MenuGoBE.Dtos.Order
 
         public decimal TotalAmount { get; set; }
 
-        public long CreatedBy { get; set; }
+        public long? CreatedBy { get; set; }
 
         public DateTime CreatedAt { get; set; }
     }
