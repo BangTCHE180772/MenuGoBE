@@ -155,6 +155,8 @@ namespace MenuGoBE.Service
                 .Where(mp => mp.MenuId == menuId && mp.Product.IsSellable && mp.Product.IsActive)
                 .Include(mp => mp.Product)
                     .ThenInclude(p => p.Group)
+                .Include(mp => mp.Product)
+                    .ThenInclude(p => p.Image)
                 .Select(mp => new MenuProductViewDto
                 {
                     Id = mp.Product.Id,
@@ -166,6 +168,7 @@ namespace MenuGoBE.Service
                     IsActive = mp.Product.IsActive,
                     GroupId = mp.Product.GroupId,
                     GroupName = mp.Product.Group != null ? mp.Product.Group.Name : string.Empty,
+                    ImageLink = mp.Product.Image != null ? mp.Product.Image.ImageLink : string.Empty,
                 })
                 .OrderBy(p => p.GroupId)
                 .ThenBy(p => p.Name)
