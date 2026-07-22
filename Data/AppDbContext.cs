@@ -60,8 +60,8 @@ public class AppDbContext : DbContext
     public DbSet<Device> Devices { get; set; } = null!;
 
     // 9. Inventory Module
-    public DbSet<BProduct> BProducts { get; set; } = null!;
-    public DbSet<BProductHistory> BProductHistories { get; set; } = null!;
+    public DbSet<BInventory> BInventories { get; set; } = null!;
+    public DbSet<InventoryLedger> InventoryLedgers { get; set; } = null!;
     public DbSet<Document> Documents { get; set; } = null!;
     public DbSet<DocumentDetail> DocumentDetails { get; set; } = null!;
     public DbSet<Partner> Partners { get; set; } = null!;
@@ -107,13 +107,18 @@ public class AppDbContext : DbContext
             .HasIndex(d => d.Code)
             .IsUnique();
 
-        // Document: self-referencing FK (FatherId → Id)
+        // Document: self-referencing FK (ParentDocumentId → Id)
         // One parent Document can have many child Documents
         modelBuilder.Entity<Document>()
-            .HasOne(d => d.Father)
+            .HasOne(d => d.ParentDocument)
             .WithMany(d => d.ChildDocuments)
-            .HasForeignKey(d => d.FatherId)
+            .HasForeignKey(d => d.ParentDocumentId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Document: Auto-increment PostingSequence
+        modelBuilder.Entity<Document>()
+            .Property(d => d.PostingSequence)
+            .ValueGeneratedOnAdd();
 
         // Document: CreatedBy / DeletedBy → Accounts (multiple FK to same table)
         modelBuilder.Entity<Document>()
@@ -133,18 +138,18 @@ public class AppDbContext : DbContext
             .HasIndex(cf => cf.Code)
             .IsUnique();
 
+        // CashFlow: DocumentId → Document
+        modelBuilder.Entity<CashFlow>()
+            .HasOne(cf => cf.Document)
+            .WithMany(d => d.CashFlows)
+            .HasForeignKey(cf => cf.DocumentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // CashFlow: DeletedBy → Accounts
         modelBuilder.Entity<CashFlow>()
             .HasOne(cf => cf.Deleter)
             .WithMany(a => a.DeletedCashFlows)
             .HasForeignKey(cf => cf.DeletedBy)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // CashFlowDetail: DeletedBy → Accounts
-        modelBuilder.Entity<CashFlowDetail>()
-            .HasOne(cfd => cfd.Deleter)
-            .WithMany(a => a.DeletedCashFlowDetails)
-            .HasForeignKey(cfd => cfd.DeletedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Partner: CreatedBy → Accounts
@@ -154,13 +159,21 @@ public class AppDbContext : DbContext
             .HasForeignKey(p => p.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // InventoryLedger: CreatedBy → Accounts
+        modelBuilder.Entity<InventoryLedger>()
+            .HasOne(il => il.Creator)
+            .WithMany(a => a.CreatedInventoryLedgers)
+            .HasForeignKey(il => il.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+
         // Store enums as string names (human-readable in DB, resilient to reordering)
-        modelBuilder.Entity<BProduct>()
+        modelBuilder.Entity<BInventory>()
             .Property(b => b.Type)
             .HasConversion<string>();
 
-        modelBuilder.Entity<BProductHistory>()
-            .Property(b => b.ChangeType)
+        modelBuilder.Entity<InventoryLedger>()
+            .Property(il => il.DocumentType)
             .HasConversion<string>();
 
         modelBuilder.Entity<Document>()
@@ -181,6 +194,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<CashFlow>()
             .Property(cf => cf.Direction)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<CashFlow>()
+            .Property(cf => cf.Status)
             .HasConversion<string>();
 
         modelBuilder.Entity<CashFlowDetail>()

@@ -23,5 +23,4 @@ public class Recipe
 
     public ICollection<RecipesDetailed> RecipesDetaileds { get; set; } = new List<RecipesDetailed>();
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
-    public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
 }
