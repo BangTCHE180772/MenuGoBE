@@ -8,6 +8,7 @@ using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Mapper;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using MenuGoBE.Service;
 using Microsoft.EntityFrameworkCore;
 using Moq;
@@ -263,7 +264,7 @@ namespace MenuGoTest.UnitTests
             var savedDetails = await _context.RecipesDetaileds.ToListAsync();
             Assert.Equal(2, savedDetails.Count);
             
-            var detailsList = savedDetails.FindAll(d => d.ProductId == 10);
+            var detailsList = savedDetails.FindAll(d => d.IngredientProductId == 10);
             Assert.Single(detailsList);
             Assert.Equal(1.123m, detailsList[0].Quantity);
         }
@@ -312,8 +313,9 @@ namespace MenuGoTest.UnitTests
                 }
             };
 
-            var existing = new Product { Id = 1, Name = "Hammer", Type = "tool" };
+            var existing = new Product { Id = 1, Name = "Hammer", Type = ProductType.Tool };
 
+            _repoMock.Setup(r => r.GetByIdAndTypeAsync(dto.Id, ProductType.Tool)).ReturnsAsync(existing);
             _repoMock.Setup(r => r.GetByIdAndTypeAsync(dto.Id, "tool")).ReturnsAsync(existing);
             _repoMock.Setup(r => r.ExistsByNameExcludeIdAsync(dto.Name, dto.Id)).ReturnsAsync(false);
 
@@ -343,10 +345,12 @@ namespace MenuGoTest.UnitTests
                 }
             };
 
-            var existing = new Product { Id = 1, Name = "Pizza", Type = "processed" };
+            var existing = new Product { Id = 1, Name = "Pizza", Type = ProductType.Processed };
 
+            _repoMock.Setup(r => r.GetByIdAndTypeAsync(dto.Id, ProductType.Processed)).ReturnsAsync(existing);
             _repoMock.Setup(r => r.GetByIdAndTypeAsync(dto.Id, "processed")).ReturnsAsync(existing);
             _repoMock.Setup(r => r.ExistsByNameExcludeIdAsync(dto.Name, dto.Id)).ReturnsAsync(false);
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(1)).ReturnsAsync(ProductType.Processed);
             _repoMock.Setup(r => r.GetProductTypeAsync(1)).ReturnsAsync("processed");
 
             // Act & Assert
@@ -376,17 +380,17 @@ namespace MenuGoTest.UnitTests
                 }
             };
 
-            var existing = new Product { Id = 1, Name = "Pizza", Type = "processed" };
+            var existing = new Product { Id = 1, Name = "Pizza", Type = ProductType.Processed };
 
+            _repoMock.Setup(r => r.GetByIdAndTypeAsync(dto.Id, ProductType.Processed)).ReturnsAsync(existing);
             _repoMock.Setup(r => r.GetByIdAndTypeAsync(dto.Id, "processed")).ReturnsAsync(existing);
             _repoMock.Setup(r => r.ExistsByNameExcludeIdAsync(dto.Name, dto.Id)).ReturnsAsync(false);
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(2)).ReturnsAsync(ProductType.Manufactured);
             _repoMock.Setup(r => r.GetProductTypeAsync(2)).ReturnsAsync("manufactured");
 
             // Setup DB: Product 2 has active recipe depending on Product 1
-            var recipe = new Recipe { Id = 10, ProductId = 2, IsActive = true };
-            var recipeDetail = new RecipesDetailed { RecipeId = 10, ProductId = 1, Quantity = 1 };
+            var recipeDetail = new RecipesDetailed { ParentProductId = 2, IngredientProductId = 1, Quantity = 1 };
 
-            await _context.Recipes.AddAsync(recipe);
             await _context.RecipesDetaileds.AddAsync(recipeDetail);
             await _context.SaveChangesAsync();
 

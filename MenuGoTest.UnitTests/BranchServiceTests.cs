@@ -267,8 +267,8 @@ namespace MenuGoTest.UnitTests
             using var dbContext = new MenuGoBE.Data.AppDbContext(options);
 
             long chainId = 5;
-            var prod1 = new Product { Id = 10, ChainId = chainId, Name = "Product 10", Type = "ingredient" };
-            var prod2 = new Product { Id = 20, ChainId = chainId, Name = "Product 20", Type = "processed" };
+            var prod1 = new Product { Id = 10, ChainId = chainId, Name = "Product 10", Type = MenuGoBE.Models.Enums.ProductType.Ingredient };
+            var prod2 = new Product { Id = 20, ChainId = chainId, Name = "Product 20", Type = MenuGoBE.Models.Enums.ProductType.Processed };
             await dbContext.Products.AddRangeAsync(prod1, prod2);
             await dbContext.SaveChangesAsync();
 
