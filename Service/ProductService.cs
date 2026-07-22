@@ -2,6 +2,7 @@ using AutoMapper;
 using MenuGoBE.Data;
 using MenuGoBE.Dtos.Product;
 using MenuGoBE.Exceptions;
+using MenuGoBE.Helpers;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
@@ -89,6 +90,41 @@ namespace MenuGoBE.Service
             if (dto.Recipe != null)
             {
                 await SaveRecipeAsync(entity.Id, dto.Recipe);
+            }
+
+            // Populate BInventories for child branches under the same Chain
+            var existingBranches = await _context.Branches
+                .Where(b => b.ChainId == entity.ChainId)
+                .ToListAsync();
+
+            if (existingBranches.Count > 0)
+            {
+                var existingBranchIds = await _context.BInventories
+                    .Where(bi => bi.ProductId == entity.Id)
+                    .Select(bi => bi.BranchId)
+                    .ToHashSetAsync();
+
+                var bInventories = existingBranches
+                    .Where(b => !existingBranchIds.Contains(b.Id))
+                    .Select(b => new BInventory
+                    {
+                        BranchId = b.Id,
+                        ProductId = entity.Id,
+                        Type = BInventoryHelper.MapProductTypeToBInventoryType(entity.Type),
+                        Avg = 0,
+                        LeftOver = 0,
+                        Quantity = 0,
+                        ChainActive = false,
+                        BranchActive = false,
+                        CreatedAt = DateTime.UtcNow
+                    })
+                    .ToList();
+
+                if (bInventories.Count > 0)
+                {
+                    await _context.BInventories.AddRangeAsync(bInventories);
+                    await _context.SaveChangesAsync();
+                }
             }
 
             return _mapper.Map<ProductViewDto>(entity);

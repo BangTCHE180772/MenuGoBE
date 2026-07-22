@@ -434,11 +434,51 @@ namespace MenuGoTest.UnitTests
                 }
             };
 
-            _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
-
             // Act & Assert
             var ex = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateWithTypeAsync(dto, "processed"));
             Assert.Equal(ErrorCodes.ProcessedUnitConversionsNotAllowed.Code, ex.Code);
+        }
+
+        [Fact]
+        public async Task CreateWithTypeAsync_ShouldCreateBInventoryForChildBranches()
+        {
+            // Arrange
+            long chainId = 10;
+            var branch1 = new Branch { Id = 1, ChainId = chainId, Name = "Branch 1" };
+            var branch2 = new Branch { Id = 2, ChainId = chainId, Name = "Branch 2" };
+            await _context.Branches.AddRangeAsync(branch1, branch2);
+            await _context.SaveChangesAsync();
+
+            var dto = new ProductCreateDto
+            {
+                ChainId = chainId,
+                Name = "New Milk Tea",
+                SKUCode = "TEA-001",
+                IsActive = true,
+                SellPrice = 35000
+            };
+
+            _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
+            _repoMock.Setup(r => r.ExistsBySKUAsync(dto.SKUCode)).ReturnsAsync(false);
+            _repoMock.Setup(r => r.CreateAsync(It.IsAny<Product>()))
+                .Callback<Product>(p => p.Id = 100)
+                .Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.CreateWithTypeAsync(dto, "regular");
+
+            // Assert
+            Assert.NotNull(result);
+            var bInventories = await _context.BInventories.Where(bi => bi.ProductId == 100).ToListAsync();
+            Assert.Equal(2, bInventories.Count);
+            Assert.All(bInventories, bi =>
+            {
+                Assert.False(bi.ChainActive);
+                Assert.False(bi.BranchActive);
+                Assert.Equal(0, bi.Quantity);
+                Assert.Equal(0, bi.LeftOver);
+                Assert.Equal(0, bi.Avg);
+            });
         }
     }
 }

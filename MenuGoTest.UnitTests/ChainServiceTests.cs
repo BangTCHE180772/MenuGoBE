@@ -126,8 +126,7 @@ namespace MenuGoTest.UnitTests
                 OpenTime = new TimeOnly(7, 0),
                 CloseTime = new TimeOnly(21, 0),
                 LogoImage = "logo.png",
-                BackgroundImage = "bg.png",
-                AddressId = 10
+                BackgroundImage = "bg.png"
             };
 
             _repoMock.Setup(r => r.CreateAsync(It.IsAny<Chain>())).Returns(Task.CompletedTask);
@@ -143,7 +142,6 @@ namespace MenuGoTest.UnitTests
             Assert.Equal(createDto.CloseTime, result.CloseTime);
             Assert.Equal(createDto.LogoImage, result.LogoImage);
             Assert.Equal(createDto.BackgroundImage, result.BackgroundImage);
-            Assert.Equal(createDto.AddressId, result.AddressId);
 
             _repoMock.Verify(r => r.CreateAsync(It.Is<Chain>(c => c.Name == createDto.Name)), Times.Once);
             _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
@@ -160,8 +158,7 @@ namespace MenuGoTest.UnitTests
                 OpenTime = new TimeOnly(10, 0),
                 CloseTime = new TimeOnly(22, 0),
                 LogoImage = "new_logo.png",
-                BackgroundImage = "new_bg.png",
-                AddressId = 15
+                BackgroundImage = "new_bg.png"
             };
 
             var existingChain = new Chain
@@ -189,7 +186,6 @@ namespace MenuGoTest.UnitTests
             Assert.Equal(updateDto.CloseTime, existingChain.CloseTime);
             Assert.Equal(updateDto.LogoImage, existingChain.LogoImage);
             Assert.Equal(updateDto.BackgroundImage, existingChain.BackgroundImage);
-            Assert.Equal(updateDto.AddressId, existingChain.AddressId);
 
             _repoMock.Verify(r => r.GetByIdAsync(updateDto.Id), Times.Once);
             _repoMock.Verify(r => r.UpdateAsync(existingChain), Times.Once);
