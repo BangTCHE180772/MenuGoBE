@@ -8,6 +8,7 @@ using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
 using MenuGoBE.Dtos.Branch;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 
 namespace MenuGoTest.UnitTests
@@ -255,5 +256,49 @@ namespace MenuGoTest.UnitTests
             _repoMock.Verify(r => r.DeleteAsync(1), Times.Once);
             _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
         }
+
+        [Fact]
+        public async Task CreateAsync_ShouldCreateBInventoryForExistingProducts()
+        {
+            // Arrange
+            var options = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<MenuGoBE.Data.AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            using var dbContext = new MenuGoBE.Data.AppDbContext(options);
+
+            long chainId = 5;
+            var prod1 = new Product { Id = 10, ChainId = chainId, Name = "Product 10", Type = "ingredient" };
+            var prod2 = new Product { Id = 20, ChainId = chainId, Name = "Product 20", Type = "processed" };
+            await dbContext.Products.AddRangeAsync(prod1, prod2);
+            await dbContext.SaveChangesAsync();
+
+            var service = new BranchService(_repoMock.Object, _mapper, dbContext);
+
+            var dto = new BranchCreateDto
+            {
+                ChainId = chainId,
+                Name = "Branch District 1"
+            };
+
+            _repoMock.Setup(r => r.CreateAsync(It.IsAny<Branch>()))
+                .Callback<Branch>(b => b.Id = 50)
+                .Returns(Task.CompletedTask);
+
+            // Act
+            var result = await service.CreateAsync(dto);
+
+            // Assert
+            Assert.NotNull(result);
+            var bInventories = await dbContext.BInventories.Where(bi => bi.BranchId == 50).ToListAsync();
+            Assert.Equal(2, bInventories.Count);
+            Assert.All(bInventories, bi =>
+            {
+                Assert.False(bi.ChainActive);
+                Assert.False(bi.BranchActive);
+                Assert.Equal(0, bi.Quantity);
+                Assert.Equal(0, bi.LeftOver);
+                Assert.Equal(0, bi.Avg);
+            });
+        }
     }
-}
+}
