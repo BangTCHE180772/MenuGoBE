@@ -160,6 +160,42 @@ namespace MenuGoBE.Service
                 .Distinct()
                 .ToList();
 
+            bool isManagerOrAbove = roles.Any(r => r == "Manager" || r == "Owner" || r == "Admin");
+
+            DateTime? shiftEndTime = null;
+            DateTime? disconnectTime = null;
+
+            if (!isManagerOrAbove)
+            {
+                if (device.DeviceType == "Station" && !roles.Contains("Waiter"))
+                    throw new Exception("Vui lòng vào đúng vị trí làm việc (Thiết bị này dành cho Phục vụ).");
+                if (device.DeviceType == "POS" && !roles.Contains("Cashier"))
+                    throw new Exception("Vui lòng vào đúng vị trí làm việc (Thiết bị này dành cho Thu ngân).");
+                if (device.DeviceType == "Kitchen" && !roles.Contains("Chef"))
+                    throw new Exception("Vui lòng vào đúng vị trí làm việc (Thiết bị này dành cho Bếp).");
+
+                var activeSchedules = await _context.WorkSchedules
+                    .Include(ws => ws.Shift)
+                    .Where(ws => ws.AccountId == account.Id
+                              && ws.BranchId == device.BranchId
+                              && ws.WorkDate == today
+                              && ws.CheckInAt != null)
+                    .ToListAsync();
+
+                if (!activeSchedules.Any())
+                    throw new Exception("Bạn chưa check-in ca làm việc hôm nay tại chi nhánh này.");
+
+                var nowTime = TimeOnly.FromDateTime(DateTime.Now);
+                var validSchedule = activeSchedules.FirstOrDefault(s => s.Shift.EndTime.AddMinutes(30) >= nowTime);
+
+                if (validSchedule == null)
+                    throw new Exception("Ca làm việc của bạn đã kết thúc quá 30 phút hoặc chưa tới ca.");
+
+                var todayDt = DateTime.Today;
+                shiftEndTime = todayDt.Add(validSchedule.Shift.EndTime.ToTimeSpan());
+                disconnectTime = shiftEndTime.Value.AddMinutes(30);
+            }
+
             device.LastActiveAt = DateTime.UtcNow;
             await _repo.UpdateAsync(device);
 
@@ -171,7 +207,9 @@ namespace MenuGoBE.Service
                     id = account.Id,
                     name = account.Name,
                     email = account.Email,
-                    roles = roles
+                    roles = roles,
+                    shiftEndTime = shiftEndTime,
+                    disconnectTime = disconnectTime
                 }
             };
         }
