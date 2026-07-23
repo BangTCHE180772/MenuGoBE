@@ -25,9 +25,17 @@ public class Product
 
     public string SKUCode { get; set; } = string.Empty;
 
-    public bool IsActive { get; set; } = true;
+
 
     public bool IsSellable { get; set; } = true;
+
+    public bool IsManageQuantity { get; set; } = false;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MinStorage { get; set; } = 0;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MaxStorage { get; set; } = 1000000000;
 
     [Column(TypeName = "decimal(18,0)")]
     public decimal SellPrice { get; set; }

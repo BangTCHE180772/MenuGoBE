@@ -72,7 +72,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult InvalidConversionPoint = new(
         1016, 
-        "ConversionPoint của đơn vị phụ phải là số nguyên lớn hơn 1 và nhỏ hơn hoặc bằng 1 tỷ.", 
+        "Giá trị quy đổi của đơn vị phụ phải là số nguyên từ 2 đến 1.000.000 (1 triệu).", 
         400
     );
 
@@ -96,7 +96,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult InvalidRecipeQuantity = new(
         1021, 
-        "Số lượng nguyên liệu phải lớn hơn 0, nhỏ hơn hoặc bằng 1 tỷ, và tối đa 3 chữ số thập phân.", 
+        "Số lượng nguyên liệu trong công thức phải từ 0,001 đến 1.000.000 (1 triệu), và tối đa 3 chữ số thập phân.", 
         400
     );
 

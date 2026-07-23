@@ -17,8 +17,10 @@ namespace MenuGoBE.Dtos.Product
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string SKUCode { get; set; } = string.Empty;
-        public bool IsActive { get; set; }
         public bool IsSellable { get; set; }
+        public bool IsManageQuantity { get; set; }
+        public decimal MinStorage { get; set; }
+        public decimal MaxStorage { get; set; }
         public decimal SellPrice { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<ProductUnitConversionViewDto>? UnitConversions { get; set; }

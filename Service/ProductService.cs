@@ -86,9 +86,17 @@ namespace MenuGoBE.Service
                 throw new MenuGoException(ErrorCodes.DuplicateProductName);
             }
 
-            if (!string.IsNullOrWhiteSpace(dto.SKUCode) && await _repo.ExistsBySKUAsync(dto.SKUCode))
+            if (string.IsNullOrWhiteSpace(dto.SKUCode))
             {
-                throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
+                dto.SKUCode = await GenerateSmartSKUCodeAsync(targetType);
+            }
+            else
+            {
+                dto.SKUCode = dto.SKUCode.Trim();
+                if (await _repo.ExistsBySKUAsync(dto.SKUCode))
+                {
+                    throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
+                }
             }
 
             // Validate unit conversions if provided
@@ -123,14 +131,16 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Product>(dto);
             entity.Type = targetType;
 
-            if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
+            if (entity.Type == ProductType.Processed)
             {
-                entity.ImageId = await ResolveImageIdAsync(dto.ImageUrl, dto.ImageId);
+                entity.IsManageQuantity = false;
+                entity.MinStorage = 0;
+                entity.MaxStorage = 1000000000;
             }
-            
-            if (entity.Type == ProductType.Tool)
+            else if (!entity.IsManageQuantity)
             {
-                entity.IsActive = false;
+                entity.MinStorage = 0;
+                entity.MaxStorage = 1000000000;
             }
 
             await _repo.CreateAsync(entity);
@@ -183,6 +193,22 @@ namespace MenuGoBE.Service
                 }
             }
 
+            // Link product to menus if specified
+            if (dto.MenuIds != null && dto.MenuIds.Count > 0)
+            {
+                var distinctMenuIds = dto.MenuIds.Distinct().ToList();
+                var menuProducts = distinctMenuIds
+                    .Where(mId => !_context.MenuProducts.Any(mp => mp.MenuId == mId && mp.ProductId == entity.Id))
+                    .Select(mId => new MenuProduct { MenuId = mId, ProductId = entity.Id })
+                    .ToList();
+
+                if (menuProducts.Count > 0)
+                {
+                    await _context.MenuProducts.AddRangeAsync(menuProducts);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             return _mapper.Map<ProductViewDto>(entity);
         }
 
@@ -216,28 +242,21 @@ namespace MenuGoBE.Service
                 throw new MenuGoException(ErrorCodes.DuplicateProductName);
             }
 
-            if (!string.IsNullOrWhiteSpace(dto.SKUCode) && await _repo.ExistsBySKUExcludeIdAsync(dto.SKUCode, dto.Id))
-            {
-                throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
-            }
-
             var targetType = overrideType ?? dto.Type ?? targetProduct.Type;
 
-            // Safeguard: Check deactivation rules when setting IsActive to false
-            if (!dto.IsActive)
+            if (string.IsNullOrWhiteSpace(dto.SKUCode))
             {
-                // Check if product is an ingredient in another product's recipe
-                if (await _context.RecipesDetaileds.AnyAsync(rd => rd.IngredientProductId == dto.Id))
+                dto.SKUCode = await GenerateSmartSKUCodeAsync(targetType);
+            }
+            else
+            {
+                dto.SKUCode = dto.SKUCode.Trim();
+                if (await _repo.ExistsBySKUExcludeIdAsync(dto.SKUCode, dto.Id))
                 {
-                    throw new MenuGoException(ErrorCodes.ProductCannotBeDeactivatedUsedInRecipe);
-                }
-
-                // Check if product has been used in order details
-                if (await _context.OrderDetails.AnyAsync(od => od.ProductId == dto.Id))
-                {
-                    throw new MenuGoException(ErrorCodes.ProductCannotBeDeactivatedUsedInOrders);
+                    throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
                 }
             }
+
 
             // Validate unit conversions if provided
             if (dto.UnitConversions != null && dto.UnitConversions.Count > 0)
@@ -278,14 +297,16 @@ namespace MenuGoBE.Service
             _mapper.Map(dto, targetProduct);
             targetProduct.Type = targetType; // Ensure type remains correct
 
-            if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
+            if (targetProduct.Type == ProductType.Processed)
             {
-                targetProduct.ImageId = await ResolveImageIdAsync(dto.ImageUrl, dto.ImageId);
+                targetProduct.IsManageQuantity = false;
+                targetProduct.MinStorage = 0;
+                targetProduct.MaxStorage = 1000000000;
             }
-
-            if (targetProduct.Type == ProductType.Tool)
+            else if (!targetProduct.IsManageQuantity)
             {
-                targetProduct.IsActive = false;
+                targetProduct.MinStorage = 0;
+                targetProduct.MaxStorage = 1000000000;
             }
 
             await _repo.UpdateAsync(targetProduct);
@@ -304,6 +325,31 @@ namespace MenuGoBE.Service
             if (recipeDetails != null)
             {
                 await SaveRecipeItemsAsync(targetProduct.Id, recipeDetails);
+            }
+
+            // Sync menu associations if MenuIds array is provided in request
+            if (dto.MenuIds != null)
+            {
+                var existingMenuProducts = await _context.MenuProducts
+                    .Where(mp => mp.ProductId == targetProduct.Id)
+                    .ToListAsync();
+
+                if (existingMenuProducts.Count > 0)
+                {
+                    _context.MenuProducts.RemoveRange(existingMenuProducts);
+                    await _context.SaveChangesAsync();
+                }
+
+                if (dto.MenuIds.Count > 0)
+                {
+                    var distinctMenuIds = dto.MenuIds.Distinct().ToList();
+                    var newMenuProducts = distinctMenuIds.Select(mId => new MenuProduct
+                    {
+                        MenuId = mId,
+                        ProductId = targetProduct.Id
+                    }).ToList();
+                    await _context.MenuProducts.AddRangeAsync(newMenuProducts);
+                }
             }
 
             await _repo.SaveChangesAsync();
@@ -416,7 +462,7 @@ namespace MenuGoBE.Service
 
                 if (!conversion.IsBase)
                 {
-                    if (conversion.ConversionPoint % 1 != 0 || conversion.ConversionPoint <= 1 || conversion.ConversionPoint > 1000000000m)
+                    if (conversion.ConversionPoint % 1 != 0 || conversion.ConversionPoint < 2 || conversion.ConversionPoint > 1000000m)
                     {
                         throw new MenuGoException(ErrorCodes.InvalidConversionPoint);
                     }
@@ -506,8 +552,8 @@ namespace MenuGoBE.Service
                     }
                 }
 
-                // Validate quantity: quantity must be >= 0 and <= 1,000,000,000, max 3 decimal places
-                if (detail.Quantity < 0 || detail.Quantity > 1000000000m || Math.Truncate(detail.Quantity * 1000m) / 1000m != detail.Quantity)
+                // Validate quantity: quantity must be >= 0.001 and <= 1,000,000, max 3 decimal places
+                if (detail.Quantity < 0.001m || detail.Quantity > 1000000m || Math.Truncate(detail.Quantity * 1000m) / 1000m != detail.Quantity)
                 {
                     throw new MenuGoException(ErrorCodes.InvalidRecipeQuantity);
                 }
@@ -603,6 +649,30 @@ namespace MenuGoBE.Service
             await _context.SaveChangesAsync();
 
             return newImage.Id;
+        }
+
+        private async Task<string> GenerateSmartSKUCodeAsync(ProductType targetType)
+        {
+            var prefix = targetType switch
+            {
+                ProductType.Ingredient => "NL",
+                ProductType.Tool => "DC",
+                ProductType.Processed => "CB",
+                ProductType.Manufactured => "TP",
+                _ => "HH"
+            };
+
+            var count = await _context.Products.CountAsync(p => p.Type == targetType);
+            var nextSeq = count + 1;
+
+            string candidate;
+            do
+            {
+                candidate = $"{prefix}{nextSeq:D6}";
+                nextSeq++;
+            } while (await _repo.ExistsBySKUAsync(candidate));
+
+            return candidate;
         }
     }
 }
