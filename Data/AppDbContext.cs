@@ -175,10 +175,13 @@ public class AppDbContext : DbContext
             .HasForeignKey(il => il.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Store enums as string names (human-readable in DB, resilient to reordering)
+        // Store enums as string names with fallback for legacy DB values (e.g. 'Food' -> Regular)
         modelBuilder.Entity<Product>()
             .Property(p => p.Type)
-            .HasConversion<string>();
+            .HasConversion(
+                v => v.ToString(),
+                v => ParseEnumProductType(v)
+            );
 
         modelBuilder.Entity<BInventory>()
             .Property(b => b.Type)
@@ -225,5 +228,15 @@ public class AppDbContext : DbContext
         {
             foreignKey.DeleteBehavior = DeleteBehavior.Restrict;
         }
+    }
+
+    private static ProductType ParseEnumProductType(string value)
+    {
+        ProductType parsed;
+        if (Enum.TryParse<ProductType>(value, true, out parsed))
+        {
+            return parsed;
+        }
+        return ProductType.Regular;
     }
 }

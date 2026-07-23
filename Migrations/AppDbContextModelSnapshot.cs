@@ -1127,11 +1127,17 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("ImageId")
                         .HasColumnType("bigint");
 
-                    b.Property<bool>("IsActive")
+                    b.Property<bool>("IsManageQuantity")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsSellable")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal>("MaxStorage")
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("MinStorage")
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<string>("Name")
                         .IsRequired()

@@ -14,7 +14,7 @@ namespace MenuGoBE.Dtos.Menu
 
         public decimal SellPrice { get; set; }
         public bool IsSellable { get; set; }
-        public bool IsActive { get; set; }
+
 
         public long? GroupId { get; set; }
         public string GroupName { get; set; } = string.Empty;

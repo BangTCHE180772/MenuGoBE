@@ -152,7 +152,7 @@ namespace MenuGoBE.Service
         public async Task<List<MenuProductViewDto>> GetProductsAsync(long menuId)
         {
             var products = await _context.MenuProducts
-                .Where(mp => mp.MenuId == menuId && mp.Product.IsSellable && mp.Product.IsActive)
+                .Where(mp => mp.MenuId == menuId && mp.Product.IsSellable)
                 .Include(mp => mp.Product)
                     .ThenInclude(p => p.Group)
                 .Include(mp => mp.Product)
@@ -165,7 +165,6 @@ namespace MenuGoBE.Service
                     Type = mp.Product.Type,
                     SellPrice = mp.Product.SellPrice,
                     IsSellable = mp.Product.IsSellable,
-                    IsActive = mp.Product.IsActive,
                     GroupId = mp.Product.GroupId,
                     GroupName = mp.Product.Group != null ? mp.Product.Group.Name : string.Empty,
                     ImageLink = mp.Product.Image != null ? mp.Product.Image.ImageLink : string.Empty,

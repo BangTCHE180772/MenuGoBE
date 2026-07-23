@@ -28,6 +28,7 @@ namespace MenuGoBE.Repositories
         public async Task<List<Product>> GetAllAsync(ProductType? type = null)
         {
             var query = _context.Products
+                .AsNoTracking()
                 .Include(p => p.Image)
                 .Include(p => p.UnitConversions)
                 .Include(p => p.RecipeItems)
