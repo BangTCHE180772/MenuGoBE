@@ -150,15 +150,27 @@ namespace MenuGoBE.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task<(decimal Revenue, decimal Expenses, decimal Profit)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate)
+        public async Task<(decimal Revenue, decimal Expenses, decimal Profit)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
         {
-            var revenue = await _context.Orders
-                .Where(o => o.Status == "Paid" && o.CreatedAt >= startDate && o.CreatedAt <= endDate)
-                .SumAsync(o => o.TotalAmount);
+            var revenueQuery = _context.Orders
+                .Where(o => o.Status == "Paid" && o.CreatedAt >= startDate && o.CreatedAt <= endDate);
 
-            var expenses = await _context.CashFlows
-                .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate)
-                .SumAsync(cf => cf.TotalAmount);
+            if (branchId.HasValue)
+            {
+                revenueQuery = revenueQuery.Where(o => o.Table.Area.BranchId == branchId.Value);
+            }
+
+            var revenue = await revenueQuery.SumAsync(o => o.TotalAmount);
+
+            var expensesQuery = _context.CashFlows
+                .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate);
+
+            if (branchId.HasValue)
+            {
+                expensesQuery = expensesQuery.Where(cf => cf.BranchId == branchId.Value);
+            }
+
+            var expenses = await expensesQuery.SumAsync(cf => cf.TotalAmount);
 
             if (expenses == 0 && revenue > 0)
             {

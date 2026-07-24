@@ -261,4 +261,10 @@ public static class ErrorCodes
         "Loại chi nhánh tìm kiếm không được quá 50 ký tự.",
         400
     );
+
+    public static readonly ErrorResult UserBranchIdClaimMissing = new(
+        2019,
+        "Tài khoản quản lý không có thông tin chi nhánh liên kết hợp lệ.",
+        400
+    );
 }

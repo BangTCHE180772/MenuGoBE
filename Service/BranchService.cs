@@ -196,7 +196,7 @@ namespace MenuGoBE.Service
             return true;
         }
 
-        public async Task<object> GetDashboardStatsAsync(string range, string? startDateStr, string? endDateStr)
+        public async Task<object> GetDashboardStatsAsync(string range, string? startDateStr, string? endDateStr, long? branchId)
         {
             var today = DateTime.UtcNow.Date;
             DateTime startDate = DateTime.SpecifyKind(today.AddDays(-today.Day + 1), DateTimeKind.Utc);
@@ -240,7 +240,7 @@ namespace MenuGoBE.Service
                 }
             }
 
-            var (revenue, expenses, profit) = await _repo.GetFinancialStatsAsync(startDate, endDate);
+            var (revenue, expenses, profit) = await _repo.GetFinancialStatsAsync(startDate, endDate, branchId);
 
             return new
             {
