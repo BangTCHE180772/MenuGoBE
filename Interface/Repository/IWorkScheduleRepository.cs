@@ -14,10 +14,7 @@ namespace MenuGoBE.Interface.Repository
         Task SaveChangesAsync();
         Task<List<WorkSchedule>> GetTodaySchedulesAsync(long accountId, long branchId, DateOnly date);
         Task<bool> ExistsAsync(long accountId, long shiftId, System.DateOnly workDate);
-        Task<bool> BranchExistsAsync(long branchId);
-        Task<bool> ShiftExistsAsync(long shiftId);
-        Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds);
+        Task<bool> HasOverlappingScheduleAsync(long accountId, System.DateOnly workDate, TimeOnly startTime, TimeOnly endTime);
         Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId);
-        Task<List<long>> GetActiveRoleIdsAsync(long accountId);
     }
 }

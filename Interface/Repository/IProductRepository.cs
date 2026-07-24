@@ -17,7 +17,6 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> ExistsByNameExcludeIdAsync(string name, long id);
         Task<bool> ExistsBySKUAsync(string sku);
         Task<bool> ExistsBySKUExcludeIdAsync(string sku, long id);
-        Task<bool> UnitExistsAsync(long unitId);
         Task ClearUnitConversionsAsync(long productId);
         Task<ProductType?> GetProductTypeEnumAsync(long id);
         Task<string?> GetProductTypeAsync(long id);
