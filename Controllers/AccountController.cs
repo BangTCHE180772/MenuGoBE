@@ -28,7 +28,7 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:long}")]
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetByIdAsync(id);
@@ -69,7 +69,7 @@ namespace MenuGoBE.Controllers
             }
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
             var result = await _service.DeleteAsync(id);
