@@ -57,6 +57,15 @@ namespace MenuGoBE.Service
             }
 
             var entity = _mapper.Map<WorkSchedule>(dto);
+            if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckInAt = DateTime.SpecifyKind(entity.CheckInAt.Value, DateTimeKind.Utc);
+            }
+            if (entity.CheckOutAt.HasValue && entity.CheckOutAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckOutAt = DateTime.SpecifyKind(entity.CheckOutAt.Value, DateTimeKind.Utc);
+            }
+
             if (string.IsNullOrWhiteSpace(entity.Code))
             {
                 entity.Code = $"WS-{dto.BranchId}-{dto.ShiftId}-{dto.AccountId}-{dto.WorkDate:yyyyMMdd}";
@@ -136,6 +145,15 @@ namespace MenuGoBE.Service
 
             _mapper.Map(dto, entity);
 
+            if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckInAt = DateTime.SpecifyKind(entity.CheckInAt.Value, DateTimeKind.Utc);
+            }
+            if (entity.CheckOutAt.HasValue && entity.CheckOutAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckOutAt = DateTime.SpecifyKind(entity.CheckOutAt.Value, DateTimeKind.Utc);
+            }
+
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
 
@@ -176,6 +194,7 @@ namespace MenuGoBE.Service
 
             if (workingIndex >= 0)
             {
+                // Có ca đang Working -> Tiến hành Check-out
                 bool autoSplitOccurred = false;
                 
                 while (workingIndex >= 0 && workingIndex < schedules.Count - 1)
@@ -183,8 +202,11 @@ namespace MenuGoBE.Service
                     var currentWs = schedules[workingIndex];
                     var nextWs = schedules[workingIndex + 1];
                     
+                    // Nếu thời điểm quét thẻ đã vượt qua giờ kết thúc của ca hiện tại một khoảng đáng kể (ví dụ > 30 phút)
+                    // Hoặc đơn giản là vượt qua hẳn giờ kết thúc và nhân viên có ca tiếp theo.
                     if (currentTimeOnly >= nextWs.Shift.StartTime && currentTimeOnly > currentWs.Shift.EndTime)
                     {
+                        // Auto-split: Chốt ca hiện tại ở đúng giờ EndTime
                         var localEndTime = today.ToDateTime(currentWs.Shift.EndTime);
                         var utcEndTime = localEndTime.AddHours(-7);
                         
@@ -194,6 +216,7 @@ namespace MenuGoBE.Service
                         currentWs.Status = "Completed";
                         await _repo.UpdateAsync(currentWs);
                         
+                        // Mở ca tiếp theo ở đúng giờ StartTime
                         var localStartTime = today.ToDateTime(nextWs.Shift.StartTime);
                         var utcStartTime = localStartTime.AddHours(-7);
                         
@@ -210,6 +233,7 @@ namespace MenuGoBE.Service
                     }
                 }
 
+                // Chốt ca Working cuối cùng với thời gian quét thực tế
                 var finalWorking = schedules[workingIndex];
                 finalWorking.CheckOutAt = now;
                 var duration = finalWorking.CheckOutAt.Value - finalWorking.CheckInAt.Value;
@@ -227,9 +251,37 @@ namespace MenuGoBE.Service
             }
             else
             {
-                var nextSchedule = schedules.FirstOrDefault(s => s.Status == "Scheduled" || s.CheckInAt == null);
+                // Không có ca nào đang Working -> Tìm ca đầu tiên chưa check-in và chưa kết thúc
+                var nextSchedule = schedules
+                    .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING"))
+                    .OrderBy(s => s.Shift.StartTime)
+                    .FirstOrDefault(s => currentTimeOnly < s.Shift.EndTime);
+
+                if (nextSchedule == null)
+                {
+                    // Nếu đã qua giờ kết thúc của TẤT CẢ các ca, lấy ca cuối cùng trong ngày
+                    nextSchedule = schedules
+                        .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING"))
+                        .OrderBy(s => s.Shift.StartTime)
+                        .LastOrDefault();
+                }
+
                 if (nextSchedule != null)
                 {
+                    // Đánh dấu các ca trước đó là "Absent" (vắng mặt)
+                    var missedSchedules = schedules
+                        .Where(s => s.CheckInAt == null 
+                                 && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING")
+                                 && s.Id != nextSchedule.Id
+                                 && s.Shift.EndTime <= currentTimeOnly)
+                        .ToList();
+
+                    foreach (var missed in missedSchedules)
+                    {
+                        missed.Status = "Absent";
+                        await _repo.UpdateAsync(missed);
+                    }
+
                     nextSchedule.CheckInAt = now;
                     nextSchedule.Status = "Working";
                     await _repo.UpdateAsync(nextSchedule);
@@ -238,6 +290,7 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
+                    // Nếu tất cả đã Completed, cập nhật lại giờ Check-out cho ca cuối cùng
                     var lastCompleted = schedules.LastOrDefault(s => s.Status == "Completed");
                     if (lastCompleted != null)
                     {
