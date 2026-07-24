@@ -83,6 +83,9 @@ namespace MenuGoBE.Service
                             Quantity = 0,
                             ChainActive = false,
                             BranchActive = false,
+                            IsManageQuantity = p.IsManageQuantity,
+                            MinStorage = p.MinStorage,
+                            MaxStorage = p.MaxStorage,
                             CreatedAt = DateTime.UtcNow
                         })
                         .ToList();
