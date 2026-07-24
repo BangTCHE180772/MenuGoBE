@@ -24,6 +24,8 @@ public class Branch
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public DateTime? PostingLockDate { get; set; }
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;
