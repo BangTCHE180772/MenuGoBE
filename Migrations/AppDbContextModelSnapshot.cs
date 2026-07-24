@@ -227,6 +227,9 @@ namespace MenuGoBE.Migrations
                     b.Property<TimeOnly>("OpenTime")
                         .HasColumnType("time without time zone");
 
+                    b.Property<DateTime?>("PostingLockDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
@@ -603,6 +606,9 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.Property<decimal?>("SystemQuantity")
                         .HasColumnType("decimal(21,3)");
 
                     b.Property<decimal>("UnitPrice")

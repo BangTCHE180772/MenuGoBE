@@ -16,6 +16,9 @@ public class DocumentDetail
     [Column(TypeName = "decimal(21,3)")]
     public decimal Quantity { get; set; }
 
+    [Column(TypeName = "decimal(21,3)")]
+    public decimal? SystemQuantity { get; set; }
+
     [Column(TypeName = "decimal(30,12)")]
     public decimal UnitPrice { get; set; }
 
