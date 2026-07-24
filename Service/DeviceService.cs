@@ -185,13 +185,17 @@ namespace MenuGoBE.Service
                 if (!activeSchedules.Any())
                     throw new Exception("Bạn chưa check-in ca làm việc hôm nay tại chi nhánh này.");
 
-                var nowTime = TimeOnly.FromDateTime(DateTime.Now);
-                var validSchedule = activeSchedules.FirstOrDefault(s => s.Shift.EndTime.AddMinutes(30) >= nowTime);
+                var nowDateTime = DateTime.Now;
+                var todayDt = DateTime.Today;
+
+                var validSchedule = activeSchedules.FirstOrDefault(s => {
+                    var shiftEndDateTime = todayDt.Add(s.Shift.EndTime.ToTimeSpan());
+                    return shiftEndDateTime.AddMinutes(30) >= nowDateTime;
+                });
 
                 if (validSchedule == null)
                     throw new Exception("Ca làm việc của bạn đã kết thúc quá 30 phút hoặc chưa tới ca.");
 
-                var todayDt = DateTime.Today;
                 shiftEndTime = todayDt.Add(validSchedule.Shift.EndTime.ToTimeSpan());
                 disconnectTime = shiftEndTime.Value.AddMinutes(30);
             }

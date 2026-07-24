@@ -15,12 +15,18 @@ namespace MenuGoTest.UnitTests
     public class WorkScheduleServiceTests
     {
         private readonly Mock<IWorkScheduleRepository> _repoMock;
+        private readonly Mock<IBranchRepository> _branchRepoMock;
+        private readonly Mock<IShiftRepository> _shiftRepoMock;
+        private readonly Mock<IAccountRepository> _accountRepoMock;
         private readonly IMapper _mapper;
         private readonly WorkScheduleService _service;
 
         public WorkScheduleServiceTests()
         {
             _repoMock = new Mock<IWorkScheduleRepository>();
+            _branchRepoMock = new Mock<IBranchRepository>();
+            _shiftRepoMock = new Mock<IShiftRepository>();
+            _accountRepoMock = new Mock<IAccountRepository>();
 
             var config = new MapperConfiguration(cfg =>
             {
@@ -28,7 +34,12 @@ namespace MenuGoTest.UnitTests
             }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = config.CreateMapper();
 
-            _service = new WorkScheduleService(_repoMock.Object, _mapper);
+            _service = new WorkScheduleService(
+                _repoMock.Object, 
+                _mapper,
+                _branchRepoMock.Object,
+                _shiftRepoMock.Object,
+                _accountRepoMock.Object);
         }
 
         [Fact]
