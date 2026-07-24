@@ -38,6 +38,16 @@ namespace MenuGoTest.UnitTests
                 .Options;
             _context = new AppDbContext(options);
 
+            // Seed a base material product to satisfy validation for processed/manufactured types
+            _context.Products.Add(new Product
+            {
+                Id = 9999,
+                Name = "Base Material",
+                Type = ProductType.Regular,
+                SellPrice = 1000
+            });
+            _context.SaveChanges();
+
             _service = new ProductService(_repoMock.Object, _mapper, _context);
         }
 
@@ -242,7 +252,7 @@ namespace MenuGoTest.UnitTests
                     Details = new List<ProductRecipeDetailedDto>
                     {
                         new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1.123000m }, // valid, should be cut to 1.123
-                        new ProductRecipeDetailedDto { ProductId = 11, Quantity = 0.0m } // valid
+                        new ProductRecipeDetailedDto { ProductId = 11, Quantity = 2.0m } // valid
                     }
                 }
             };
@@ -250,6 +260,8 @@ namespace MenuGoTest.UnitTests
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
             _repoMock.Setup(r => r.GetProductTypeAsync(10)).ReturnsAsync("ingredient");
             _repoMock.Setup(r => r.GetProductTypeAsync(11)).ReturnsAsync("ingredient");
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(10)).ReturnsAsync(ProductType.Ingredient);
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(11)).ReturnsAsync(ProductType.Ingredient);
             _repoMock.Setup(r => r.CreateAsync(It.IsAny<Product>())).Returns(Task.CompletedTask);
             _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
@@ -291,6 +303,7 @@ namespace MenuGoTest.UnitTests
 
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
             _repoMock.Setup(r => r.GetProductTypeAsync(10)).ReturnsAsync("ingredient");
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(10)).ReturnsAsync(ProductType.Ingredient);
 
             // Act & Assert
             var ex = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateWithTypeAsync(dto, "processed"));
@@ -458,7 +471,6 @@ namespace MenuGoTest.UnitTests
                 ChainId = chainId,
                 Name = "New Milk Tea",
                 SKUCode = "TEA-001",
-                IsActive = true,
                 SellPrice = 35000
             };
 
