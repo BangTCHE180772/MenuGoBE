@@ -71,7 +71,7 @@ Documents:          Id, BranchId, ParentDocumentId(nullable,self-ref), PostingSe
                     Code(UNIQUE varchar 100), Type(enum:DocumentType), Status(enum:DocumentStatus),
                     TransferStatus(enum:DocumentTransferStatus), TotalAmount(DECIMAL 30,12),
                     CreatedBy(FK->Accounts), CreatedAt, IsDeleted, DeletedBy(FK->Accounts), DeletedAt
-DocumentDetails:    Id, DocumentId, BInventoryId, IsLeftOver,
+DocumentDetails:    Id, DocumentId, BInventoryId,
                     Quantity(DECIMAL 21,3), UnitPrice(DECIMAL 30,12), Note, CreatedAt
 Partners:           Id, BranchId, Type(enum:PartnerType), Name, AddressId(nullable),
                     Phone(nullable), Email(nullable), CreatedBy(FK->Accounts), CreatedAt

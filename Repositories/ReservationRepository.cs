@@ -55,4 +55,11 @@ public class ReservationRepository : IReservationRepository
             .Where(r => r.ReservationTime >= startTime && r.ReservationTime <= endTime)
             .ToListAsync();
     }
+
+    public async Task<Reservation?> GetByOrderIdAsync(long orderId)
+    {
+        return await _context.Reservations
+            .Include(r => r.Customer)
+            .FirstOrDefaultAsync(r => r.OrderId == orderId);
+    }
 }

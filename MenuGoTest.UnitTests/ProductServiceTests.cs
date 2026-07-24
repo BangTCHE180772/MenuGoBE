@@ -19,6 +19,7 @@ namespace MenuGoTest.UnitTests
     public class ProductServiceTests : IDisposable
     {
         private readonly Mock<IProductRepository> _repoMock;
+        private readonly Mock<IUnitRepository> _unitRepoMock;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context;
         private readonly ProductService _service;
@@ -26,6 +27,7 @@ namespace MenuGoTest.UnitTests
         public ProductServiceTests()
         {
             _repoMock = new Mock<IProductRepository>();
+            _unitRepoMock = new Mock<IUnitRepository>();
 
             var mapperConfig = new MapperConfiguration(cfg =>
             {
@@ -38,17 +40,18 @@ namespace MenuGoTest.UnitTests
                 .Options;
             _context = new AppDbContext(options);
 
-            // Seed a base material product to satisfy validation for processed/manufactured types
+            // Add a base material product to satisfy pre-requisite for processed/manufactured tests
             _context.Products.Add(new Product
             {
                 Id = 9999,
-                Name = "Base Material",
-                Type = ProductType.Regular,
-                SellPrice = 1000
+                Name = "Base Ingredient",
+                Type = ProductType.Ingredient,
+                IsSellable = false,
+                SellPrice = 0
             });
             _context.SaveChanges();
 
-            _service = new ProductService(_repoMock.Object, _mapper, _context);
+            _service = new ProductService(_repoMock.Object, _unitRepoMock.Object, _mapper, _context);
         }
 
         public void Dispose()
@@ -471,6 +474,7 @@ namespace MenuGoTest.UnitTests
                 ChainId = chainId,
                 Name = "New Milk Tea",
                 SKUCode = "TEA-001",
+                IsSellable = true,
                 SellPrice = 35000
             };
 

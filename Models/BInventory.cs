@@ -29,6 +29,14 @@ public class BInventory
 
     public bool BranchActive { get; set; }
 
+    public bool IsManageQuantity { get; set; } = false;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MinStorage { get; set; } = 0;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MaxStorage { get; set; } = 1000000000;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

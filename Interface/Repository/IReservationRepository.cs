@@ -10,4 +10,5 @@ public interface IReservationRepository
     Task UpdateAsync(Reservation entity);
     Task SaveChangesAsync();
     Task<List<Reservation>> GetOverlappingReservationsAsync(DateTime startTime, DateTime endTime);
+    Task<Reservation?> GetByOrderIdAsync(long orderId);
 }
