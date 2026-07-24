@@ -113,11 +113,6 @@ namespace MenuGoBE.Repositories
             return await _context.Products.AnyAsync(p => p.SKUCode.ToLower() == sku.ToLower() && p.Id != id);
         }
 
-        public async Task<bool> UnitExistsAsync(long unitId)
-        {
-            return await _context.Units.AnyAsync(u => u.Id == unitId);
-        }
-
         public async Task ClearUnitConversionsAsync(long productId)
         {
             var conversions = await _context.UnitConversions

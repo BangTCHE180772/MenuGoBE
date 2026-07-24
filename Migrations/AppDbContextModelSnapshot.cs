@@ -169,8 +169,17 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsManageQuantity")
+                        .HasColumnType("boolean");
+
                     b.Property<decimal>("LeftOver")
                         .HasColumnType("decimal(30,12)");
+
+                    b.Property<decimal>("MaxStorage")
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<decimal>("MinStorage")
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<long>("ProductId")
                         .HasColumnType("bigint");
@@ -217,6 +226,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<TimeOnly>("OpenTime")
                         .HasColumnType("time without time zone");
+
+                    b.Property<DateTime?>("PostingLockDate")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -590,13 +602,13 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("DocumentId")
                         .HasColumnType("bigint");
 
-                    b.Property<bool>("IsLeftOver")
-                        .HasColumnType("boolean");
-
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
                     b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(21,3)");
+
+                    b.Property<decimal?>("SystemQuantity")
                         .HasColumnType("decimal(21,3)");
 
                     b.Property<decimal>("UnitPrice")

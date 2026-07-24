@@ -13,10 +13,11 @@ public class DocumentDetail
 
     public long BInventoryId { get; set; }
 
-    public bool IsLeftOver { get; set; }
-
     [Column(TypeName = "decimal(21,3)")]
     public decimal Quantity { get; set; }
+
+    [Column(TypeName = "decimal(21,3)")]
+    public decimal? SystemQuantity { get; set; }
 
     [Column(TypeName = "decimal(30,12)")]
     public decimal UnitPrice { get; set; }

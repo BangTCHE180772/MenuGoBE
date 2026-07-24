@@ -52,23 +52,14 @@ namespace MenuGoBE.Repositories
             return await _context.WorkSchedules.AnyAsync(ws => ws.AccountId == accountId && ws.ShiftId == shiftId && ws.WorkDate == workDate);
         }
 
-        public async Task<bool> BranchExistsAsync(long branchId)
+        public async Task<bool> HasOverlappingScheduleAsync(long accountId, System.DateOnly workDate, TimeOnly startTime, TimeOnly endTime)
         {
-            return await _context.Branches.AnyAsync(b => b.Id == branchId);
-        }
-
-        public async Task<bool> ShiftExistsAsync(long shiftId)
-        {
-            return await _context.Shifts.AnyAsync(s => s.Id == shiftId);
-        }
-
-        public async Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds)
-        {
-            if (accountIds == null || accountIds.Count == 0) return new List<long>();
-            return await _context.Accounts
-                .Where(a => accountIds.Contains(a.Id))
-                .Select(a => a.Id)
-                .ToListAsync();
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .AnyAsync(ws => ws.AccountId == accountId 
+                             && ws.WorkDate == workDate
+                             && ws.Shift.StartTime < endTime 
+                             && ws.Shift.EndTime > startTime);
         }
 
         public async Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId)
@@ -94,24 +85,5 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
-        {
-            var now = DateTime.UtcNow;
-            var today = DateOnly.FromDateTime(now);
-
-            var activeContracts = await _context.Contracts
-                .Where(c => c.AccountId == accountId && c.Status == "Active" && c.StartDate <= today && (c.EndDate == null || c.EndDate >= today))
-                .Select(c => c.RoleId)
-                .Distinct()
-                .ToListAsync();
-
-            var activeTempRoles = await _context.TempRoles
-                .Where(tr => tr.AccountId == accountId && tr.Status == "Active" && tr.StartTime <= now && tr.EndTime >= now)
-                .Select(tr => tr.RoleId)
-                .Distinct()
-                .ToListAsync();
-
-            return activeContracts.Union(activeTempRoles).ToList();
-        }
     }
 }
