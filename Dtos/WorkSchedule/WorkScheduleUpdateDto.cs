@@ -17,7 +17,6 @@ namespace MenuGoBE.Dtos.WorkSchedule
         [Required]
         public long ShiftId { get; set; }
 
-        [Required]
         public string Code { get; set; } = string.Empty;
 
         [Required]
