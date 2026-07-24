@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
@@ -15,7 +16,7 @@ public class Product
 
     public long ChainId { get; set; }
 
-    public string Type { get; set; } = string.Empty;
+    public ProductType Type { get; set; }
 
     [Required]
     public string Name { get; set; } = string.Empty;
@@ -24,13 +25,17 @@ public class Product
 
     public string SKUCode { get; set; } = string.Empty;
 
-    public bool IsBatchManage { get; set; } = false;
 
-    public bool IsActive { get; set; } = true;
-
-    public bool IsSecret { get; set; } = false;
 
     public bool IsSellable { get; set; } = true;
+
+    public bool IsManageQuantity { get; set; } = false;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MinStorage { get; set; } = 0;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MaxStorage { get; set; } = 1000000000;
 
     [Column(TypeName = "decimal(18,0)")]
     public decimal SellPrice { get; set; }
@@ -48,9 +53,9 @@ public class Product
     public Chain Chain { get; set; } = null!;
 
     public ICollection<MenuProduct> MenuProducts { get; set; } = new List<MenuProduct>();
-    public ICollection<Recipe> Recipes { get; set; } = new List<Recipe>();
-    public ICollection<RecipesDetailed> RecipesDetaileds { get; set; } = new List<RecipesDetailed>();
+    public ICollection<RecipesDetailed> RecipeItems { get; set; } = new List<RecipesDetailed>();
+    public ICollection<RecipesDetailed> UsedInRecipeItems { get; set; } = new List<RecipesDetailed>();
     public ICollection<UnitConversion> UnitConversions { get; set; } = new List<UnitConversion>();
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
-    public ICollection<BProduct> BProducts { get; set; } = new List<BProduct>();
+    public ICollection<BInventory> BInventories { get; set; } = new List<BInventory>();
 }

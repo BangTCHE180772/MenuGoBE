@@ -23,17 +23,10 @@ public class CashFlowDetail
 
     public string? Note { get; set; }
 
-    public long? DeletedBy { get; set; }
-
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
     // Navigation
     [ForeignKey("CashFlowId")]
     public CashFlow CashFlow { get; set; } = null!;
 
     [ForeignKey("DocumentPartnerId")]
     public DocumentPartner? DocumentPartner { get; set; }
-
-    [ForeignKey("DeletedBy")]
-    public Account? Deleter { get; set; }
 }

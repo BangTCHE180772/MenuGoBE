@@ -77,7 +77,8 @@ namespace MenuGoBE.Mapper
             CreateMap<Order, OrderViewDto>();
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
-            CreateMap<OrderDetail, OrderDetailViewDto>();
+            CreateMap<OrderDetail, OrderDetailViewDto>()
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty));
             CreateMap<OrderDetailCreateDto, OrderDetail>();
             CreateMap<OrderDetailUpdateDto, OrderDetail>();
 
@@ -123,15 +124,16 @@ namespace MenuGoBE.Mapper
             CreateMap<UnitUpdateDto, Unit>();
 
             //Product
-            CreateMap<Product, ProductViewDto>();
+            CreateMap<Product, ProductViewDto>()
+                .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.Image != null ? src.Image.ImageLink : null))
+                .ForMember(dest => dest.RecipeItems, opt => opt.MapFrom(src => src.RecipeItems));
             CreateMap<ProductCreateDto, Product>()
                 .ForMember(dest => dest.UnitConversions, opt => opt.Ignore());
             CreateMap<ProductUpdateDto, Product>()
                 .ForMember(dest => dest.UnitConversions, opt => opt.Ignore());
             CreateMap<UnitConversion, ProductUnitConversionViewDto>();
-            CreateMap<Recipe, ProductRecipeViewDto>()
-                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.RecipesDetaileds));
-            CreateMap<RecipesDetailed, ProductRecipeDetailedViewDto>();
+            CreateMap<RecipesDetailed, ProductRecipeDetailedViewDto>()
+                .ForMember(dest => dest.IngredientProductName, opt => opt.MapFrom(src => src.IngredientProduct != null ? src.IngredientProduct.Name : string.Empty));
 
             //Address
             CreateMap<AddressCreateDto, Address>();

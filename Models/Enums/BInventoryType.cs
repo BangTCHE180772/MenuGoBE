@@ -1,6 +1,6 @@
 namespace MenuGoBE.Models.Enums;
 
-public enum BProductType
+public enum BInventoryType
 {
     RawMaterial = 1,
     SemiFinished = 2,

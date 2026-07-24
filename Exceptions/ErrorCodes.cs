@@ -72,7 +72,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult InvalidConversionPoint = new(
         1016, 
-        "ConversionPoint của đơn vị phụ phải là số nguyên lớn hơn 1 và nhỏ hơn hoặc bằng 1 tỷ.", 
+        "Giá trị quy đổi của đơn vị phụ phải là số nguyên từ 2 đến 1.000.000 (1 triệu).", 
         400
     );
 
@@ -96,7 +96,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult InvalidRecipeQuantity = new(
         1021, 
-        "Số lượng nguyên liệu phải lớn hơn 0, nhỏ hơn hoặc bằng 1 tỷ, và tối đa 3 chữ số thập phân.", 
+        "Số lượng nguyên liệu trong công thức phải từ 0,001 đến 1.000.000 (1 triệu), và tối đa 3 chữ số thập phân.", 
         400
     );
 
@@ -126,7 +126,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult RecipeHasDetails = new(
         1025, 
-        "Không thể cập nhật hoặc xóa công thức đã ghi nhận trong đơn hàng (OrderDetailed).", 
+        "Không thể cập nhật hoặc xóa công thức đã ghi nhận trong đơn hàng.", 
         400
     );
 
@@ -144,7 +144,49 @@ public static class ErrorCodes
 
     public static readonly ErrorResult ProcessedUnitConversionsNotAllowed = new(
         1028, 
-        "Sản phẩm loại processed chỉ được cấu hình đơn vị cơ sở (base unit), không được thêm các đơn vị chuyển đổi khác.", 
+        "Sản phẩm loại processed và manufactured chỉ được cấu hình duy nhất 1 đơn vị cơ sở (base unit), không được thêm các đơn vị chuyển đổi khác.", 
+        400
+    );
+
+    public static readonly ErrorResult ProductRecipeLockedDueToTransactions = new(
+        1029, 
+        "Sản phẩm đã có phát sinh giao dịch (đơn hàng/chứng từ/kho), không thể chỉnh sửa hoặc xóa công thức món.", 
+        400
+    );
+
+    public static readonly ErrorResult ProductCannotBeDeletedUsedInRecipe = new(
+        1030,
+        "Không thể xóa sản phẩm vì đang được sử dụng làm nguyên liệu trong công thức món khác hoặc có thành phần công thức.",
+        400
+    );
+
+    public static readonly ErrorResult ProductCannotBeDeletedUsedInTransactions = new(
+        1031,
+        "Không thể xóa sản phẩm vì đã có phát sinh giao dịch trong đơn hàng, chứng từ hoặc kho.",
+        400
+    );
+
+    public static readonly ErrorResult ProductCannotBeDeletedUsedInMenu = new(
+        1032,
+        "Không thể xóa sản phẩm vì đang được gán vào thực đơn (Menu).",
+        400
+    );
+
+    public static readonly ErrorResult ProductCannotBeDeactivatedUsedInRecipe = new(
+        1033,
+        "Sản phẩm này đang được sử dụng làm nguyên liệu trong công thức món khác, không thể chuyển trạng thái ngưng hoạt động.",
+        400
+    );
+
+    public static readonly ErrorResult ProductCannotBeDeactivatedUsedInOrders = new(
+        1034,
+        "Sản phẩm này đã phát sinh trong đơn hàng/hóa đơn, không thể chuyển trạng thái ngưng hoạt động.",
+        400
+    );
+
+    public static readonly ErrorResult IngredientOrRegularRequired = new(
+        1035,
+        "Cần có ít nhất một sản phẩm loại Hàng thường hoặc Nguyên liệu để tạo công thức món.",
         400
     );
 }

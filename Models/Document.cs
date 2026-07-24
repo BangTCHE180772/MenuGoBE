@@ -12,7 +12,12 @@ public class Document
 
     public long BranchId { get; set; }
 
-    public long? FatherId { get; set; }
+    public long? ParentDocumentId { get; set; }
+
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public long PostingSequence { get; set; }
+
+    public DateTime BusinessDate { get; set; }
 
     [Required]
     [MaxLength(100)]
@@ -25,7 +30,7 @@ public class Document
     public DocumentTransferStatus TransferStatus { get; set; }
 
     [Column(TypeName = "decimal(30,12)")]
-    public decimal TotalPrice { get; set; }
+    public decimal TotalAmount { get; set; }
 
     public long? CreatedBy { get; set; }
 
@@ -41,8 +46,8 @@ public class Document
     [ForeignKey("BranchId")]
     public Branch Branch { get; set; } = null!;
 
-    [ForeignKey("FatherId")]
-    public Document? Father { get; set; }
+    [ForeignKey("ParentDocumentId")]
+    public Document? ParentDocument { get; set; }
 
     [ForeignKey("CreatedBy")]
     public Account? Creator { get; set; }
@@ -50,9 +55,11 @@ public class Document
     [ForeignKey("DeletedBy")]
     public Account? Deleter { get; set; }
 
-    [InverseProperty("Father")]
+    [InverseProperty("ParentDocument")]
     public ICollection<Document> ChildDocuments { get; set; } = new List<Document>();
 
     public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
     public ICollection<DocumentPartner> DocumentPartners { get; set; } = new List<DocumentPartner>();
+    public ICollection<InventoryLedger> InventoryLedgers { get; set; } = new List<InventoryLedger>();
+    public ICollection<CashFlow> CashFlows { get; set; } = new List<CashFlow>();
 }

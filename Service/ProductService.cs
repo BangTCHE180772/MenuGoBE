@@ -2,9 +2,11 @@ using AutoMapper;
 using MenuGoBE.Data;
 using MenuGoBE.Dtos.Product;
 using MenuGoBE.Exceptions;
+using MenuGoBE.Helpers;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Service
@@ -22,58 +24,123 @@ namespace MenuGoBE.Service
             _context = context;
         }
 
+        public async Task<ProductViewDto?> GetByIdAsync(long id)
+        {
+            var data = await _repo.GetByIdAsync(id);
+            if (data == null) return null;
+            return _mapper.Map<ProductViewDto>(data);
+        }
+
+        public async Task<List<ProductViewDto>> GetAllAsync(ProductType? type = null)
+        {
+            var data = await _repo.GetAllAsync(type);
+            return _mapper.Map<List<ProductViewDto>>(data);
+        }
+
         public async Task<List<ProductViewDto>> GetByTypeAsync(string type)
         {
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await GetAllAsync(parsedType);
+            }
             var data = await _repo.GetByTypeAsync(type);
             return _mapper.Map<List<ProductViewDto>>(data);
         }
 
-        public async Task<ProductViewDto?> GetByIdAndTypeAsync(long id, string type)
+        public async Task<ProductViewDto?> GetByIdAndTypeAsync(long id, ProductType type)
         {
             var data = await _repo.GetByIdAndTypeAsync(id, type);
             if (data == null) return null;
             return _mapper.Map<ProductViewDto>(data);
         }
 
-        public async Task<ProductViewDto> CreateWithTypeAsync(ProductCreateDto dto, string type)
+        public async Task<ProductViewDto?> GetByIdAndTypeAsync(long id, string type)
         {
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await GetByIdAndTypeAsync(id, parsedType);
+            }
+            var data = await _repo.GetByIdAndTypeAsync(id, type);
+            if (data == null) return null;
+            return _mapper.Map<ProductViewDto>(data);
+        }
+
+        public async Task<ProductViewDto> CreateAsync(ProductCreateDto dto, ProductType? overrideType = null)
+        {
+            ProductType targetType;
+            if (overrideType.HasValue)
+            {
+                targetType = overrideType.Value;
+            }
+            else if (dto.Type.HasValue)
+            {
+                targetType = dto.Type.Value;
+            }
+            else
+            {
+                throw new MenuGoException(ErrorCodes.ProductNotFound);
+            }
+
             if (await _repo.ExistsByNameAsync(dto.Name))
             {
                 throw new MenuGoException(ErrorCodes.DuplicateProductName);
             }
 
-            if (!string.IsNullOrWhiteSpace(dto.SKUCode) && await _repo.ExistsBySKUAsync(dto.SKUCode))
+            if (string.IsNullOrWhiteSpace(dto.SKUCode))
             {
-                throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
+                dto.SKUCode = await GenerateSmartSKUCodeAsync(targetType);
+            }
+            else
+            {
+                dto.SKUCode = dto.SKUCode.Trim();
+                if (await _repo.ExistsBySKUAsync(dto.SKUCode))
+                {
+                    throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
+                }
             }
 
             // Validate unit conversions if provided
             if (dto.UnitConversions != null && dto.UnitConversions.Count > 0)
             {
-                await ValidateUnitConversionsAsync(type, dto.UnitConversions);
+                await ValidateUnitConversionsAsync(targetType, dto.UnitConversions);
             }
 
-            // For manufactured and processed products, recipe is mandatory
-            var lowerType = type.ToLower();
-            if ((lowerType == "manufactured" || lowerType == "processed") && (dto.Recipe == null || dto.Recipe.Details == null || dto.Recipe.Details.Count == 0))
+            // Extract recipe details from payload
+            var recipeDetails = dto.Recipe?.Details;
+
+            // Mandatory recipe check for processed & manufactured
+            if (targetType == ProductType.Manufactured || targetType == ProductType.Processed)
             {
-                throw new MenuGoException(ErrorCodes.RecipeRequired);
+                var hasBaseMaterials = await _context.Products
+                    .AnyAsync(p => p.Type == ProductType.Regular || p.Type == ProductType.Ingredient);
+
+                if (!hasBaseMaterials)
+                {
+                    throw new MenuGoException(ErrorCodes.IngredientOrRegularRequired);
+                }
+
+                if (dto.Recipe == null || recipeDetails == null || recipeDetails.Count == 0)
+                {
+                    throw new MenuGoException(ErrorCodes.RecipeRequired);
+                }
             }
 
-            // Validate recipe if provided
-            if (dto.Recipe != null)
-            {
-                await ValidateRecipeAsync(type, dto.Recipe);
-            }
+            // Validate recipe rules and ingredient product types
+            await ValidateRecipeAsync(targetType, dto.Recipe);
 
             var entity = _mapper.Map<Product>(dto);
-            entity.Type = type.ToLower(); // Normalize type casing
-            
-            if (entity.Type == "tool")
+            entity.Type = targetType;
+
+            if (entity.Type == ProductType.Processed)
             {
-                entity.IsActive = false;
-                entity.IsSecret = false;
-                entity.IsBatchManage = false;
+                entity.IsManageQuantity = false;
+                entity.MinStorage = 0;
+                entity.MaxStorage = 1000000000;
+            }
+            else if (!entity.IsManageQuantity)
+            {
+                entity.MinStorage = 0;
+                entity.MaxStorage = 1000000000;
             }
 
             await _repo.CreateAsync(entity);
@@ -85,95 +152,286 @@ namespace MenuGoBE.Service
                 await SaveUnitConversionsAsync(entity.Id, dto.UnitConversions);
             }
 
-            // Save recipe
-            if (dto.Recipe != null)
+            // Save direct recipe items
+            if (recipeDetails != null && recipeDetails.Count > 0)
             {
-                await SaveRecipeAsync(entity.Id, dto.Recipe);
+                await SaveRecipeItemsAsync(entity.Id, recipeDetails);
+            }
+
+            // Populate BInventories for child branches under the same Chain
+            var existingBranches = await _context.Branches
+                .Where(b => b.ChainId == entity.ChainId)
+                .ToListAsync();
+
+            if (existingBranches.Count > 0)
+            {
+                var existingBranchIds = await _context.BInventories
+                    .Where(bi => bi.ProductId == entity.Id)
+                    .Select(bi => bi.BranchId)
+                    .ToHashSetAsync();
+
+                var bInventories = existingBranches
+                    .Where(b => !existingBranchIds.Contains(b.Id))
+                    .Select(b => new BInventory
+                    {
+                        BranchId = b.Id,
+                        ProductId = entity.Id,
+                        Type = BInventoryHelper.MapProductTypeToBInventoryType(entity.Type),
+                        Avg = 0,
+                        LeftOver = 0,
+                        Quantity = 0,
+                        ChainActive = false,
+                        BranchActive = false,
+                        IsManageQuantity = entity.IsManageQuantity,
+                        MinStorage = entity.MinStorage,
+                        MaxStorage = entity.MaxStorage,
+                        CreatedAt = DateTime.UtcNow
+                    })
+                    .ToList();
+
+                if (bInventories.Count > 0)
+                {
+                    await _context.BInventories.AddRangeAsync(bInventories);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            // Link product to menus if specified
+            if (dto.MenuIds != null && dto.MenuIds.Count > 0)
+            {
+                var distinctMenuIds = dto.MenuIds.Distinct().ToList();
+                var menuProducts = distinctMenuIds
+                    .Where(mId => !_context.MenuProducts.Any(mp => mp.MenuId == mId && mp.ProductId == entity.Id))
+                    .Select(mId => new MenuProduct { MenuId = mId, ProductId = entity.Id })
+                    .ToList();
+
+                if (menuProducts.Count > 0)
+                {
+                    await _context.MenuProducts.AddRangeAsync(menuProducts);
+                    await _context.SaveChangesAsync();
+                }
             }
 
             return _mapper.Map<ProductViewDto>(entity);
         }
 
-        public async Task<bool> UpdateWithTypeAsync(ProductUpdateDto dto, string type)
+        public async Task<ProductViewDto> CreateWithTypeAsync(ProductCreateDto dto, string type)
         {
-            var entity = await _repo.GetByIdAndTypeAsync(dto.Id, type);
-            if (entity == null) return false;
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await CreateAsync(dto, parsedType);
+            }
+            throw new MenuGoException(ErrorCodes.ProductNotFound);
+        }
+
+        public async Task<bool> UpdateAsync(ProductUpdateDto dto, ProductType? overrideType = null)
+        {
+            Product targetProduct;
+            if (overrideType.HasValue)
+            {
+                var found = await _repo.GetByIdAndTypeAsync(dto.Id, overrideType.Value);
+                if (found == null) return false;
+                targetProduct = found;
+            }
+            else
+            {
+                var found = await _repo.GetByIdAsync(dto.Id);
+                if (found == null) return false;
+                targetProduct = found;
+            }
 
             if (await _repo.ExistsByNameExcludeIdAsync(dto.Name, dto.Id))
             {
                 throw new MenuGoException(ErrorCodes.DuplicateProductName);
             }
 
-            if (!string.IsNullOrWhiteSpace(dto.SKUCode) && await _repo.ExistsBySKUExcludeIdAsync(dto.SKUCode, dto.Id))
+            var targetType = overrideType ?? dto.Type ?? targetProduct.Type;
+
+            if (string.IsNullOrWhiteSpace(dto.SKUCode))
             {
-                throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
+                dto.SKUCode = await GenerateSmartSKUCodeAsync(targetType);
             }
+            else
+            {
+                dto.SKUCode = dto.SKUCode.Trim();
+                if (await _repo.ExistsBySKUExcludeIdAsync(dto.SKUCode, dto.Id))
+                {
+                    throw new MenuGoException(ErrorCodes.DuplicateProductSKU);
+                }
+            }
+
 
             // Validate unit conversions if provided
             if (dto.UnitConversions != null && dto.UnitConversions.Count > 0)
             {
-                await ValidateUnitConversionsAsync(type, dto.UnitConversions);
+                await ValidateUnitConversionsAsync(targetType, dto.UnitConversions);
             }
 
-            // For manufactured and processed products, recipe is mandatory
-            var lowerType = type.ToLower();
-            if ((lowerType == "manufactured" || lowerType == "processed") && (dto.Recipe == null || dto.Recipe.Details == null || dto.Recipe.Details.Count == 0))
+            var recipeDetails = dto.Recipe?.Details;
+
+            // Mandatory recipe check for processed & manufactured
+            if ((targetType == ProductType.Manufactured || targetType == ProductType.Processed) && (dto.Recipe == null || recipeDetails == null || recipeDetails.Count == 0))
             {
                 throw new MenuGoException(ErrorCodes.RecipeRequired);
             }
 
-            // Validate recipe if provided
-            if (dto.Recipe != null)
+            // Validate recipe rules and ingredients
+            await ValidateRecipeAsync(targetType, dto.Recipe, dto.Id);
+
+            // Immutability Check: If recipe items are being modified, check if product has existing transactions
+            if (targetType == ProductType.Processed || targetType == ProductType.Manufactured)
             {
-                await ValidateRecipeAsync(type, dto.Recipe, dto.Id);
+                var existingItems = await _context.RecipesDetaileds
+                    .Where(rd => rd.ParentProductId == dto.Id)
+                    .Select(rd => new { rd.IngredientProductId, rd.Quantity })
+                    .ToListAsync();
+
+                var proposedItems = recipeDetails?.Select(d => new { IngredientProductId = d.ProductId, Quantity = Math.Truncate(d.Quantity * 1000m) / 1000m }).ToList() ?? new();
+
+                bool recipeChanged = existingItems.Count != proposedItems.Count ||
+                    existingItems.Any(e => !proposedItems.Any(p => p.IngredientProductId == e.IngredientProductId && p.Quantity == e.Quantity));
+
+                if (recipeChanged && await HasTransactionRecordsAsync(dto.Id))
+                {
+                    throw new MenuGoException(ErrorCodes.ProductRecipeLockedDueToTransactions);
+                }
             }
 
-            _mapper.Map(dto, entity);
-            entity.Type = type.ToLower(); // Ensure type remains correct
+            _mapper.Map(dto, targetProduct);
+            targetProduct.Type = targetType; // Ensure type remains correct
 
-            if (entity.Type == "tool")
+            if (targetProduct.Type == ProductType.Processed)
             {
-                entity.IsActive = false;
-                entity.IsSecret = false;
-                entity.IsBatchManage = false;
+                targetProduct.IsManageQuantity = false;
+                targetProduct.MinStorage = 0;
+                targetProduct.MaxStorage = 1000000000;
+            }
+            else if (!targetProduct.IsManageQuantity)
+            {
+                targetProduct.MinStorage = 0;
+                targetProduct.MaxStorage = 1000000000;
             }
 
-            await _repo.UpdateAsync(entity);
+            await _repo.UpdateAsync(targetProduct);
 
             // Sync unit conversions if unit conversions array is provided in request
             if (dto.UnitConversions != null)
             {
-                await _repo.ClearUnitConversionsAsync(entity.Id);
+                await _repo.ClearUnitConversionsAsync(targetProduct.Id);
                 if (dto.UnitConversions.Count > 0)
                 {
-                    await SaveUnitConversionsAsync(entity.Id, dto.UnitConversions);
+                    await SaveUnitConversionsAsync(targetProduct.Id, dto.UnitConversions);
                 }
             }
 
-            // Save/Sync recipe if provided in request
-            if (dto.Recipe != null)
+            // Sync direct recipe items
+            if (recipeDetails != null)
             {
-                await SaveRecipeAsync(entity.Id, dto.Recipe);
+                await SaveRecipeItemsAsync(targetProduct.Id, recipeDetails);
             }
 
+            // Sync menu associations if MenuIds array is provided in request
+            if (dto.MenuIds != null)
+            {
+                var existingMenuProducts = await _context.MenuProducts
+                    .Where(mp => mp.ProductId == targetProduct.Id)
+                    .ToListAsync();
+
+                if (existingMenuProducts.Count > 0)
+                {
+                    _context.MenuProducts.RemoveRange(existingMenuProducts);
+                    await _context.SaveChangesAsync();
+                }
+
+                if (dto.MenuIds.Count > 0)
+                {
+                    var distinctMenuIds = dto.MenuIds.Distinct().ToList();
+                    var newMenuProducts = distinctMenuIds.Select(mId => new MenuProduct
+                    {
+                        MenuId = mId,
+                        ProductId = targetProduct.Id
+                    }).ToList();
+                    await _context.MenuProducts.AddRangeAsync(newMenuProducts);
+                }
+            }
+
+            await _repo.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> UpdateWithTypeAsync(ProductUpdateDto dto, string type)
+        {
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await UpdateAsync(dto, parsedType);
+            }
+            return false;
+        }
+
+        public async Task<bool> DeleteAsync(long id, ProductType? expectedType = null)
+        {
+            Product? entity;
+            if (expectedType.HasValue)
+            {
+                entity = await _repo.GetByIdAndTypeAsync(id, expectedType.Value);
+            }
+            else
+            {
+                entity = await _repo.GetByIdAsync(id);
+            }
+
+            if (entity == null) return false;
+
+            // Safeguard 1: Check if product is used as an ingredient in any recipe, or has parent recipe items
+            if (await _context.RecipesDetaileds.AnyAsync(rd => rd.IngredientProductId == id || rd.ParentProductId == id))
+            {
+                throw new MenuGoException(ErrorCodes.ProductCannotBeDeletedUsedInRecipe);
+            }
+
+            // Safeguard 2: Check if product has transaction records (OrderDetails, DocumentDetails, InventoryLedgers)
+            if (await HasTransactionRecordsAsync(id))
+            {
+                throw new MenuGoException(ErrorCodes.ProductCannotBeDeletedUsedInTransactions);
+            }
+
+            // Safeguard 3: Check if product is assigned to any Menu
+            if (await _context.MenuProducts.AnyAsync(mp => mp.ProductId == id))
+            {
+                throw new MenuGoException(ErrorCodes.ProductCannotBeDeletedUsedInMenu);
+            }
+
+            await _repo.ClearUnitConversionsAsync(entity.Id);
+
+            // Remove associated BInventories
+            var bInventories = await _context.BInventories.Where(bi => bi.ProductId == entity.Id).ToListAsync();
+            if (bInventories.Count > 0)
+            {
+                _context.BInventories.RemoveRange(bInventories);
+            }
+
+            await _repo.DeleteAsync(entity);
             await _repo.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> DeleteWithTypeAsync(long id, string type)
         {
-            var entity = await _repo.GetByIdAndTypeAsync(id, type);
-            if (entity == null) return false;
-
-            await _repo.ClearUnitConversionsAsync(entity.Id);
-            await _repo.DeleteAsync(entity);
-            await _repo.SaveChangesAsync();
-            return true;
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await DeleteAsync(id, parsedType);
+            }
+            return false;
         }
 
-        private async Task ValidateUnitConversionsAsync(string type, List<ProductUnitConversionDto> conversions)
+        private async Task<bool> HasTransactionRecordsAsync(long productId)
         {
-            type = type.ToLower();
+            return await _context.OrderDetails.AnyAsync(od => od.ProductId == productId)
+                || await _context.DocumentDetails.AnyAsync(dd => dd.BInventory != null && dd.BInventory.ProductId == productId)
+                || await _context.InventoryLedgers.AnyAsync(il => il.BInventory != null && il.BInventory.ProductId == productId);
+        }
+
+        private async Task ValidateUnitConversionsAsync(ProductType type, List<ProductUnitConversionDto> conversions)
+        {
             var baseCount = conversions.Count(c => c.IsBase);
             if (baseCount == 0)
             {
@@ -184,7 +442,7 @@ namespace MenuGoBE.Service
                 throw new MenuGoException(ErrorCodes.OnlyOneBaseUnitAllowed);
             }
 
-            if (type == "processed")
+            if (type == ProductType.Processed || type == ProductType.Manufactured)
             {
                 if (conversions.Count > 1)
                 {
@@ -207,7 +465,7 @@ namespace MenuGoBE.Service
 
                 if (!conversion.IsBase)
                 {
-                    if (conversion.ConversionPoint % 1 != 0 || conversion.ConversionPoint <= 1 || conversion.ConversionPoint > 1000000000m)
+                    if (conversion.ConversionPoint % 1 != 0 || conversion.ConversionPoint < 2 || conversion.ConversionPoint > 1000000m)
                     {
                         throw new MenuGoException(ErrorCodes.InvalidConversionPoint);
                     }
@@ -245,100 +503,90 @@ namespace MenuGoBE.Service
             }
         }
 
-        private async Task ValidateRecipeAsync(string targetType, ProductRecipeDto recipeDto, long? productId = null)
+        private async Task ValidateRecipeAsync(ProductType targetType, ProductRecipeDto? recipeDto, long? productId = null)
         {
-            targetType = targetType.ToLower();
-            if (targetType != "processed" && targetType != "manufactured")
+            if (targetType != ProductType.Processed && targetType != ProductType.Manufactured)
             {
-                throw new MenuGoException(ErrorCodes.RecipeNotAllowed);
+                if (recipeDto != null)
+                {
+                    throw new MenuGoException(ErrorCodes.RecipeNotAllowed);
+                }
+                return;
+            }
+
+            var recipeDetails = recipeDto?.Details;
+
+            if (recipeDetails == null || recipeDetails.Count == 0)
+            {
+                throw new MenuGoException(ErrorCodes.RecipeRequired);
             }
 
             if (productId.HasValue && productId.Value > 0)
             {
-                var proposedIngredientIds = recipeDto.Details?.Select(d => d.ProductId).ToList() ?? new List<long>();
+                var proposedIngredientIds = recipeDetails.Select(d => d.ProductId).ToList();
                 if (await WouldFormCycleAsync(productId.Value, proposedIngredientIds))
                 {
                     throw new MenuGoException(ErrorCodes.RecipeCycleDetected);
                 }
             }
 
-            if (recipeDto.Details == null || recipeDto.Details.Count == 0)
+            foreach (var detail in recipeDetails)
             {
-                return;
-            }
-
-            foreach (var detail in recipeDto.Details)
-            {
-                var ingredientType = await _repo.GetProductTypeAsync(detail.ProductId);
-                if (ingredientType == null)
+                var ingredientType = await _repo.GetProductTypeEnumAsync(detail.ProductId);
+                if (!ingredientType.HasValue)
                 {
                     throw new MenuGoException(ErrorCodes.ProductNotFound);
                 }
 
-                ingredientType = ingredientType.ToLower();
-
-                if (targetType == "processed")
+                if (targetType == ProductType.Processed)
                 {
                     // Can have processed, manufactured, ingredient, regular (everything except tool)
-                    if (ingredientType == "tool")
+                    if (ingredientType == ProductType.Tool)
                     {
                         throw new MenuGoException(ErrorCodes.InvalidRecipeIngredient);
                     }
                 }
-                else if (targetType == "manufactured")
+                else if (targetType == ProductType.Manufactured)
                 {
                     // Can have manufactured, ingredient, regular (everything except processed, tool)
-                    if (ingredientType == "processed" || ingredientType == "tool")
+                    if (ingredientType == ProductType.Processed || ingredientType == ProductType.Tool)
                     {
                         throw new MenuGoException(ErrorCodes.InvalidRecipeIngredient);
                     }
                 }
 
-                // Validate quantity: quantity must be >= 0 and <= 1,000,000,000, and max 3 decimal places (allowing trailing zeros after 3 decimal places)
-                if (detail.Quantity < 0 || detail.Quantity > 1000000000m || Math.Truncate(detail.Quantity * 1000m) / 1000m != detail.Quantity)
+                // Validate quantity: quantity must be >= 0.001 and <= 1,000,000, max 3 decimal places
+                if (detail.Quantity < 0.001m || detail.Quantity > 1000000m || Math.Truncate(detail.Quantity * 1000m) / 1000m != detail.Quantity)
                 {
                     throw new MenuGoException(ErrorCodes.InvalidRecipeQuantity);
                 }
             }
         }
 
-        private async Task SaveRecipeAsync(long productId, ProductRecipeDto recipeDto)
+        private async Task SaveRecipeItemsAsync(long parentProductId, List<ProductRecipeDetailedDto> recipeDetails)
         {
-            if (recipeDto.IsActive)
+            var existingItems = await _context.RecipesDetaileds
+                .Where(rd => rd.ParentProductId == parentProductId)
+                .ToListAsync();
+
+            if (existingItems.Count > 0)
             {
-                // Deactivate all other recipes for this product
-                var existingRecipes = await _context.Recipes
-                    .Where(r => r.ProductId == productId)
-                    .ToListAsync();
-                foreach (var r in existingRecipes)
-                {
-                    r.IsActive = false;
-                }
-                _context.Recipes.UpdateRange(existingRecipes);
+                _context.RecipesDetaileds.RemoveRange(existingItems);
             }
 
-            var recipeEntity = new Recipe
+            if (recipeDetails != null && recipeDetails.Count > 0)
             {
-                ProductId = productId,
-                VersionName = recipeDto.VersionName,
-                IsActive = recipeDto.IsActive
-            };
-
-            await _context.Recipes.AddAsync(recipeEntity);
-            await _context.SaveChangesAsync();
-
-            if (recipeDto.Details != null && recipeDto.Details.Count > 0)
-            {
-                var details = recipeDto.Details.Select(d => new RecipesDetailed
+                var newItems = recipeDetails.Select(d => new RecipesDetailed
                 {
-                    RecipeId = recipeEntity.Id,
-                    ProductId = d.ProductId,
+                    ParentProductId = parentProductId,
+                    IngredientProductId = d.ProductId,
                     Quantity = Math.Truncate(d.Quantity * 1000m) / 1000m
                 }).ToList();
 
-                await _context.RecipesDetaileds.AddRangeAsync(details);
-                await _context.SaveChangesAsync();
+                await _context.RecipesDetaileds.AddRangeAsync(newItems);
             }
+
+            await _context.SaveChangesAsync();
         }
 
         private async Task<bool> WouldFormCycleAsync(long rootProductId, List<long> proposedIngredientIds)
@@ -360,34 +608,74 @@ namespace MenuGoBE.Service
             {
                 var currentId = queue.Dequeue();
 
-                var activeRecipe = await _context.Recipes
-                    .Where(r => r.ProductId == currentId && r.IsActive)
-                    .FirstOrDefaultAsync();
+                var ingredients = await _context.RecipesDetaileds
+                    .Where(rd => rd.ParentProductId == currentId)
+                    .Select(rd => rd.IngredientProductId)
+                    .ToListAsync();
 
-                if (activeRecipe != null)
+                foreach (var ingredientId in ingredients)
                 {
-                    var ingredients = await _context.RecipesDetaileds
-                        .Where(rd => rd.RecipeId == activeRecipe.Id)
-                        .Select(rd => rd.ProductId)
-                        .ToListAsync();
-
-                    foreach (var ingredientId in ingredients)
+                    if (ingredientId == rootProductId)
                     {
-                        if (ingredientId == rootProductId)
-                        {
-                            return true; // Cycle detected!
-                        }
+                        return true; // Cycle detected!
+                    }
 
-                        if (!visited.Contains(ingredientId))
-                        {
-                            visited.Add(ingredientId);
-                            queue.Enqueue(ingredientId);
-                        }
+                    if (!visited.Contains(ingredientId))
+                    {
+                        visited.Add(ingredientId);
+                        queue.Enqueue(ingredientId);
                     }
                 }
             }
 
             return false;
+        }
+
+        private async Task<long?> ResolveImageIdAsync(string? imageUrl, long? existingImageId)
+        {
+            if (string.IsNullOrWhiteSpace(imageUrl))
+                return existingImageId;
+
+            var existingImage = await _context.Images
+                .FirstOrDefaultAsync(img => img.ImageLink == imageUrl.Trim());
+
+            if (existingImage != null)
+                return existingImage.Id;
+
+            var newImage = new Image
+            {
+                ImageLink = imageUrl.Trim(),
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.Images.AddAsync(newImage);
+            await _context.SaveChangesAsync();
+
+            return newImage.Id;
+        }
+
+        private async Task<string> GenerateSmartSKUCodeAsync(ProductType targetType)
+        {
+            var prefix = targetType switch
+            {
+                ProductType.Ingredient => "NL",
+                ProductType.Tool => "DC",
+                ProductType.Processed => "CB",
+                ProductType.Manufactured => "TP",
+                _ => "HH"
+            };
+
+            var count = await _context.Products.CountAsync(p => p.Type == targetType);
+            var nextSeq = count + 1;
+
+            string candidate;
+            do
+            {
+                candidate = $"{prefix}{nextSeq:D6}";
+                nextSeq++;
+            } while (await _repo.ExistsBySKUAsync(candidate));
+
+            return candidate;
         }
     }
 }
