@@ -1,6 +1,7 @@
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Repositories
@@ -16,26 +17,63 @@ namespace MenuGoBE.Repositories
 
         public async Task<Product?> GetByIdAsync(long id)
         {
-            return await _context.Products.FindAsync(id);
+            return await _context.Products
+                .Include(p => p.Image)
+                .Include(p => p.UnitConversions)
+                .Include(p => p.RecipeItems)
+                    .ThenInclude(ri => ri.IngredientProduct)
+                .FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public async Task<List<Product>> GetAllAsync(ProductType? type = null)
+        {
+            var query = _context.Products
+                .AsNoTracking()
+                .Include(p => p.Image)
+                .Include(p => p.UnitConversions)
+                .Include(p => p.RecipeItems)
+                    .ThenInclude(ri => ri.IngredientProduct)
+                .AsQueryable();
+
+            if (type.HasValue)
+            {
+                query = query.Where(p => p.Type == type.Value);
+            }
+
+            return await query.ToListAsync();
         }
 
         public async Task<List<Product>> GetByTypeAsync(string type)
         {
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await GetAllAsync(parsedType);
+            }
+
             return await _context.Products
                 .Include(p => p.UnitConversions)
-                .Include(p => p.Recipes)
-                    .ThenInclude(r => r.RecipesDetaileds)
-                .Where(p => p.Type.ToLower() == type.ToLower())
+                .Include(p => p.RecipeItems)
+                    .ThenInclude(ri => ri.IngredientProduct)
                 .ToListAsync();
         }
 
         public async Task<Product?> GetByIdAndTypeAsync(long id, string type)
         {
+            if (Enum.TryParse<ProductType>(type, true, out var parsedType))
+            {
+                return await GetByIdAndTypeAsync(id, parsedType);
+            }
+
+            return await GetByIdAsync(id);
+        }
+
+        public async Task<Product?> GetByIdAndTypeAsync(long id, ProductType type)
+        {
             return await _context.Products
                 .Include(p => p.UnitConversions)
-                .Include(p => p.Recipes)
-                    .ThenInclude(r => r.RecipesDetaileds)
-                .FirstOrDefaultAsync(p => p.Id == id && p.Type.ToLower() == type.ToLower());
+                .Include(p => p.RecipeItems)
+                    .ThenInclude(ri => ri.IngredientProduct)
+                .FirstOrDefaultAsync(p => p.Id == id && p.Type == type);
         }
 
         public async Task CreateAsync(Product entity)
@@ -88,10 +126,16 @@ namespace MenuGoBE.Repositories
             _context.UnitConversions.RemoveRange(conversions);
         }
 
-        public async Task<string?> GetProductTypeAsync(long id)
+        public async Task<ProductType?> GetProductTypeEnumAsync(long id)
         {
             var p = await _context.Products.FindAsync(id);
             return p?.Type;
+        }
+
+        public async Task<string?> GetProductTypeAsync(long id)
+        {
+            var p = await _context.Products.FindAsync(id);
+            return p?.Type.ToString();
         }
 
         public async Task SaveChangesAsync()

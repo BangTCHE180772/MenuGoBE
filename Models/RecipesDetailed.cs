@@ -9,9 +9,9 @@ public class RecipesDetailed
     [Key]
     public long Id { get; set; }
 
-    public long ProductId { get; set; }
+    public long ParentProductId { get; set; }
 
-    public long RecipeId { get; set; }
+    public long IngredientProductId { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
     public decimal Quantity { get; set; }
@@ -19,9 +19,9 @@ public class RecipesDetailed
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    [ForeignKey("ProductId")]
-    public Product Product { get; set; } = null!;
+    [ForeignKey("ParentProductId")]
+    public Product ParentProduct { get; set; } = null!;
 
-    [ForeignKey("RecipeId")]
-    public Recipe Recipe { get; set; } = null!;
+    [ForeignKey("IngredientProductId")]
+    public Product IngredientProduct { get; set; } = null!;
 }

@@ -4,8 +4,8 @@ using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
-[Table("BProducts")]
-public class BProduct
+[Table("BInventories")]
+public class BInventory
 {
     [Key]
     public long Id { get; set; }
@@ -14,7 +14,7 @@ public class BProduct
 
     public long ProductId { get; set; }
 
-    public BProductType Type { get; set; }
+    public BInventoryType Type { get; set; }
 
     [Column(TypeName = "decimal(30,12)")]
     public decimal Avg { get; set; }
@@ -29,6 +29,14 @@ public class BProduct
 
     public bool BranchActive { get; set; }
 
+    public bool IsManageQuantity { get; set; } = false;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MinStorage { get; set; } = 0;
+
+    [Column(TypeName = "decimal(18,3)")]
+    public decimal MaxStorage { get; set; } = 1000000000;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
@@ -38,6 +46,6 @@ public class BProduct
     [ForeignKey("ProductId")]
     public Product Product { get; set; } = null!;
 
-    public ICollection<BProductHistory> BProductHistories { get; set; } = new List<BProductHistory>();
+    public ICollection<InventoryLedger> InventoryLedgers { get; set; } = new List<InventoryLedger>();
     public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
 }

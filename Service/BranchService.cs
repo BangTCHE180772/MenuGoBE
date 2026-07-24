@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using MenuGoBE.Data;
 using MenuGoBE.Dtos.Branch;
+using MenuGoBE.Helpers;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Service
 {
@@ -14,11 +17,13 @@ namespace MenuGoBE.Service
     {
         private readonly IBranchRepository _repo;
         private readonly IMapper _mapper;
+        private readonly AppDbContext? _context;
 
-        public BranchService(IBranchRepository repo, IMapper mapper)
+        public BranchService(IBranchRepository repo, IMapper mapper, AppDbContext? context = null)
         {
             _repo = repo;
             _mapper = mapper;
+            _context = context;
         }
 
         public async Task<List<BranchViewDto>> GetAllAsync()
@@ -52,6 +57,46 @@ namespace MenuGoBE.Service
             entity.Type = "Main";
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
+
+            if (_context != null)
+            {
+                var existingProducts = await _context.Products
+                    .Where(p => p.ChainId == entity.ChainId)
+                    .ToListAsync();
+
+                if (existingProducts.Count > 0)
+                {
+                    var existingProductIds = await _context.BInventories
+                        .Where(bi => bi.BranchId == entity.Id)
+                        .Select(bi => bi.ProductId)
+                        .ToHashSetAsync();
+
+                    var bInventories = existingProducts
+                        .Where(p => !existingProductIds.Contains(p.Id))
+                        .Select(p => new BInventory
+                        {
+                            BranchId = entity.Id,
+                            ProductId = p.Id,
+                            Type = BInventoryHelper.MapProductTypeToBInventoryType(p.Type),
+                            Avg = 0,
+                            LeftOver = 0,
+                            Quantity = 0,
+                            ChainActive = false,
+                            BranchActive = false,
+                            IsManageQuantity = p.IsManageQuantity,
+                            MinStorage = p.MinStorage,
+                            MaxStorage = p.MaxStorage,
+                            CreatedAt = DateTime.UtcNow
+                        })
+                        .ToList();
+
+                    if (bInventories.Count > 0)
+                    {
+                        await _context.BInventories.AddRangeAsync(bInventories);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
 
             return _mapper.Map<BranchViewDto>(entity);
         }

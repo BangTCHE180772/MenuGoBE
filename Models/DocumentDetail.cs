@@ -11,14 +11,13 @@ public class DocumentDetail
 
     public long DocumentId { get; set; }
 
-    public long BProductId { get; set; }
-
-    public long? RecipeId { get; set; }
-
-    public bool IsLeftOver { get; set; }
+    public long BInventoryId { get; set; }
 
     [Column(TypeName = "decimal(21,3)")]
     public decimal Quantity { get; set; }
+
+    [Column(TypeName = "decimal(21,3)")]
+    public decimal? SystemQuantity { get; set; }
 
     [Column(TypeName = "decimal(30,12)")]
     public decimal UnitPrice { get; set; }
@@ -31,11 +30,8 @@ public class DocumentDetail
     [ForeignKey("DocumentId")]
     public Document Document { get; set; } = null!;
 
-    [ForeignKey("BProductId")]
-    public BProduct BProduct { get; set; } = null!;
+    [ForeignKey("BInventoryId")]
+    public BInventory BInventory { get; set; } = null!;
 
-    [ForeignKey("RecipeId")]
-    public Recipe? Recipe { get; set; }
-
-    public ICollection<BProductHistory> BProductHistories { get; set; } = new List<BProductHistory>();
+    public ICollection<InventoryLedger> InventoryLedgers { get; set; } = new List<InventoryLedger>();
 }
