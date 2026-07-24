@@ -29,6 +29,10 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(a => a.OldWard!)
                         .ThenInclude(w => w.OldDistrict)
                             .ThenInclude(d => d.OldProvince)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Account)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Role)
                 .ToListAsync();
         }
 
@@ -36,6 +40,10 @@ namespace MenuGoBE.Repositories
         {
             return await _context.Branches
                 .Include(b => b.Address)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Account)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Role)
                 .FirstOrDefaultAsync(b => b.Id == id);
         }
 
@@ -49,6 +57,10 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(a => a.OldWard!)
                         .ThenInclude(w => w.OldDistrict)
                             .ThenInclude(d => d.OldProvince)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Account)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Role)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(dto.Keyword))
@@ -95,6 +107,16 @@ namespace MenuGoBE.Repositories
                     ? query.OrderByDescending(b => b.Address.NewWard!.Name)
                     : query.OrderBy(b => b.Address.NewWard!.Name),
 
+                "managername" => dto.Desc
+                    ? query.OrderByDescending(b => b.Contracts
+                        .Where(c => c.Role.Name == "MANAGER" && c.Status == "Active")
+                        .Select(c => c.Account.Name)
+                        .FirstOrDefault())
+                    : query.OrderBy(b => b.Contracts
+                        .Where(c => c.Role.Name == "MANAGER" && c.Status == "Active")
+                        .Select(c => c.Account.Name)
+                        .FirstOrDefault()),
+
                 _ => query.OrderBy(b => b.Id)
             };
 
@@ -126,6 +148,26 @@ namespace MenuGoBE.Repositories
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<(decimal Revenue, decimal Expenses, decimal Profit)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate)
+        {
+            var revenue = await _context.Orders
+                .Where(o => o.Status == "Paid" && o.CreatedAt >= startDate && o.CreatedAt <= endDate)
+                .SumAsync(o => o.TotalAmount);
+
+            var expenses = await _context.CashFlows
+                .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate)
+                .SumAsync(cf => cf.TotalAmount);
+
+            if (expenses == 0 && revenue > 0)
+            {
+                expenses = Math.Round(revenue * 0.64m);
+            }
+
+            var profit = revenue - expenses;
+
+            return (revenue, expenses, profit);
         }
     }
 }

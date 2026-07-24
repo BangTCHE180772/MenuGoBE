@@ -189,4 +189,76 @@ public static class ErrorCodes
         "Cần có ít nhất một sản phẩm loại Hàng thường hoặc Nguyên liệu để tạo công thức món.",
         400
     );
+
+    public static readonly ErrorResult ChainNameRequired = new(
+        2001,
+        "Tên chuỗi không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult ChainNameLengthExceeded = new(
+        2002,
+        "Tên chuỗi không được quá 100 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult ChainOpenCloseTimeInvalid = new(
+        2003,
+        "Giờ mở cửa phải nhỏ hơn giờ đóng cửa.",
+        400
+    );
+
+    public static readonly ErrorResult ChainImageLengthExceeded = new(
+        2004,
+        "Đường dẫn Logo hoặc Background không được quá 255 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult BranchNameRequired = new(
+        2011,
+        "Tên chi nhánh không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult BranchNameLengthExceeded = new(
+        2012,
+        "Tên chi nhánh không được vượt quá 100 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult BranchOpenCloseTimeInvalid = new(
+        2013,
+        "Giờ mở cửa phải nhỏ hơn giờ đóng cửa.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryPageInvalid = new(
+        2014,
+        "Trang phải lớn hơn 0.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryPageSizeInvalid = new(
+        2015,
+        "Số bản ghi trên trang phải từ 1 đến 100.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQuerySortByInvalid = new(
+        2016,
+        "Cột sắp xếp không hợp lệ (Name, CreatedAt, Id hoặc ManagerName).",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryKeywordLengthExceeded = new(
+        2017,
+        "Từ khóa tìm kiếm không được quá 100 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryTypeLengthExceeded = new(
+        2018,
+        "Loại chi nhánh tìm kiếm không được quá 50 ký tự.",
+        400
+    );
 }

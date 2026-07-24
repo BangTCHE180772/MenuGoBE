@@ -58,6 +58,14 @@ namespace MenuGoBE.Mapper
                         src.Address.OldWard != null
                             ? $"{src.Address.OldWard.Name}, {src.Address.OldWard.OldDistrict.Name}, {src.Address.OldWard.OldDistrict.OldProvince.Name}"
                             : "Chưa có địa chỉ cũ"
+                    ))
+                .ForMember(
+                    dest => dest.ManagerName,
+                    opt => opt.MapFrom(src =>
+                        src.Contracts
+                            .Where(c => c.Role != null && c.Role.Name == "MANAGER" && c.Status == "Active" && c.Account != null)
+                            .Select(c => c.Account.Name)
+                            .FirstOrDefault() ?? "Chưa phân công"
                     ));
             CreateMap<BranchCreateDto, Branch>();
             CreateMap<BranchUpdateDto, Branch>();
