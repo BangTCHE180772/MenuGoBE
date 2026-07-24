@@ -17,6 +17,8 @@ using MenuGoBE.Dtos.Menu;
 using MenuGoBE.Dtos.Unit;
 using MenuGoBE.Dtos.Product;
 using MenuGoBE.Dtos.Address;
+using MenuGoBE.Dtos.Payroll;
+using MenuGoBE.Dtos.SalaryDetail;
 
 namespace MenuGoBE.Mapper
 {
@@ -152,6 +154,17 @@ namespace MenuGoBE.Mapper
             CreateMap<OldProvince, OldProvinceViewDto>();
             CreateMap<OldDistrict, OldDistrictViewDto>()
                 .ForMember(dest => dest.OldProvinceName, opt => opt.MapFrom(src => src.OldProvince != null ? src.OldProvince.Name : string.Empty));
+
+            //Payroll & SalaryDetail
+            CreateMap<Payroll, PayrollViewDto>()
+                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty))
+                .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : string.Empty));
+            CreateMap<PayrollCreateDto, Payroll>();
+            CreateMap<PayrollUpdateDto, Payroll>();
+
+            CreateMap<SalaryDetail, SalaryDetailViewDto>()
+                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty));
+            CreateMap<SalaryDetailCreateDto, SalaryDetail>();
         }
     }
 }
