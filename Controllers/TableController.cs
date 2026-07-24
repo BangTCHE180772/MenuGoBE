@@ -8,6 +8,8 @@ using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Controllers
 {
@@ -16,10 +18,12 @@ namespace MenuGoBE.Controllers
     public class TableController : ControllerBase
     {
         private readonly ITableService _service;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public TableController(ITableService service)
+        public TableController(ITableService service, IHubContext<NotificationHub> hubContext)
         {
             _service = service;
+            _hubContext = hubContext;
         }
 
         [HttpGet]
@@ -59,6 +63,7 @@ namespace MenuGoBE.Controllers
         public async Task<IActionResult> Create([FromBody] TableCreateDto dto)
         {
             var result = await _service.CreateAsync(dto);
+            await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
             return Ok(result);
         }
 
@@ -70,6 +75,7 @@ namespace MenuGoBE.Controllers
             if (!result)
                 return NotFound(new { message = "Không tìm thấy Table để cập nhật" });
 
+            await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
             return Ok(new { message = "Cập nhật thành công" });
         }
 
@@ -81,6 +87,7 @@ namespace MenuGoBE.Controllers
             if (!result)
                 return NotFound(new { message = "Không tìm thấy Table để xóa" });
 
+            await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
             return Ok(new { message = "Xóa thành công" });
         }
     }
