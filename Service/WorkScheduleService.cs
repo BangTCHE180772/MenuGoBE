@@ -13,11 +13,22 @@ namespace MenuGoBE.Service
     {
         private readonly IWorkScheduleRepository _repo;
         private readonly IMapper _mapper;
+        private readonly IBranchRepository _branchRepo;
+        private readonly IShiftRepository _shiftRepo;
+        private readonly IAccountRepository _accountRepo;
 
-        public WorkScheduleService(IWorkScheduleRepository repo, IMapper mapper)
+        public WorkScheduleService(
+            IWorkScheduleRepository repo, 
+            IMapper mapper,
+            IBranchRepository branchRepo,
+            IShiftRepository shiftRepo,
+            IAccountRepository accountRepo)
         {
             _repo = repo;
             _mapper = mapper;
+            _branchRepo = branchRepo;
+            _shiftRepo = shiftRepo;
+            _accountRepo = accountRepo;
         }
 
         public async Task<List<WorkScheduleViewDto>> GetAllAsync()
@@ -37,15 +48,15 @@ namespace MenuGoBE.Service
         {
             if (dto == null) throw new ArgumentNullException(nameof(dto));
 
-            if (!await _repo.BranchExistsAsync(dto.BranchId))
+            if (await _branchRepo.GetByIdAsync(dto.BranchId) == null)
             {
                 throw new ArgumentException($"Branch with ID {dto.BranchId} does not exist.");
             }
-            if (!await _repo.ShiftExistsAsync(dto.ShiftId))
+            if (await _shiftRepo.GetByIdAsync(dto.ShiftId) == null)
             {
                 throw new ArgumentException($"Shift with ID {dto.ShiftId} does not exist.");
             }
-            var validAccounts = await _repo.GetValidAccountIdsAsync(new List<long> { dto.AccountId });
+            var validAccounts = await _accountRepo.GetValidAccountIdsAsync(new List<long> { dto.AccountId });
             if (validAccounts.Count == 0)
             {
                 throw new ArgumentException($"Account with ID {dto.AccountId} does not exist.");
@@ -54,6 +65,12 @@ namespace MenuGoBE.Service
             if (await _repo.ExistsAsync(dto.AccountId, dto.ShiftId, dto.WorkDate))
             {
                 throw new ArgumentException($"Account with ID {dto.AccountId} is already assigned to shift {dto.ShiftId} on {dto.WorkDate}.");
+            }
+
+            var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
+            if (shift != null && await _repo.HasOverlappingScheduleAsync(dto.AccountId, dto.WorkDate, shift.StartTime, shift.EndTime))
+            {
+                throw new ArgumentException($"Nhân viên này đã có ca làm việc trùng giờ trong ngày {dto.WorkDate:dd/MM/yyyy}.");
             }
 
             var entity = _mapper.Map<WorkSchedule>(dto);
@@ -86,16 +103,16 @@ namespace MenuGoBE.Service
         {
             if (dto == null) throw new ArgumentNullException(nameof(dto));
 
-            if (!await _repo.BranchExistsAsync(dto.BranchId))
+            if (await _branchRepo.GetByIdAsync(dto.BranchId) == null)
             {
                 throw new ArgumentException($"Branch with ID {dto.BranchId} does not exist.");
             }
-            if (!await _repo.ShiftExistsAsync(dto.ShiftId))
+            if (await _shiftRepo.GetByIdAsync(dto.ShiftId) == null)
             {
                 throw new ArgumentException($"Shift with ID {dto.ShiftId} does not exist.");
             }
 
-            var validAccountIds = await _repo.GetValidAccountIdsAsync(dto.AccountIds);
+            var validAccountIds = await _accountRepo.GetValidAccountIdsAsync(dto.AccountIds);
             if (validAccountIds.Count == 0)
             {
                 return new List<WorkScheduleViewDto>();
@@ -108,6 +125,12 @@ namespace MenuGoBE.Service
                 foreach (var workDate in dto.WorkDates)
                 {
                     if (await _repo.ExistsAsync(accountId, dto.ShiftId, workDate))
+                    {
+                        continue;
+                    }
+
+                    var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
+                    if (shift != null && await _repo.HasOverlappingScheduleAsync(accountId, workDate, shift.StartTime, shift.EndTime))
                     {
                         continue;
                     }
@@ -309,7 +332,7 @@ namespace MenuGoBE.Service
 
         public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
         {
-            return await _repo.GetActiveRoleIdsAsync(accountId);
+            return await _accountRepo.GetActiveRoleIdsAsync(accountId);
         }
     }
 }

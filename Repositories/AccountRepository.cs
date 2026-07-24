@@ -92,5 +92,34 @@ namespace MenuGoBE.Repositories
             return await _context.Accounts
                 .AnyAsync(a => a.CitizenIdCode == citizenIdCode && (!excludeId.HasValue || a.Id != excludeId.Value));
         }
+
+        public async Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds)
+        {
+            if (accountIds == null || accountIds.Count == 0) return new List<long>();
+            return await _context.Accounts
+                .Where(a => accountIds.Contains(a.Id))
+                .Select(a => a.Id)
+                .ToListAsync();
+        }
+
+        public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
+        {
+            var now = DateTime.UtcNow;
+            var today = DateOnly.FromDateTime(now);
+
+            var activeContracts = await _context.Contracts
+                .Where(c => c.AccountId == accountId && c.Status == "Active" && c.StartDate <= today && (c.EndDate == null || c.EndDate >= today))
+                .Select(c => c.RoleId)
+                .Distinct()
+                .ToListAsync();
+
+            var activeTempRoles = await _context.TempRoles
+                .Where(tr => tr.AccountId == accountId && tr.Status == "Active" && tr.StartTime <= now && tr.EndTime >= now)
+                .Select(tr => tr.RoleId)
+                .Distinct()
+                .ToListAsync();
+
+            return activeContracts.Union(activeTempRoles).ToList();
+        }
     }
 }
