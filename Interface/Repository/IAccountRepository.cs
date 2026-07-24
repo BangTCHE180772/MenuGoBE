@@ -17,5 +17,7 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> ExistsByPhoneAsync(string phone, long? excludeId = null);
         Task<bool> ExistsByEmailAsync(string email, long? excludeId = null);
         Task<bool> ExistsByCitizenIdCodeAsync(string citizenIdCode, long? excludeId = null);
+        Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds);
+        Task<List<long>> GetActiveRoleIdsAsync(long accountId);
     }
 }

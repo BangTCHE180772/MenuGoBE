@@ -19,6 +19,7 @@ namespace MenuGoTest.UnitTests
     public class ProductServiceTests : IDisposable
     {
         private readonly Mock<IProductRepository> _repoMock;
+        private readonly Mock<IUnitRepository> _unitRepoMock;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context;
         private readonly ProductService _service;
@@ -26,6 +27,7 @@ namespace MenuGoTest.UnitTests
         public ProductServiceTests()
         {
             _repoMock = new Mock<IProductRepository>();
+            _unitRepoMock = new Mock<IUnitRepository>();
 
             var mapperConfig = new MapperConfiguration(cfg =>
             {
@@ -38,7 +40,7 @@ namespace MenuGoTest.UnitTests
                 .Options;
             _context = new AppDbContext(options);
 
-            _service = new ProductService(_repoMock.Object, _mapper, _context);
+            _service = new ProductService(_repoMock.Object, _unitRepoMock.Object, _mapper, _context);
         }
 
         public void Dispose()
@@ -458,7 +460,7 @@ namespace MenuGoTest.UnitTests
                 ChainId = chainId,
                 Name = "New Milk Tea",
                 SKUCode = "TEA-001",
-                IsActive = true,
+                IsSellable = true,
                 SellPrice = 35000
             };
 
