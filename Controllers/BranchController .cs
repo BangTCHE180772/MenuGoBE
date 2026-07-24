@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Branch;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -72,12 +74,34 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet("dashboard-stats")]
-        public async Task<IActionResult> GetDashboardStats([FromQuery] string range = "thisMonth", [FromQuery] string? startDateStr = null, [FromQuery] string? endDateStr = null)
+        public async Task<IActionResult> GetDashboardStats(
+            [FromQuery] string range = "thisMonth",
+            [FromQuery] string? startDateStr = null,
+            [FromQuery] string? endDateStr = null,
+            [FromQuery] long? branchId = null)
         {
             try
             {
-                var stats = await _service.GetDashboardStatsAsync(range, startDateStr, endDateStr);
+                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+                if (userRole == "Manager")
+                {
+                    var branchClaim = User.FindFirst("branchId")?.Value;
+                    if (long.TryParse(branchClaim, out var mgrBranchId))
+                    {
+                        branchId = mgrBranchId;
+                    }
+                    else
+                    {
+                        throw new MenuGoException(ErrorCodes.UserBranchIdClaimMissing);
+                    }
+                }
+
+                var stats = await _service.GetDashboardStatsAsync(range, startDateStr, endDateStr, branchId);
                 return Ok(stats);
+            }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { message = ex.Message, code = ex.Code });
             }
             catch (Exception ex)
             {

@@ -20,6 +20,6 @@ namespace MenuGoBE.Interface.Services
 
         Task<bool> DeleteAsync(long id);
 
-        Task<object> GetDashboardStatsAsync(string range, string? startDateStr, string? endDateStr);
+        Task<object> GetDashboardStatsAsync(string range, string? startDateStr, string? endDateStr, long? branchId);
     }
 }

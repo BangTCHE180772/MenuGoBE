@@ -21,9 +21,9 @@ namespace MenuGoBE.Service
             _mapper = mapper;
         }
 
-        public async Task<List<AccountViewDto>> GetAccountsExcludeRolesAsync(List<long> excludedRoles)
+        public async Task<List<AccountViewDto>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, long? branchId)
         {
-            var accounts = await _repo.GetAccountsExcludeRolesAsync(excludedRoles);
+            var accounts = await _repo.GetAccountsExcludeRolesAsync(excludedRoles, branchId);
             return _mapper.Map<List<AccountViewDto>>(accounts);
         }
 
