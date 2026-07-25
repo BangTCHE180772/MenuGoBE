@@ -26,5 +26,7 @@ namespace MenuGoBE.Dtos.Branch
         public TimeOnly CloseTime { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public string ManagerName { get; set; } = string.Empty;
     }
 }

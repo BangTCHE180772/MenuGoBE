@@ -190,38 +190,111 @@ public static class ErrorCodes
         400
     );
 
+    public static readonly ErrorResult ChainNameRequired = new(
+        2001,
+        "Tên chuỗi không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult ChainNameLengthExceeded = new(
+        2002,
+        "Tên chuỗi không được quá 100 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult ChainOpenCloseTimeInvalid = new(
+        2003,
+        "Giờ mở cửa phải nhỏ hơn giờ đóng cửa.",
+        400
+    );
+
+    public static readonly ErrorResult ChainImageLengthExceeded = new(
+        2004,
+        "Đường dẫn Logo hoặc Background không được quá 255 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult BranchNameRequired = new(
+        2011,
+        "Tên chi nhánh không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult BranchNameLengthExceeded = new(
+        2012,
+        "Tên chi nhánh không được vượt quá 100 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult BranchOpenCloseTimeInvalid = new(
+        2013,
+        "Giờ mở cửa phải nhỏ hơn giờ đóng cửa.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryPageInvalid = new(
+        2014,
+        "Trang phải lớn hơn 0.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryPageSizeInvalid = new(
+        2015,
+        "Số bản ghi trên trang phải từ 1 đến 100.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQuerySortByInvalid = new(
+        2016,
+        "Cột sắp xếp không hợp lệ (Name, CreatedAt, Id hoặc ManagerName).",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryKeywordLengthExceeded = new(
+        2017,
+        "Từ khóa tìm kiếm không được quá 100 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult BranchQueryTypeLengthExceeded = new(
+        2018,
+        "Loại chi nhánh tìm kiếm không được quá 50 ký tự.",
+        400
+    );
+
+    // --- DOCUMENT ERROR CODES (2101 - 2150) ---
     public static readonly ErrorResult DocumentBranchNotFound = new(
-        2001, 
+        2101, 
         "Chi nhánh không tồn tại.", 
         404
     );
 
     public static readonly ErrorResult DocumentPostingLockDateError = new(
-        2002, 
+        2102, 
         "Ngày chứng từ phải sau ngày khóa sổ (PostingLockDate).", 
         400
     );
 
     public static readonly ErrorResult DocumentProductNotInInventory = new(
-        2003, 
+        2103, 
         "Một số sản phẩm không tồn tại trong kho chi nhánh này.", 
         400
     );
 
     public static readonly ErrorResult DocumentInvalidProductTypeForImport = new(
-        2004, 
+        2104, 
         "Không thể nhập kho sản phẩm do thuộc loại Manufactured hoặc Processed.", 
         400
     );
 
     public static readonly ErrorResult DocumentExactlyOneSupplierRequired = new(
-        2005, 
+        2105, 
         "Phiếu nhập kho phải có đúng 1 Nhà cung cấp (Supplier).", 
         400
     );
 
     public static readonly ErrorResult DocumentGuestNotAllowedInImport = new(
-        2006, 
+        2106, 
         "Phiếu nhập kho không được có Khách lẻ (Customer).", 
         400
     );
