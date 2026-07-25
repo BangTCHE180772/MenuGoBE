@@ -12,7 +12,8 @@ public class CashFlow
 
     public long BranchId { get; set; }
 
-    public long? DocumentId { get; set; }
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public long PostingSequence { get; set; }
 
     [Required]
     [MaxLength(100)]
@@ -38,9 +39,6 @@ public class CashFlow
     // Navigation
     [ForeignKey("BranchId")]
     public Branch Branch { get; set; } = null!;
-
-    [ForeignKey("DocumentId")]
-    public Document? Document { get; set; }
 
     [ForeignKey("DeletedBy")]
     public Account? Deleter { get; set; }

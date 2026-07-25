@@ -1,0 +1,53 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+
+namespace MenuGoBE.Dtos.Document
+{
+    public class ImportDocumentCreateDto
+    {
+        [Required]
+        public long BranchId { get; set; }
+
+        [Required]
+        public DateTime BusinessDate { get; set; }
+
+        public string? Note { get; set; }
+
+        [Required]
+        [MinLength(1, ErrorMessage = "Phải có ít nhất 1 sản phẩm nhập kho")]
+        public List<ImportDocumentDetailDto> Details { get; set; } = new List<ImportDocumentDetailDto>();
+
+        [Required]
+        [MinLength(1, ErrorMessage = "Phải có ít nhất 1 đối tác (Supplier)")]
+        public List<ImportDocumentPartnerDto> Partners { get; set; } = new List<ImportDocumentPartnerDto>();
+    }
+
+    public class ImportDocumentDetailDto
+    {
+        [Required]
+        public long BInventoryId { get; set; }
+
+        [Required]
+        [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nhập phải lớn hơn 0")]
+        public decimal Quantity { get; set; }
+
+        [Required]
+        [Range(0, double.MaxValue, ErrorMessage = "Đơn giá không được âm")]
+        public decimal UnitPrice { get; set; }
+
+        public string? Note { get; set; }
+    }
+
+    public class ImportDocumentPartnerDto
+    {
+        [Required]
+        public long PartnerId { get; set; }
+
+        [Required]
+        [Range(0, double.MaxValue, ErrorMessage = "Chi phí không được âm")]
+        public decimal Cost { get; set; }
+
+        public string? Note { get; set; }
+    }
+}

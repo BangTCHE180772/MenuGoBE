@@ -61,5 +61,5 @@ public class Document
     public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
     public ICollection<DocumentPartner> DocumentPartners { get; set; } = new List<DocumentPartner>();
     public ICollection<InventoryLedger> InventoryLedgers { get; set; } = new List<InventoryLedger>();
-    public ICollection<CashFlow> CashFlows { get; set; } = new List<CashFlow>();
+
 }
