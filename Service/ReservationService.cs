@@ -4,6 +4,8 @@ using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using MenuGoBE.Dtos.Table;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Service;
 
@@ -17,6 +19,7 @@ public class ReservationService : IReservationService
     private readonly ICustomerRepository _customerRepo;
     private readonly IMapper _mapper;
     private readonly IReservationSignalService _signalService;
+    private readonly IHubContext<NotificationHub> _hubContext;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -26,7 +29,8 @@ public class ReservationService : IReservationService
         IProductRepository productRepo,
         ICustomerRepository customerRepo,
         IMapper mapper,
-        IReservationSignalService signalService)
+        IReservationSignalService signalService,
+        IHubContext<NotificationHub> hubContext)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -36,6 +40,7 @@ public class ReservationService : IReservationService
         _customerRepo = customerRepo;
         _mapper = mapper;
         _signalService = signalService;
+        _hubContext = hubContext;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -111,6 +116,11 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationViewDto> CreateAsync(ReservationCreateDto dto)
     {
+        if (dto.ReservationTime < DateTime.UtcNow.AddMinutes(10))
+        {
+            throw new InvalidOperationException("Thời gian đặt bàn phải cách thời gian hiện tại ít nhất 10 phút.");
+        }
+
         var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
         if (customer == null)
         {
@@ -182,8 +192,18 @@ public class ReservationService : IReservationService
             await _orderRepo.CreateAsync(fatherOrder);
             await _orderRepo.SaveChangesAsync();
 
-            // Do NOT forcefully lock the table status here.
-            // Let the ReservationMonitorService smart task handle the lock 2 hours prior!
+            // Do NOT forcefully lock the table status here unless it's within 30 minutes.
+            bool shouldLockImmediately = (dto.ReservationTime - DateTime.UtcNow).TotalMinutes <= 30;
+
+            if (shouldLockImmediately)
+            {
+                var fatherTable = await _tableRepo.GetByIdAsync(fatherTableId);
+                if (fatherTable != null && (fatherTable.Status == "Empty" || fatherTable.Status == "Available"))
+                {
+                    fatherTable.Status = "Reserved";
+                    await _tableRepo.UpdateAsync(fatherTable);
+                }
+            }
 
             decimal totalAmount = 0;
             if (dto.PreOrderItems != null && dto.PreOrderItems.Any())
@@ -224,9 +244,19 @@ public class ReservationService : IReservationService
                     CreatedAt = DateTime.UtcNow
                 };
                 await _orderRepo.CreateAsync(childOrder);
+                if (shouldLockImmediately)
+                {
+                    var childTable = await _tableRepo.GetByIdAsync(childTableId);
+                    if (childTable != null && (childTable.Status == "Empty" || childTable.Status == "Available"))
+                    {
+                        childTable.Status = "Reserved";
+                        await _tableRepo.UpdateAsync(childTable);
+                    }
+                }
             }
 
             await _orderRepo.SaveChangesAsync();
+            await _tableRepo.SaveChangesAsync();
             await _detailRepo.SaveChangesAsync();
 
             reservation.OrderId = fatherOrder.Id;
@@ -237,6 +267,11 @@ public class ReservationService : IReservationService
 
         // Notify Background Task to recalculate the sleep timer
         _signalService.TriggerSignal();
+
+        if (dto.TableIds != null && dto.TableIds.Any() && (dto.ReservationTime - DateTime.UtcNow).TotalMinutes <= 30)
+        {
+            await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        }
 
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
@@ -303,6 +338,7 @@ public class ReservationService : IReservationService
 
         await _reservationRepo.SaveChangesAsync();
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 
@@ -365,6 +401,7 @@ public class ReservationService : IReservationService
 
         await _reservationRepo.SaveChangesAsync();
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 
@@ -378,6 +415,7 @@ public class ReservationService : IReservationService
         await _reservationRepo.SaveChangesAsync();
 
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 
@@ -419,6 +457,7 @@ public class ReservationService : IReservationService
         }
 
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 }

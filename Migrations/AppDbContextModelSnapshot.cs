@@ -275,11 +275,14 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<long?>("DocumentId")
-                        .HasColumnType("bigint");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<long>("PostingSequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("PostingSequence"));
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -296,8 +299,6 @@ namespace MenuGoBE.Migrations
                         .IsUnique();
 
                     b.HasIndex("DeletedBy");
-
-                    b.HasIndex("DocumentId");
 
                     b.ToTable("CashFlows");
                 });
@@ -322,6 +323,9 @@ namespace MenuGoBE.Migrations
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
+                    b.Property<long?>("PartnerId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasColumnType("text");
@@ -335,6 +339,8 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("CashFlowId");
 
                     b.HasIndex("DocumentPartnerId");
+
+                    b.HasIndex("PartnerId");
 
                     b.ToTable("CashFlowDetails");
                 });
@@ -735,7 +741,10 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("decimal(30,12)");
 
                     b.Property<long>("PostingSequence")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("PostingSequence"));
 
                     b.Property<decimal>("QuantityDelta")
                         .HasColumnType("decimal(21,3)");
@@ -1678,16 +1687,9 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("DeletedBy")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("MenuGoBE.Models.Document", "Document")
-                        .WithMany("CashFlows")
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Branch");
 
                     b.Navigation("Deleter");
-
-                    b.Navigation("Document");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.CashFlowDetail", b =>
@@ -1703,9 +1705,16 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("DocumentPartnerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.Partner", "Partner")
+                        .WithMany()
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("CashFlow");
 
                     b.Navigation("DocumentPartner");
+
+                    b.Navigation("Partner");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Chain", b =>
@@ -2252,8 +2261,6 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Document", b =>
                 {
-                    b.Navigation("CashFlows");
-
                     b.Navigation("ChildDocuments");
 
                     b.Navigation("DocumentDetails");

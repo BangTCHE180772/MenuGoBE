@@ -19,6 +19,7 @@ namespace MenuGoTest.UnitTests
     public class ProductServiceTests : IDisposable
     {
         private readonly Mock<IProductRepository> _repoMock;
+        private readonly Mock<IUnitRepository> _unitRepoMock;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context;
         private readonly ProductService _service;
@@ -26,6 +27,7 @@ namespace MenuGoTest.UnitTests
         public ProductServiceTests()
         {
             _repoMock = new Mock<IProductRepository>();
+            _unitRepoMock = new Mock<IUnitRepository>();
 
             var mapperConfig = new MapperConfiguration(cfg =>
             {
@@ -38,7 +40,18 @@ namespace MenuGoTest.UnitTests
                 .Options;
             _context = new AppDbContext(options);
 
-            _service = new ProductService(_repoMock.Object, _mapper, _context);
+            // Add a base material product to satisfy pre-requisite for processed/manufactured tests
+            _context.Products.Add(new Product
+            {
+                Id = 9999,
+                Name = "Base Ingredient",
+                Type = ProductType.Ingredient,
+                IsSellable = false,
+                SellPrice = 0
+            });
+            _context.SaveChanges();
+
+            _service = new ProductService(_repoMock.Object, _unitRepoMock.Object, _mapper, _context);
         }
 
         public void Dispose()
@@ -242,7 +255,7 @@ namespace MenuGoTest.UnitTests
                     Details = new List<ProductRecipeDetailedDto>
                     {
                         new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1.123000m }, // valid, should be cut to 1.123
-                        new ProductRecipeDetailedDto { ProductId = 11, Quantity = 0.0m } // valid
+                        new ProductRecipeDetailedDto { ProductId = 11, Quantity = 2.0m } // valid
                     }
                 }
             };
@@ -250,6 +263,8 @@ namespace MenuGoTest.UnitTests
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
             _repoMock.Setup(r => r.GetProductTypeAsync(10)).ReturnsAsync("ingredient");
             _repoMock.Setup(r => r.GetProductTypeAsync(11)).ReturnsAsync("ingredient");
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(10)).ReturnsAsync(ProductType.Ingredient);
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(11)).ReturnsAsync(ProductType.Ingredient);
             _repoMock.Setup(r => r.CreateAsync(It.IsAny<Product>())).Returns(Task.CompletedTask);
             _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
@@ -291,6 +306,7 @@ namespace MenuGoTest.UnitTests
 
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
             _repoMock.Setup(r => r.GetProductTypeAsync(10)).ReturnsAsync("ingredient");
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(10)).ReturnsAsync(ProductType.Ingredient);
 
             // Act & Assert
             var ex = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateWithTypeAsync(dto, "processed"));
@@ -458,7 +474,7 @@ namespace MenuGoTest.UnitTests
                 ChainId = chainId,
                 Name = "New Milk Tea",
                 SKUCode = "TEA-001",
-                IsActive = true,
+                IsSellable = true,
                 SellPrice = 35000
             };
 

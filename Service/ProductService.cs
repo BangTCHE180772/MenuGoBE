@@ -14,12 +14,14 @@ namespace MenuGoBE.Service
     public class ProductService : IProductService
     {
         private readonly IProductRepository _repo;
+        private readonly IUnitRepository _unitRepo;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context;
 
-        public ProductService(IProductRepository repo, IMapper mapper, AppDbContext context)
+        public ProductService(IProductRepository repo, IUnitRepository unitRepo, IMapper mapper, AppDbContext context)
         {
             _repo = repo;
+            _unitRepo = unitRepo;
             _mapper = mapper;
             _context = context;
         }
@@ -458,7 +460,7 @@ namespace MenuGoBE.Service
 
             foreach (var conversion in conversions)
             {
-                if (!await _repo.UnitExistsAsync(conversion.UnitId))
+                if (await _unitRepo.GetByIdAsync(conversion.UnitId) == null)
                 {
                     throw new MenuGoException(ErrorCodes.UnitNotFound);
                 }
