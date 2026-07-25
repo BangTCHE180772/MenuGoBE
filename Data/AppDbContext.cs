@@ -147,12 +147,7 @@ public class AppDbContext : DbContext
             .HasIndex(cf => cf.Code)
             .IsUnique();
 
-        // CashFlow: DocumentId → Document
-        modelBuilder.Entity<CashFlow>()
-            .HasOne(cf => cf.Document)
-            .WithMany(d => d.CashFlows)
-            .HasForeignKey(cf => cf.DocumentId)
-            .OnDelete(DeleteBehavior.Restrict);
+
 
         // CashFlow: DeletedBy → Accounts
         modelBuilder.Entity<CashFlow>()
