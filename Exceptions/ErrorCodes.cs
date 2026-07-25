@@ -189,4 +189,40 @@ public static class ErrorCodes
         "Cần có ít nhất một sản phẩm loại Hàng thường hoặc Nguyên liệu để tạo công thức món.",
         400
     );
+
+    public static readonly ErrorResult DocumentBranchNotFound = new(
+        2001, 
+        "Chi nhánh không tồn tại.", 
+        404
+    );
+
+    public static readonly ErrorResult DocumentPostingLockDateError = new(
+        2002, 
+        "Ngày chứng từ phải sau ngày khóa sổ (PostingLockDate).", 
+        400
+    );
+
+    public static readonly ErrorResult DocumentProductNotInInventory = new(
+        2003, 
+        "Một số sản phẩm không tồn tại trong kho chi nhánh này.", 
+        400
+    );
+
+    public static readonly ErrorResult DocumentInvalidProductTypeForImport = new(
+        2004, 
+        "Không thể nhập kho sản phẩm do thuộc loại Manufactured hoặc Processed.", 
+        400
+    );
+
+    public static readonly ErrorResult DocumentExactlyOneSupplierRequired = new(
+        2005, 
+        "Phiếu nhập kho phải có đúng 1 Nhà cung cấp (Supplier).", 
+        400
+    );
+
+    public static readonly ErrorResult DocumentGuestNotAllowedInImport = new(
+        2006, 
+        "Phiếu nhập kho không được có Khách lẻ (Customer).", 
+        400
+    );
 }

@@ -16,6 +16,7 @@ public class InventoryLedger
 
     public long? DocumentDetailId { get; set; }
 
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public long PostingSequence { get; set; }
 
     public DateTime BusinessDate { get; set; }
