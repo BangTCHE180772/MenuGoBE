@@ -14,6 +14,8 @@ public class CashFlowDetail
 
     public long? DocumentPartnerId { get; set; }
 
+    public long? PartnerId { get; set; }
+
     public CashFlowDetailType Type { get; set; }
 
     public PaymentMethod PaymentMethod { get; set; }
@@ -29,4 +31,7 @@ public class CashFlowDetail
 
     [ForeignKey("DocumentPartnerId")]
     public DocumentPartner? DocumentPartner { get; set; }
+
+    [ForeignKey("PartnerId")]
+    public Partner? Partner { get; set; }
 }

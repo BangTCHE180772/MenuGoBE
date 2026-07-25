@@ -71,6 +71,24 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpGet("dashboard-stats")]
+        public async Task<IActionResult> GetDashboardStats([FromQuery] string range = "thisMonth", [FromQuery] string? startDateStr = null, [FromQuery] string? endDateStr = null)
+        {
+            try
+            {
+                var stats = await _service.GetDashboardStatsAsync(range, startDateStr, endDateStr);
+                return Ok(stats);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi tính toán số liệu thống kê.",
+                    error = ex.Message
+                });
+            }
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] BranchCreateDto dto)
         {

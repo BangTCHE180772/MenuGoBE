@@ -16,8 +16,9 @@ namespace MenuGoBE.Service
         private readonly ICustomerRepository _customerRepo;
         private readonly IPaymentRepository _paymentRepo;
         private readonly IVoucherRepository _voucherRepo;
+        private readonly IReservationRepository _reservationRepo;
 
-        public OrderService(IOrderRepository repo, IMapper mapper, ITableRepository tableRepo, ICustomerRepository customerRepo, IPaymentRepository paymentRepo, IVoucherRepository voucherRepo)
+        public OrderService(IOrderRepository repo, IMapper mapper, ITableRepository tableRepo, ICustomerRepository customerRepo, IPaymentRepository paymentRepo, IVoucherRepository voucherRepo, IReservationRepository reservationRepo)
         {
             _repo = repo;
             _mapper = mapper;
@@ -25,6 +26,7 @@ namespace MenuGoBE.Service
             _customerRepo = customerRepo;
             _paymentRepo = paymentRepo;
             _voucherRepo = voucherRepo;
+            _reservationRepo = reservationRepo;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -255,6 +257,18 @@ namespace MenuGoBE.Service
             summary.Items = items;
             summary.PendingConfirmCount = items.Count(i => i.Status == "CustomerPending");
             summary.ReadyToServeCount = items.Count(i => i.CookingStatus == "Ready");
+
+            if (table?.Status == "Reserved")
+            {
+                var reservation = await _reservationRepo.GetByOrderIdAsync(summary.ActiveOrderId.Value);
+                if (reservation != null)
+                {
+                    summary.ReservationId = reservation.Id;
+                    summary.CustomerName = reservation.Customer?.Name;
+                    summary.CustomerPhone = reservation.Customer?.Phone;
+                    summary.ReservationTime = reservation.ReservationTime;
+                }
+            }
 
             return summary;
         }
