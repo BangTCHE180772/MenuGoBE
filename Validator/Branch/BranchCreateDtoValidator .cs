@@ -12,15 +12,14 @@ namespace MenuGoBE.Validator.Branch
         public BranchCreateDtoValidator()
         {
             RuleFor(x => x.Name)
-                .NotEmpty()
-                .MaximumLength(100);
+                .NotEmpty().WithMessage("Tên chi nhánh không được để trống.")
+                .MaximumLength(100).WithMessage("Tên chi nhánh không được vượt quá 100 ký tự.");
 
             RuleFor(x => x.Type)
-                .MaximumLength(50);
+                .MaximumLength(50).WithMessage("Loại chi nhánh không được vượt quá 50 ký tự.");
 
             RuleFor(x => x.OpenTime)
-                .LessThan(x => x.CloseTime)
-                .WithMessage("Giờ mở cửa phải nhỏ hơn giờ đóng cửa.");
+                .LessThan(x => x.CloseTime).WithMessage("Giờ mở cửa phải nhỏ hơn giờ đóng cửa.");
         }
     }
 }

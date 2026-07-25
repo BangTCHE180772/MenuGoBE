@@ -79,6 +79,7 @@ builder.Services.AddScoped<INewProvinceRepository, NewProvinceRepository>();
 builder.Services.AddScoped<IOldProvinceRepository, OldProvinceRepository>();
 builder.Services.AddScoped<IOldDistrictRepository, OldDistrictRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -106,6 +107,7 @@ builder.Services.AddScoped<INewProvinceService, NewProvinceService>();
 builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
 builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();

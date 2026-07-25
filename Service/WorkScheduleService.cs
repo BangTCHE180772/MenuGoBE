@@ -13,11 +13,22 @@ namespace MenuGoBE.Service
     {
         private readonly IWorkScheduleRepository _repo;
         private readonly IMapper _mapper;
+        private readonly IBranchRepository _branchRepo;
+        private readonly IShiftRepository _shiftRepo;
+        private readonly IAccountRepository _accountRepo;
 
-        public WorkScheduleService(IWorkScheduleRepository repo, IMapper mapper)
+        public WorkScheduleService(
+            IWorkScheduleRepository repo, 
+            IMapper mapper,
+            IBranchRepository branchRepo,
+            IShiftRepository shiftRepo,
+            IAccountRepository accountRepo)
         {
             _repo = repo;
             _mapper = mapper;
+            _branchRepo = branchRepo;
+            _shiftRepo = shiftRepo;
+            _accountRepo = accountRepo;
         }
 
         public async Task<List<WorkScheduleViewDto>> GetAllAsync()
@@ -37,15 +48,15 @@ namespace MenuGoBE.Service
         {
             if (dto == null) throw new ArgumentNullException(nameof(dto));
 
-            if (!await _repo.BranchExistsAsync(dto.BranchId))
+            if (await _branchRepo.GetByIdAsync(dto.BranchId) == null)
             {
                 throw new ArgumentException($"Branch with ID {dto.BranchId} does not exist.");
             }
-            if (!await _repo.ShiftExistsAsync(dto.ShiftId))
+            if (await _shiftRepo.GetByIdAsync(dto.ShiftId) == null)
             {
                 throw new ArgumentException($"Shift with ID {dto.ShiftId} does not exist.");
             }
-            var validAccounts = await _repo.GetValidAccountIdsAsync(new List<long> { dto.AccountId });
+            var validAccounts = await _accountRepo.GetValidAccountIdsAsync(new List<long> { dto.AccountId });
             if (validAccounts.Count == 0)
             {
                 throw new ArgumentException($"Account with ID {dto.AccountId} does not exist.");
@@ -56,7 +67,22 @@ namespace MenuGoBE.Service
                 throw new ArgumentException($"Account with ID {dto.AccountId} is already assigned to shift {dto.ShiftId} on {dto.WorkDate}.");
             }
 
+            var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
+            if (shift != null && await _repo.HasOverlappingScheduleAsync(dto.AccountId, dto.WorkDate, shift.StartTime, shift.EndTime))
+            {
+                throw new ArgumentException($"Nhân viên này đã có ca làm việc trùng giờ trong ngày {dto.WorkDate:dd/MM/yyyy}.");
+            }
+
             var entity = _mapper.Map<WorkSchedule>(dto);
+            if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckInAt = DateTime.SpecifyKind(entity.CheckInAt.Value, DateTimeKind.Utc);
+            }
+            if (entity.CheckOutAt.HasValue && entity.CheckOutAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckOutAt = DateTime.SpecifyKind(entity.CheckOutAt.Value, DateTimeKind.Utc);
+            }
+
             if (string.IsNullOrWhiteSpace(entity.Code))
             {
                 entity.Code = $"WS-{dto.BranchId}-{dto.ShiftId}-{dto.AccountId}-{dto.WorkDate:yyyyMMdd}";
@@ -77,16 +103,16 @@ namespace MenuGoBE.Service
         {
             if (dto == null) throw new ArgumentNullException(nameof(dto));
 
-            if (!await _repo.BranchExistsAsync(dto.BranchId))
+            if (await _branchRepo.GetByIdAsync(dto.BranchId) == null)
             {
                 throw new ArgumentException($"Branch with ID {dto.BranchId} does not exist.");
             }
-            if (!await _repo.ShiftExistsAsync(dto.ShiftId))
+            if (await _shiftRepo.GetByIdAsync(dto.ShiftId) == null)
             {
                 throw new ArgumentException($"Shift with ID {dto.ShiftId} does not exist.");
             }
 
-            var validAccountIds = await _repo.GetValidAccountIdsAsync(dto.AccountIds);
+            var validAccountIds = await _accountRepo.GetValidAccountIdsAsync(dto.AccountIds);
             if (validAccountIds.Count == 0)
             {
                 return new List<WorkScheduleViewDto>();
@@ -99,6 +125,12 @@ namespace MenuGoBE.Service
                 foreach (var workDate in dto.WorkDates)
                 {
                     if (await _repo.ExistsAsync(accountId, dto.ShiftId, workDate))
+                    {
+                        continue;
+                    }
+
+                    var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
+                    if (shift != null && await _repo.HasOverlappingScheduleAsync(accountId, workDate, shift.StartTime, shift.EndTime))
                     {
                         continue;
                     }
@@ -135,6 +167,15 @@ namespace MenuGoBE.Service
             if (entity == null) return false;
 
             _mapper.Map(dto, entity);
+
+            if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckInAt = DateTime.SpecifyKind(entity.CheckInAt.Value, DateTimeKind.Utc);
+            }
+            if (entity.CheckOutAt.HasValue && entity.CheckOutAt.Value.Kind == DateTimeKind.Unspecified)
+            {
+                entity.CheckOutAt = DateTime.SpecifyKind(entity.CheckOutAt.Value, DateTimeKind.Utc);
+            }
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -176,6 +217,7 @@ namespace MenuGoBE.Service
 
             if (workingIndex >= 0)
             {
+                // Có ca đang Working -> Tiến hành Check-out
                 bool autoSplitOccurred = false;
                 
                 while (workingIndex >= 0 && workingIndex < schedules.Count - 1)
@@ -183,8 +225,11 @@ namespace MenuGoBE.Service
                     var currentWs = schedules[workingIndex];
                     var nextWs = schedules[workingIndex + 1];
                     
-                    if (currentTimeOnly >= nextWs.Shift.StartTime && currentTimeOnly > currentWs.Shift.EndTime)
+                    // Nếu thời điểm quét thẻ đã vượt qua giờ kết thúc của ca hiện tại một khoảng đáng kể (ví dụ > 30 phút)
+                    // Hoặc đơn giản là vượt qua hẳn giờ kết thúc và nhân viên có ca tiếp theo.
+                    if (currentTimeOnly >= nextWs.Shift.StartTime && currentTimeOnly >= currentWs.Shift.EndTime)
                     {
+                        // Auto-split: Chốt ca hiện tại ở đúng giờ EndTime
                         var localEndTime = today.ToDateTime(currentWs.Shift.EndTime);
                         var utcEndTime = localEndTime.AddHours(-7);
                         
@@ -194,6 +239,7 @@ namespace MenuGoBE.Service
                         currentWs.Status = "Completed";
                         await _repo.UpdateAsync(currentWs);
                         
+                        // Mở ca tiếp theo ở đúng giờ StartTime
                         var localStartTime = today.ToDateTime(nextWs.Shift.StartTime);
                         var utcStartTime = localStartTime.AddHours(-7);
                         
@@ -210,6 +256,7 @@ namespace MenuGoBE.Service
                     }
                 }
 
+                // Chốt ca Working cuối cùng với thời gian quét thực tế
                 var finalWorking = schedules[workingIndex];
                 finalWorking.CheckOutAt = now;
                 var duration = finalWorking.CheckOutAt.Value - finalWorking.CheckInAt.Value;
@@ -227,9 +274,37 @@ namespace MenuGoBE.Service
             }
             else
             {
-                var nextSchedule = schedules.FirstOrDefault(s => s.Status == "Scheduled" || s.CheckInAt == null);
+                // Không có ca nào đang Working -> Tìm ca đầu tiên chưa check-in và chưa kết thúc
+                var nextSchedule = schedules
+                    .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING"))
+                    .OrderBy(s => s.Shift.StartTime)
+                    .FirstOrDefault(s => currentTimeOnly < s.Shift.EndTime);
+
+                if (nextSchedule == null)
+                {
+                    // Nếu đã qua giờ kết thúc của TẤT CẢ các ca, lấy ca cuối cùng trong ngày
+                    nextSchedule = schedules
+                        .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING"))
+                        .OrderBy(s => s.Shift.StartTime)
+                        .LastOrDefault();
+                }
+
                 if (nextSchedule != null)
                 {
+                    // Đánh dấu các ca trước đó là "Absent" (vắng mặt)
+                    var missedSchedules = schedules
+                        .Where(s => s.CheckInAt == null 
+                                 && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING")
+                                 && s.Id != nextSchedule.Id
+                                 && s.Shift.EndTime <= currentTimeOnly)
+                        .ToList();
+
+                    foreach (var missed in missedSchedules)
+                    {
+                        missed.Status = "Absent";
+                        await _repo.UpdateAsync(missed);
+                    }
+
                     nextSchedule.CheckInAt = now;
                     nextSchedule.Status = "Working";
                     await _repo.UpdateAsync(nextSchedule);
@@ -238,6 +313,7 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
+                    // Nếu tất cả đã Completed, cập nhật lại giờ Check-out cho ca cuối cùng
                     var lastCompleted = schedules.LastOrDefault(s => s.Status == "Completed");
                     if (lastCompleted != null)
                     {
@@ -256,7 +332,7 @@ namespace MenuGoBE.Service
 
         public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
         {
-            return await _repo.GetActiveRoleIdsAsync(accountId);
+            return await _accountRepo.GetActiveRoleIdsAsync(accountId);
         }
     }
 }
