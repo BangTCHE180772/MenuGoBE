@@ -195,59 +195,5 @@ namespace MenuGoBE.Service
 
             return true;
         }
-
-        public async Task<object> GetDashboardStatsAsync(string range, string? startDateStr, string? endDateStr, long? branchId)
-        {
-            var today = DateTime.UtcNow.Date;
-            DateTime startDate = DateTime.SpecifyKind(today.AddDays(-today.Day + 1), DateTimeKind.Utc);
-            DateTime endDate = DateTime.SpecifyKind(today.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-
-            if (range == "7days")
-            {
-                startDate = DateTime.SpecifyKind(today.AddDays(-6), DateTimeKind.Utc);
-                endDate = DateTime.SpecifyKind(today.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-            }
-            else if (range == "thisMonth")
-            {
-                startDate = DateTime.SpecifyKind(new DateTime(today.Year, today.Month, 1), DateTimeKind.Utc);
-                endDate = DateTime.SpecifyKind(today.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-            }
-            else if (range == "lastMonth")
-            {
-                var lastMonth = today.AddMonths(-1);
-                startDate = DateTime.SpecifyKind(new DateTime(lastMonth.Year, lastMonth.Month, 1), DateTimeKind.Utc);
-                endDate = DateTime.SpecifyKind(new DateTime(today.Year, today.Month, 1).AddTicks(-1), DateTimeKind.Utc);
-            }
-            else if (range == "thisYear")
-            {
-                startDate = DateTime.SpecifyKind(new DateTime(today.Year, 1, 1), DateTimeKind.Utc);
-                endDate = DateTime.SpecifyKind(today.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-            }
-            else if (range == "lastYear")
-            {
-                startDate = DateTime.SpecifyKind(new DateTime(today.Year - 1, 1, 1), DateTimeKind.Utc);
-                endDate = DateTime.SpecifyKind(new DateTime(today.Year, 1, 1).AddTicks(-1), DateTimeKind.Utc);
-            }
-            else if (range == "custom" && !string.IsNullOrEmpty(startDateStr) && !string.IsNullOrEmpty(endDateStr))
-            {
-                if (DateTime.TryParse(startDateStr, out var parsedStart))
-                {
-                    startDate = DateTime.SpecifyKind(parsedStart.Date, DateTimeKind.Utc);
-                }
-                if (DateTime.TryParse(endDateStr, out var parsedEnd))
-                {
-                    endDate = DateTime.SpecifyKind(parsedEnd.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
-                }
-            }
-
-            var (revenue, expenses, profit) = await _repo.GetFinancialStatsAsync(startDate, endDate, branchId);
-
-            return new
-            {
-                revenue = (double)revenue,
-                expenses = (double)expenses,
-                profit = (double)profit
-            };
-        }
     }
 }
