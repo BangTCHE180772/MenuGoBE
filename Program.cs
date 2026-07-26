@@ -92,6 +92,7 @@ builder.Services.AddScoped<IExportDeleteDocumentRepository, ExportDeleteDocument
 builder.Services.AddScoped<ICheckDocumentRepository, CheckDocumentRepository>();
 builder.Services.AddScoped<IProductionDocumentRepository, ProductionDocumentRepository>();
 builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
+builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -128,6 +129,7 @@ builder.Services.AddScoped<IExportDeleteDocumentService, ExportDeleteDocumentSer
 builder.Services.AddScoped<ICheckDocumentService, CheckDocumentService>();
 builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();

@@ -36,11 +36,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
             decimal expectedExpenses = 400m;
             decimal expectedProfit = 600m;
 
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("default", null, null);
+            var result = await _service.GetDashboardStatsAsync("default", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -56,18 +56,18 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
             Assert.Equal((double)expectedExpenses, (double)expensesProp.GetValue(result)!);
             Assert.Equal((double)expectedProfit, (double)profitProp.GetValue(result)!);
 
-            _repoMock.Verify(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()), Times.Once);
+            _repoMock.Verify(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()), Times.Once);
         }
 
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_For7daysRange()
         {
             // Arrange
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((500m, 200m, 300m));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("7days", null, null);
+            var result = await _service.GetDashboardStatsAsync("7days", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -79,11 +79,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForThisMonthRange()
         {
             // Arrange
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((800m, 300m, 500m));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("thisMonth", null, null);
+            var result = await _service.GetDashboardStatsAsync("thisMonth", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -95,11 +95,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForLastMonthRange()
         {
             // Arrange
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((1200m, 600m, 600m));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("lastMonth", null, null);
+            var result = await _service.GetDashboardStatsAsync("lastMonth", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -111,11 +111,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForThisYearRange()
         {
             // Arrange
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((2000m, 900m, 1100m));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("thisYear", null, null);
+            var result = await _service.GetDashboardStatsAsync("thisYear", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -127,11 +127,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForLastYearRange()
         {
             // Arrange
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((3000m, 1500m, 1500m));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("lastYear", null, null);
+            var result = await _service.GetDashboardStatsAsync("lastYear", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -143,14 +143,14 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForCustomRange()
         {
             // Arrange
-            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
                 .ReturnsAsync((150m, 50m, 100m));
 
             string startDateStr = "2026-07-01";
             string endDateStr = "2026-07-15";
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("custom", startDateStr, endDateStr);
+            var result = await _service.GetDashboardStatsAsync("custom", startDateStr, endDateStr, null);
 
             // Assert
             Assert.NotNull(result);
@@ -159,7 +159,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
 
             _repoMock.Verify(r => r.GetFinancialStatsAsync(
                 It.Is<DateTime>(dt => dt.Year == 2026 && dt.Month == 7 && dt.Day == 1),
-                It.Is<DateTime>(dt => dt.Year == 2026 && dt.Month == 7 && dt.Day == 15)), 
+                It.Is<DateTime>(dt => dt.Year == 2026 && dt.Month == 7 && dt.Day == 15),
+                null), 
                 Times.Once);
         }
     }

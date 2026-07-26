@@ -18,12 +18,18 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles)
+        public async Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, long? branchId)
         {
-            return await _context.Accounts
+            var query = _context.Accounts
                 .Include(a => a.Contracts)
-                .Where(a => !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)))
-                .ToListAsync();
+                .Where(a => !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)));
+
+            if (branchId.HasValue)
+            {
+                query = query.Where(a => a.Contracts.Any(c => c.BranchId == branchId.Value));
+            }
+
+            return await query.ToListAsync();
         }
 
         public async Task<Account?> GetAccountByEmailAsync(string email)

@@ -21,10 +21,24 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet("exclude-roles")]
-        public async Task<IActionResult> GetAccountsExcludeRoles()
+        public async Task<IActionResult> GetAccountsExcludeRoles([FromQuery] long? branchId = null)
         {
+            var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+            if (userRole == "Manager")
+            {
+                var branchClaim = User.FindFirst("branchId")?.Value;
+                if (long.TryParse(branchClaim, out var mgrBranchId))
+                {
+                    branchId = mgrBranchId;
+                }
+                else
+                {
+                    return BadRequest(new { message = "Tài khoản quản lý không có thông tin chi nhánh liên kết hợp lệ." });
+                }
+            }
+
             // Fetch accounts excluding role 1, 2 and 3
-            var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 });
+            var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 }, branchId);
             return Ok(result);
         }
 

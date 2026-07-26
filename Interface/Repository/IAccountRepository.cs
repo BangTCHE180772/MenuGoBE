@@ -6,7 +6,7 @@ namespace MenuGoBE.Interface.Repository
 {
     public interface IAccountRepository
     {
-        Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles);
+        Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, long? branchId);
         Task<Account?> GetByIdAsync(long id);
         Task<Account?> GetAccountByEmailAsync(string email);
         Task<Account?> GetAccountWithRolesAsync(long id);
