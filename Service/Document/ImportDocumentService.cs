@@ -28,11 +28,9 @@ namespace MenuGoBE.Service.Document
             if (branch == null)
                 throw new MenuGoException(ErrorCodes.DocumentBranchNotFound);
 
-            // 1. Validation: PostingLockDate
             if (branch.PostingLockDate.HasValue && dto.BusinessDate.Date <= branch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError);
 
-            // 2. Validation: Products
             var binvIds = dto.Details.Select(d => d.BInventoryId).Distinct().ToList();
             var binvs = await _repo.GetBInventoriesAsync(dto.BranchId, binvIds);
 
@@ -45,7 +43,6 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể nhập kho sản phẩm [{binv.Product.Name}] do thuộc loại Manufactured hoặc Processed.");
             }
 
-            // 3. Validation: Partners
             var partnerIds = dto.Partners.Select(p => p.PartnerId).Distinct().ToList();
             var partners = await _repo.GetPartnersAsync(partnerIds);
             
@@ -57,7 +54,6 @@ namespace MenuGoBE.Service.Document
             if (guests.Any())
                 throw new MenuGoException(ErrorCodes.DocumentGuestNotAllowedInImport);
 
-            // 4. Cost Allocation
             decimal totalGoodsValue = dto.Details.Sum(d => d.Quantity * d.UnitPrice);
             
             var transAndOthers = dto.Partners.Where(dp => 
