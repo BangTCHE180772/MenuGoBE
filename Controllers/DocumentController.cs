@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using MenuGoBE.Dtos.Document;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,36 +16,31 @@ namespace MenuGoBE.Controllers
             _service = service;
         }
 
-        [HttpPost("import")]
-        public async Task<IActionResult> CreateImport([FromBody] ImportDocumentCreateDto dto)
+        private long? GetUserId()
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
+            var userIdStr = User.Identity?.IsAuthenticated == true
+                ? User.FindFirst("AccountId")?.Value
+                : null;
+            return !string.IsNullOrEmpty(userIdStr) && long.TryParse(userIdStr, out var parsedId) && parsedId > 0
+                ? parsedId
+                : null;
+        }
 
+        // ==========================================
+        // GENERIC DELETE ENDPOINT
+        // ==========================================
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteDocument(long id)
+        {
             try
             {
-                var createdBy = User.Identity?.IsAuthenticated == true
-                    ? long.Parse(User.FindFirst("AccountId")?.Value ?? "0")
-                    : (long?)null;
-
-                var result = await _service.CreateImportDocumentAsync(dto, createdBy > 0 ? createdBy : null);
-                
-                return Ok(new
-                {
-                    message = "Tạo phiếu nhập kho thành công",
-                    documentId = result.Id,
-                    code = result.Code
-                });
+                var deletedBy = GetUserId();
+                await _service.DeleteDocumentAsync(id, deletedBy);
+                return Ok(new { message = "Xóa chứng từ thành công." });
             }
             catch (Exception ex)
             {
-                return BadRequest(new
-                {
-                    message = "Đã xảy ra lỗi khi tạo phiếu nhập kho.",
-                    error = ex.Message
-                });
+                return BadRequest(new { message = "Đã xảy ra lỗi khi xóa chứng từ.", error = ex.Message });
             }
         }
     }
