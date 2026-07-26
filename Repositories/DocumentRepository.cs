@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Repositories
@@ -31,6 +32,14 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<BInventory>> GetBInventoriesByIdsAsync(List<long> binvIds)
+        {
+            return await _context.BInventories
+                .Include(b => b.Product)
+                .Where(b => binvIds.Contains(b.Id))
+                .ToListAsync();
+        }
+
         public async Task<List<Partner>> GetPartnersAsync(List<long> partnerIds)
         {
             return await _context.Partners
@@ -38,13 +47,21 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<InventoryLedger>> GetLatestLedgersBeforeOrEqualDateAsync(List<long> binvIds, DateTime date)
+        public async Task<List<InventoryLedger>> GetLatestLedgersBeforeOrEqualDateAsync(List<long> binvIds, DateTime date, long? excludeDocumentId = null)
         {
             var ledgers = new List<InventoryLedger>();
             foreach (var binvId in binvIds)
             {
-                var latest = await _context.InventoryLedgers
-                    .Where(l => l.BInventoryId == binvId && l.BusinessDate <= date)
+                var query = _context.InventoryLedgers
+                    .Include(l => l.DocumentDetail)
+                    .Where(l => l.BInventoryId == binvId && l.BusinessDate <= date);
+
+                if (excludeDocumentId.HasValue)
+                {
+                    query = query.Where(l => l.DocumentId != excludeDocumentId.Value);
+                }
+
+                var latest = await query
                     .OrderByDescending(l => l.BusinessDate)
                     .ThenByDescending(l => l.PostingSequence)
                     .FirstOrDefaultAsync();
@@ -57,13 +74,57 @@ namespace MenuGoBE.Repositories
             return ledgers;
         }
 
-        public async Task<List<InventoryLedger>> GetLedgersAfterDateAsync(List<long> binvIds, DateTime date)
+        public async Task<List<InventoryLedger>> GetLedgersAfterDateAsync(List<long> binvIds, DateTime date, long? excludeDocumentId = null)
         {
-            return await _context.InventoryLedgers
-                .Where(l => binvIds.Contains(l.BInventoryId) && l.BusinessDate > date)
+            var query = _context.InventoryLedgers
+                .Include(l => l.DocumentDetail)
+                .Where(l => binvIds.Contains(l.BInventoryId) && l.BusinessDate > date);
+
+            if (excludeDocumentId.HasValue)
+            {
+                query = query.Where(l => l.DocumentId != excludeDocumentId.Value);
+            }
+
+            return await query
                 .OrderBy(l => l.BusinessDate)
                 .ThenBy(l => l.PostingSequence)
                 .ToListAsync();
+        }
+
+        public async Task<InventoryLedger?> GetPriorLedgerAsync(long binvId, DateTime date, long postingSequence)
+        {
+            return await _context.InventoryLedgers
+                .Include(l => l.DocumentDetail)
+                .Where(l => l.BInventoryId == binvId && 
+                            (l.BusinessDate < date || (l.BusinessDate == date && l.PostingSequence < postingSequence)))
+                .OrderByDescending(l => l.BusinessDate)
+                .ThenByDescending(l => l.PostingSequence)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<List<InventoryLedger>> GetSubsequentLedgersAsync(long binvId, DateTime date, long postingSequence)
+        {
+            return await _context.InventoryLedgers
+                .Include(l => l.DocumentDetail)
+                .Where(l => l.BInventoryId == binvId && 
+                            (l.BusinessDate > date || (l.BusinessDate == date && l.PostingSequence > postingSequence)))
+                .OrderBy(l => l.BusinessDate)
+                .ThenBy(l => l.PostingSequence)
+                .ToListAsync();
+        }
+
+        public async Task<Document> ExecuteDocumentTransactionAsync(
+            Document document,
+            List<DocumentDetail> details,
+            List<DocumentPartner> docPartners,
+            List<BInventory> updatedBInvs,
+            List<InventoryLedger> ledgersToCreate,
+            List<InventoryLedger> ledgersToUpdate,
+            List<CashFlow> cashFlows,
+            List<CashFlowDetail> cashFlowDetails)
+        {
+            return await ExecuteImportTransactionAsync(
+                document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
         }
 
         public async Task<Document> ExecuteImportTransactionAsync(
@@ -139,6 +200,116 @@ namespace MenuGoBE.Repositories
                 await transaction.CommitAsync();
 
                 return document;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<bool> HasReturnDocumentsAsync(long importDocumentId)
+        {
+            return await _context.Documents.AnyAsync(d => d.ParentDocumentId == importDocumentId && !d.IsDeleted);
+        }
+
+        public async Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId)
+        {
+            return await _context.DocumentDetails
+                .Include(d => d.Document)
+                .Where(d => d.Document != null 
+                            && d.Document.ParentDocumentId == importDocumentId 
+                            && d.Document.Type == DocumentType.Return 
+                            && !d.Document.IsDeleted)
+                .ToListAsync();
+        }
+
+        public async Task<Document> ExecuteReturnTransactionAsync(
+            Document document,
+            List<DocumentDetail> details,
+            List<DocumentPartner> docPartners,
+            List<BInventory> updatedBInvs,
+            List<InventoryLedger> ledgersToCreate,
+            List<InventoryLedger> ledgersToUpdate,
+            List<CashFlow> cashFlows,
+            List<CashFlowDetail> cashFlowDetails)
+        {
+            // Tái sử dụng logic của Import vì cơ bản là insert giống hệt nhau
+            return await ExecuteImportTransactionAsync(
+                document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
+        }
+        public async Task<Document?> GetDocumentWithDetailsAsync(long documentId)
+        {
+            return await _context.Documents
+                .Include(d => d.Branch)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dd => dd.BInventory)
+                        .ThenInclude(b => b.Product)
+                .Include(d => d.DocumentPartners)
+                .FirstOrDefaultAsync(d => d.Id == documentId);
+        }
+
+        public async Task<Document?> GetChildReceiveDocumentAsync(long parentTransferDocumentId)
+        {
+            return await _context.Documents
+                .Include(d => d.Branch)
+                .Include(d => d.DocumentDetails)
+                .FirstOrDefaultAsync(d => d.ParentDocumentId == parentTransferDocumentId && d.Type == DocumentType.Transfer && !d.IsDeleted);
+        }
+
+        public async Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId)
+        {
+            return await _context.CashFlows
+                .Where(cf => cf.CashFlowDetails.Any(cfd => cfd.DocumentPartner != null && cfd.DocumentPartner.DocumentId == documentId))
+                .ToListAsync();
+        }
+
+        public async Task<List<InventoryLedger>> GetLedgersByDocumentIdAsync(long documentId)
+        {
+            return await _context.InventoryLedgers
+                .Where(l => l.DocumentId == documentId)
+                .ToListAsync();
+        }
+
+        public async Task ExecuteDeleteTransactionAsync(
+            Document document,
+            List<InventoryLedger> ledgersToDelete,
+            List<InventoryLedger> ledgersToUpdate,
+            List<BInventory> updatedBInvs,
+            List<CashFlow> cashFlowsToSoftDelete)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Soft delete document
+                _context.Documents.Update(document);
+
+                // Hard delete the exact ledgers generated by this document
+                if (ledgersToDelete.Any())
+                {
+                    _context.InventoryLedgers.RemoveRange(ledgersToDelete);
+                }
+
+                // Update subsequent ledgers due to ripple recalculation
+                if (ledgersToUpdate.Any())
+                {
+                    _context.InventoryLedgers.UpdateRange(ledgersToUpdate);
+                }
+
+                // Update BInventories
+                if (updatedBInvs.Any())
+                {
+                    _context.BInventories.UpdateRange(updatedBInvs);
+                }
+
+                // Soft delete associated cashflows
+                if (cashFlowsToSoftDelete.Any())
+                {
+                    _context.CashFlows.UpdateRange(cashFlowsToSoftDelete);
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
             }
             catch
             {
