@@ -22,12 +22,12 @@ namespace MenuGoBE.Repositories
         {
             var query = _context.Accounts
                 .Include(a => a.Contracts)
-                .Where(a => !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)))
+                .Where(a => !a.Contracts.Any() || !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)))
                 .AsQueryable();
 
             if (branchIds != null)
             {
-                query = query.Where(a => a.Contracts.Any(c => branchIds.Contains(c.BranchId)) || (managerAccountId.HasValue && a.CreatedBy == managerAccountId.Value));
+                query = query.Where(a => !a.Contracts.Any() || a.Contracts.Any(c => branchIds.Contains(c.BranchId)) || (managerAccountId.HasValue && a.CreatedBy == managerAccountId.Value));
             }
 
             return await query.ToListAsync();
@@ -37,12 +37,12 @@ namespace MenuGoBE.Repositories
         {
             var query = _context.Accounts
                 .Include(a => a.Contracts)
-                .Where(a => a.Contracts.Any(c => roleIds.Contains(c.RoleId)))
+                .Where(a => !a.Contracts.Any() || a.Contracts.Any(c => roleIds.Contains(c.RoleId)))
                 .AsQueryable();
 
             if (branchId.HasValue)
             {
-                query = query.Where(a => a.Contracts.Any(c => c.BranchId == branchId.Value));
+                query = query.Where(a => !a.Contracts.Any() || a.Contracts.Any(c => c.BranchId == branchId.Value));
             }
 
             return await query.ToListAsync();
@@ -189,6 +189,7 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync(a => a.Id == targetAccountId);
 
             if (account == null) return false;
+            if (!account.Contracts.Any()) return true;
             if (account.CreatedBy == managerAccountId) return true;
             if (managerBranchIds != null && managerBranchIds.Count > 0)
             {
