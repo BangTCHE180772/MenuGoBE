@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace MenuGoBE.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class AccountController : ControllerBase
@@ -20,17 +21,77 @@ namespace MenuGoBE.Controllers
             _service = service;
         }
 
-        [HttpGet("exclude-roles")]
-        public async Task<IActionResult> GetAccountsExcludeRoles()
+        private long? GetCurrentAccountId()
         {
+            var sub = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                   ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                   ?? User.FindFirst("id")?.Value;
+
+            if (long.TryParse(sub, out var accountId))
+                return accountId;
+
+            return null;
+        }
+
+        [HttpGet("exclude-roles")]
+        public async Task<IActionResult> GetAccountsExcludeRoles([FromQuery] long? branchId)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền quản lý tài khoản." });
+
+            List<long>? filterBranchIds = null;
+
+            if (isAdmin)
+            {
+                if (branchId.HasValue)
+                {
+                    filterBranchIds = new List<long> { branchId.Value };
+                }
+            }
+            else // isManager
+            {
+                if (branchId.HasValue)
+                {
+                    if (!branchIds.Contains(branchId.Value))
+                    {
+                        return StatusCode(403, new { message = "Bạn không có quyền xem tài khoản của chi nhánh này." });
+                    }
+                    filterBranchIds = new List<long> { branchId.Value };
+                }
+                else
+                {
+                    filterBranchIds = branchIds;
+                }
+            }
+
             // Fetch accounts excluding role 1, 2 and 3
-            var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 });
+            var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 }, filterBranchIds, currentUserId.Value);
             return Ok(result);
         }
 
         [HttpGet("{id:long}")]
         public async Task<IActionResult> GetById(long id)
         {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền quản lý tài khoản." });
+
+            if (!isAdmin && isManager)
+            {
+                bool canAccess = await _service.CanManagerAccessAccountAsync(id, branchIds, currentUserId.Value);
+                if (!canAccess)
+                    return StatusCode(403, new { message = "Bạn không có quyền xem tài khoản thuộc chi nhánh khác." });
+            }
+
             var result = await _service.GetByIdAsync(id);
             if (result == null)
                 return NotFound(new { message = "Không tìm thấy Account" });
@@ -41,9 +102,17 @@ namespace MenuGoBE.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] AccountCreateDto dto)
         {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền tạo tài khoản." });
+
             try
             {
-                var result = await _service.CreateAsync(dto);
+                var result = await _service.CreateAsync(dto, currentUserId.Value);
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -55,6 +124,21 @@ namespace MenuGoBE.Controllers
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] AccountUpdateDto dto)
         {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền cập nhật tài khoản." });
+
+            if (!isAdmin && isManager)
+            {
+                bool canAccess = await _service.CanManagerAccessAccountAsync(dto.Id, branchIds, currentUserId.Value);
+                if (!canAccess)
+                    return StatusCode(403, new { message = "Bạn không có quyền cập nhật tài khoản thuộc chi nhánh khác." });
+            }
+
             try
             {
                 var result = await _service.UpdateAsync(dto);
@@ -72,6 +156,21 @@ namespace MenuGoBE.Controllers
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền xóa tài khoản." });
+
+            if (!isAdmin && isManager)
+            {
+                bool canAccess = await _service.CanManagerAccessAccountAsync(id, branchIds, currentUserId.Value);
+                if (!canAccess)
+                    return StatusCode(403, new { message = "Bạn không có quyền xóa tài khoản thuộc chi nhánh khác." });
+            }
+
             var result = await _service.DeleteAsync(id);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy Account để xóa" });
