@@ -150,7 +150,7 @@ namespace MenuGoBE.Service.Document
             }
             else
             {
-                // Outflow (Export, Return, Transfer Outflow, Production Raw Materials Outflow)
+                // Outflow
                 if (previousQuantity <= 0)
                 {
                     valueDelta = 0;
@@ -174,7 +174,6 @@ namespace MenuGoBE.Service.Document
             {
                 if (previousQuantity <= 0)
                 {
-                    // MAC Rule for negative recovery: MAC = Total Incoming Value / Incoming Quantity (V_in / Q_in)
                     if (ledger.QuantityDelta > 0 && ledger.InventoryValueDelta > 0)
                     {
                         decimal incomingUnitCost = ledger.InventoryValueDelta / ledger.QuantityDelta;
@@ -196,7 +195,6 @@ namespace MenuGoBE.Service.Document
                 }
                 else
                 {
-                    // Outflow (Export, Return, Transfer Outflow, Production Raw Material Outflow): Avg cost does NOT change!
                     newAvgCost = previousAvgCost;
                     newLeftOver = previousLeftOver;
                     newTotalValue = (nextQty * newAvgCost) + newLeftOver;
