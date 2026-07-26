@@ -26,6 +26,18 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<ContractViewDto>>(data);
         }
 
+        public async Task<List<ContractViewDto>> GetByBranchIdsAsync(List<long> branchIds)
+        {
+            var data = await _repo.GetByBranchIdsAsync(branchIds);
+            return _mapper.Map<List<ContractViewDto>>(data);
+        }
+
+        public async Task<List<ContractViewDto>> GetContractsByRolesAsync(List<long> roleIds, long? branchId = null, List<long>? branchIds = null)
+        {
+            var data = await _repo.GetContractsByRolesAsync(roleIds, branchId, branchIds);
+            return _mapper.Map<List<ContractViewDto>>(data);
+        }
+
         public async Task<ContractViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
