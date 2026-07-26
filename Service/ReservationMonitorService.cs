@@ -129,7 +129,7 @@ public class ReservationMonitorService : BackgroundService
                             TableName = table.Name,
                             BranchId = branchId,
                             ReservationTime = warnRes.ReservationTime,
-                            Message = $"Bàn {table.Name} đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi! Vui lòng sắp xếp bàn dự phòng."
+                            Message = $"{table.Name} đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi! Vui lòng sắp xếp bàn dự phòng."
                         });
                         _warnedReservationIds.Add(warnRes.Id);
                     }
