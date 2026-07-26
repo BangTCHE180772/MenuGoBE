@@ -12,7 +12,7 @@ namespace MenuGoBE.Repositories
 {
     public class DocumentRepository : IDocumentRepository
     {
-        private readonly AppDbContext _context;
+        protected readonly AppDbContext _context;
 
         public DocumentRepository(AppDbContext context)
         {
@@ -208,11 +208,6 @@ namespace MenuGoBE.Repositories
             }
         }
 
-        public async Task<bool> HasReturnDocumentsAsync(long importDocumentId)
-        {
-            return await _context.Documents.AnyAsync(d => d.ParentDocumentId == importDocumentId && !d.IsDeleted);
-        }
-
         public async Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId)
         {
             return await _context.DocumentDetails
@@ -224,20 +219,6 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<Document> ExecuteReturnTransactionAsync(
-            Document document,
-            List<DocumentDetail> details,
-            List<DocumentPartner> docPartners,
-            List<BInventory> updatedBInvs,
-            List<InventoryLedger> ledgersToCreate,
-            List<InventoryLedger> ledgersToUpdate,
-            List<CashFlow> cashFlows,
-            List<CashFlowDetail> cashFlowDetails)
-        {
-            // Tái sử dụng logic của Import vì cơ bản là insert giống hệt nhau
-            return await ExecuteImportTransactionAsync(
-                document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
-        }
         public async Task<Document?> GetDocumentWithDetailsAsync(long documentId)
         {
             return await _context.Documents
@@ -247,14 +228,6 @@ namespace MenuGoBE.Repositories
                         .ThenInclude(b => b.Product)
                 .Include(d => d.DocumentPartners)
                 .FirstOrDefaultAsync(d => d.Id == documentId);
-        }
-
-        public async Task<Document?> GetChildReceiveDocumentAsync(long parentTransferDocumentId)
-        {
-            return await _context.Documents
-                .Include(d => d.Branch)
-                .Include(d => d.DocumentDetails)
-                .FirstOrDefaultAsync(d => d.ParentDocumentId == parentTransferDocumentId && d.Type == DocumentType.Transfer && !d.IsDeleted);
         }
 
         public async Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId)

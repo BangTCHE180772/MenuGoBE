@@ -13,6 +13,10 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.OData.ModelBuilder;
 using MenuGoBE.Models;
 using MenuGoBE.Helpers;
+using MenuGoBE.Interface.Repository.Document;
+using MenuGoBE.Repositories.Document;
+using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Service.Document;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -81,6 +85,12 @@ builder.Services.AddScoped<IOldDistrictRepository, OldDistrictRepository>();
 builder.Services.AddScoped<IPayrollRepository, PayrollRepository>();
 builder.Services.AddScoped<ISalaryDetailRepository, SalaryDetailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<IImportDocumentRepository, ImportDocumentRepository>();
+builder.Services.AddScoped<IReturnDocumentRepository, ReturnDocumentRepository>();
+builder.Services.AddScoped<ITransferDocumentRepository, TransferDocumentRepository>();
+builder.Services.AddScoped<IExportDeleteDocumentRepository, ExportDeleteDocumentRepository>();
+builder.Services.AddScoped<ICheckDocumentRepository, CheckDocumentRepository>();
+builder.Services.AddScoped<IProductionDocumentRepository, ProductionDocumentRepository>();
 builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
 
 // Service
@@ -111,6 +121,12 @@ builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<ISalaryDetailService, SalaryDetailService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<IImportDocumentService, ImportDocumentService>();
+builder.Services.AddScoped<IReturnDocumentService, ReturnDocumentService>();
+builder.Services.AddScoped<ITransferDocumentService, TransferDocumentService>();
+builder.Services.AddScoped<IExportDeleteDocumentService, ExportDeleteDocumentService>();
+builder.Services.AddScoped<ICheckDocumentService, CheckDocumentService>();
+builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
