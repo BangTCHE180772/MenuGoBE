@@ -53,7 +53,7 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
-                .OrderByDescending(o => o.CreatedAt)
+                .OrderBy(o => o.CreatedAt)
                 .FirstOrDefaultAsync();
         }
 
