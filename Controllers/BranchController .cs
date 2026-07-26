@@ -73,46 +73,6 @@ namespace MenuGoBE.Controllers
             }
         }
 
-        [HttpGet("dashboard-stats")]
-        public async Task<IActionResult> GetDashboardStats(
-            [FromQuery] string range = "thisMonth",
-            [FromQuery] string? startDateStr = null,
-            [FromQuery] string? endDateStr = null,
-            [FromQuery] long? branchId = null)
-        {
-            try
-            {
-                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-                if (userRole == "Manager")
-                {
-                    var branchClaim = User.FindFirst("branchId")?.Value;
-                    if (long.TryParse(branchClaim, out var mgrBranchId))
-                    {
-                        branchId = mgrBranchId;
-                    }
-                    else
-                    {
-                        throw new MenuGoException(ErrorCodes.UserBranchIdClaimMissing);
-                    }
-                }
-
-                var stats = await _service.GetDashboardStatsAsync(range, startDateStr, endDateStr, branchId);
-                return Ok(stats);
-            }
-            catch (MenuGoException ex)
-            {
-                return StatusCode(ex.HttpStatusCode, new { message = ex.Message, code = ex.Code });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
-                {
-                    message = "Đã xảy ra lỗi khi tính toán số liệu thống kê.",
-                    error = ex.Message
-                });
-            }
-        }
-
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] BranchCreateDto dto)
         {
