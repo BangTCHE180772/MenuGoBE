@@ -44,6 +44,8 @@ public class AppDbContext : DbContext
     public DbSet<Shift> Shifts { get; set; } = null!;
     public DbSet<WorkSchedule> WorkSchedules { get; set; } = null!;
     public DbSet<Ticket> Tickets { get; set; } = null!;
+    public DbSet<Payroll> Payrolls { get; set; } = null!;
+    public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
 
     // 7. Orders Module
     public DbSet<Area> Areas { get; set; } = null!;
@@ -217,6 +219,18 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<CashFlowDetail>()
             .Property(cfd => cfd.PaymentMethod)
             .HasConversion<string>();
+
+        // ── 10. Payroll Module ───────────────────────────────────────────────
+        modelBuilder.Entity<Payroll>()
+            .Property(p => p.Status)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<SalaryDetail>()
+            .Property(sd => sd.Type)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Payroll>()
+            .HasIndex(p => new { p.AccountId, p.Month, p.Year });
 
         // ── Global: disable cascade deletes to avoid Multiple Cascade Path ──
         foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
