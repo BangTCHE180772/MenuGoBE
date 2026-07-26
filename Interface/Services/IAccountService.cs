@@ -7,6 +7,7 @@ namespace MenuGoBE.Interface.Services
     public interface IAccountService
     {
         Task<List<AccountViewDto>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, List<long>? branchIds = null, long? managerAccountId = null);
+        Task<List<AccountViewDto>> GetAccountsByRolesAsync(List<long> roleIds, long? branchId = null);
         Task<AccountViewDto?> GetByIdAsync(long id);
         Task<AccountViewDto> CreateAsync(AccountCreateDto dto, long creatorAccountId = 0);
         Task<bool> UpdateAsync(AccountUpdateDto dto);

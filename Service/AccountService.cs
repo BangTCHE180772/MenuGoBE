@@ -27,6 +27,12 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<AccountViewDto>>(accounts);
         }
 
+        public async Task<List<AccountViewDto>> GetAccountsByRolesAsync(List<long> roleIds, long? branchId = null)
+        {
+            var accounts = await _repo.GetAccountsByRolesAsync(roleIds, branchId);
+            return _mapper.Map<List<AccountViewDto>>(accounts);
+        }
+
         public async Task<AccountViewDto?> GetByIdAsync(long id)
         {
             var account = await _repo.GetByIdAsync(id);
