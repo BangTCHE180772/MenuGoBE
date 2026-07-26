@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MenuGoBE.Models;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Interface.Repository
 {
@@ -16,8 +17,8 @@ namespace MenuGoBE.Interface.Repository
         Task<InventoryLedger?> GetPriorLedgerAsync(long binvId, DateTime date, long postingSequence);
         Task<List<InventoryLedger>> GetSubsequentLedgersAsync(long binvId, DateTime date, long postingSequence);
         
-        Task<Document> ExecuteDocumentTransactionAsync(
-            Document document,
+        Task<DocumentEntity> ExecuteDocumentTransactionAsync(
+            DocumentEntity document,
             List<DocumentDetail> details,
             List<DocumentPartner> docPartners,
             List<BInventory> updatedBInvs,
@@ -26,11 +27,13 @@ namespace MenuGoBE.Interface.Repository
             List<CashFlow> cashFlows,
             List<CashFlowDetail> cashFlowDetails);
             
-        Task<Document?> GetDocumentWithDetailsAsync(long documentId);
+        Task<DocumentEntity?> GetDocumentWithDetailsAsync(long documentId);
+        Task<List<DocumentEntity>> GetDocumentsAsync(long? branchId = null, MenuGoBE.Models.Enums.DocumentType? type = null);
+        Task<bool> HasReturnDocumentsAsync(long importDocumentId);
         Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId);
         Task<List<InventoryLedger>> GetLedgersByDocumentIdAsync(long documentId);
         Task ExecuteDeleteTransactionAsync(
-            Document document,
+            DocumentEntity document,
             List<InventoryLedger> ledgersToDelete,
             List<InventoryLedger> ledgersToUpdate,
             List<BInventory> updatedBInvs,

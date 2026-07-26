@@ -1,13 +1,14 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MenuGoBE.Models;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Interface.Repository.Document
 {
     public interface IImportDocumentRepository : IDocumentRepository
     {
-        Task<Document> ExecuteImportTransactionAsync(
-            Document document,
+        Task<DocumentEntity> ExecuteImportTransactionAsync(
+            DocumentEntity document,
             List<DocumentDetail> details,
             List<DocumentPartner> docPartners,
             List<BInventory> updatedBInvs,

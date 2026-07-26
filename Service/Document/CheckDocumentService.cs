@@ -9,6 +9,8 @@ using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 
+using DocumentEntity = MenuGoBE.Models.Document;
+
 namespace MenuGoBE.Service.Document
 {
     public class CheckDocumentService : DocumentServiceBase, ICheckDocumentService
@@ -20,7 +22,7 @@ namespace MenuGoBE.Service.Document
             _repo = repo;
         }
 
-        public async Task<Document> CreateCheckDocumentAsync(CheckDocumentCreateDto dto, long? createdBy = null)
+        public async Task<DocumentEntity> CreateCheckDocumentAsync(CheckDocumentCreateDto dto, long? createdBy = null)
         {
             var adjDto = new AdjustmentDocumentCreateDto
             {
@@ -37,7 +39,7 @@ namespace MenuGoBE.Service.Document
             return await CreateAdjustmentDocumentAsync(adjDto, createdBy);
         }
 
-        public async Task<Document> CreateAdjustmentDocumentAsync(AdjustmentDocumentCreateDto dto, long? createdBy = null)
+        public async Task<DocumentEntity> CreateAdjustmentDocumentAsync(AdjustmentDocumentCreateDto dto, long? createdBy = null)
         {
             var branch = await _repo.GetBranchAsync(dto.BranchId);
             if (branch == null)
@@ -64,7 +66,7 @@ namespace MenuGoBE.Service.Document
             var rawDate = dto.BusinessDate.ToUniversalTime();
             var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day, rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
 
-            var document = new Document
+            var document = new DocumentEntity
             {
                 BranchId = dto.BranchId,
                 BusinessDate = exactSecondDate,

@@ -4,6 +4,7 @@ using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Repositories.Document
 {
@@ -13,7 +14,7 @@ namespace MenuGoBE.Repositories.Document
         {
         }
 
-        public async Task<Document?> GetChildReceiveDocumentAsync(long parentTransferDocumentId)
+        public async Task<DocumentEntity?> GetChildReceiveDocumentAsync(long parentTransferDocumentId)
         {
             return await _context.Documents
                 .Include(d => d.Branch)

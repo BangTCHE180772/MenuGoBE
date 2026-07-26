@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers.Document
@@ -11,10 +13,12 @@ namespace MenuGoBE.Controllers.Document
     public class ExportDeleteDocumentController : ControllerBase
     {
         private readonly IExportDeleteDocumentService _service;
+        private readonly IDocumentService _documentService;
 
-        public ExportDeleteDocumentController(IExportDeleteDocumentService service)
+        public ExportDeleteDocumentController(IExportDeleteDocumentService service, IDocumentService documentService)
         {
             _service = service;
+            _documentService = documentService;
         }
 
         private long? GetUserId()
@@ -30,6 +34,20 @@ namespace MenuGoBE.Controllers.Document
         // ==========================================
         // 2. EXPORT DELETE DOCUMENT (Xuất hủy - Type 2)
         // ==========================================
+        [HttpGet("export-delete")]
+        public async Task<IActionResult> GetExportDeleteDocuments([FromQuery] long? branchId)
+        {
+            try
+            {
+                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Export);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu xuất hủy.", error = ex.Message });
+            }
+        }
+
         [HttpPost("export-delete")]
         public async Task<IActionResult> CreateExportDelete([FromBody] ExportDeleteDocumentCreateDto dto)
         {

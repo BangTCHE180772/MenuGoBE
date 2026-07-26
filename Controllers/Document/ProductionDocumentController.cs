@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers.Document
@@ -11,10 +13,12 @@ namespace MenuGoBE.Controllers.Document
     public class ProductionDocumentController : ControllerBase
     {
         private readonly IProductionDocumentService _service;
+        private readonly IDocumentService _documentService;
 
-        public ProductionDocumentController(IProductionDocumentService service)
+        public ProductionDocumentController(IProductionDocumentService service, IDocumentService documentService)
         {
             _service = service;
+            _documentService = documentService;
         }
 
         private long? GetUserId()
@@ -30,6 +34,20 @@ namespace MenuGoBE.Controllers.Document
         // ==========================================
         // 6. PRODUCTION DOCUMENT (Sản xuất - Type 6)
         // ==========================================
+        [HttpGet("production")]
+        public async Task<IActionResult> GetProductionDocuments([FromQuery] long? branchId)
+        {
+            try
+            {
+                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Production);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu sản xuất.", error = ex.Message });
+            }
+        }
+
         [HttpPost("production")]
         public async Task<IActionResult> CreateProduction([FromBody] ProductionDocumentCreateDto dto)
         {

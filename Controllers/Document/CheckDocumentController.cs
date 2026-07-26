@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers.Document
@@ -11,10 +13,12 @@ namespace MenuGoBE.Controllers.Document
     public class CheckDocumentController : ControllerBase
     {
         private readonly ICheckDocumentService _service;
+        private readonly IDocumentService _documentService;
 
-        public CheckDocumentController(ICheckDocumentService service)
+        public CheckDocumentController(ICheckDocumentService service, IDocumentService documentService)
         {
             _service = service;
+            _documentService = documentService;
         }
 
         private long? GetUserId()
@@ -30,6 +34,21 @@ namespace MenuGoBE.Controllers.Document
         // ==========================================
         // 5. CHECK DOCUMENT (Kiểm kho - Type 5)
         // ==========================================
+        [HttpGet("check")]
+        [HttpGet("adjustment")]
+        public async Task<IActionResult> GetCheckDocuments([FromQuery] long? branchId)
+        {
+            try
+            {
+                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Check);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu kiểm kho.", error = ex.Message });
+            }
+        }
+
         [HttpPost("check")]
         public async Task<IActionResult> CreateCheck([FromBody] CheckDocumentCreateDto dto)
         {

@@ -1,12 +1,12 @@
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
-using MenuGoBE.Models;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Interface.Services.Document
 {
     public interface IImportDocumentService
     {
-        Task<Document> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null);
+        Task<DocumentEntity> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null);
         Task DeleteImportDocumentAsync(long documentId, long? deletedBy = null);
     }
 }

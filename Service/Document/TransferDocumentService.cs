@@ -9,6 +9,8 @@ using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 
+using DocumentEntity = MenuGoBE.Models.Document;
+
 namespace MenuGoBE.Service.Document
 {
     public class TransferDocumentService : DocumentServiceBase, ITransferDocumentService
@@ -20,7 +22,7 @@ namespace MenuGoBE.Service.Document
             _repo = repo;
         }
 
-        public async Task<Document> CreateTransferDocumentAsync(TransferDocumentCreateDto dto, long? createdBy = null)
+        public async Task<DocumentEntity> CreateTransferDocumentAsync(TransferDocumentCreateDto dto, long? createdBy = null)
         {
             var fromBranch = await _repo.GetBranchAsync(dto.FromBranchId);
             var toBranch = await _repo.GetBranchAsync(dto.ToBranchId);
@@ -46,7 +48,7 @@ namespace MenuGoBE.Service.Document
             var rawDate = dto.BusinessDate.ToUniversalTime();
             var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day, rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
 
-            var document = new Document
+            var document = new DocumentEntity
             {
                 BranchId = dto.FromBranchId,
                 BusinessDate = exactSecondDate,
@@ -154,7 +156,7 @@ namespace MenuGoBE.Service.Document
                 ledgersToCreate, ledgersToUpdate, new List<CashFlow>(), new List<CashFlowDetail>());
         }
 
-        public async Task<Document> ReceiveTransferDocumentAsync(TransferReceiveDocumentCreateDto dto, long? createdBy = null)
+        public async Task<DocumentEntity> ReceiveTransferDocumentAsync(TransferReceiveDocumentCreateDto dto, long? createdBy = null)
         {
             var parentTransferDoc = await _repo.GetDocumentWithDetailsAsync(dto.TransferDocumentId);
             if (parentTransferDoc == null || parentTransferDoc.IsDeleted)
@@ -209,7 +211,7 @@ namespace MenuGoBE.Service.Document
             var now = DateTime.UtcNow;
             string code = $"RC{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
 
-            var receiveDocument = new Document
+            var receiveDocument = new DocumentEntity
             {
                 BranchId = toBranchId,
                 BusinessDate = exactReceiveDate,

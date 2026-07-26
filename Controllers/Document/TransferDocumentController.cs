@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers.Document
@@ -11,10 +13,12 @@ namespace MenuGoBE.Controllers.Document
     public class TransferDocumentController : ControllerBase
     {
         private readonly ITransferDocumentService _service;
+        private readonly IDocumentService _documentService;
 
-        public TransferDocumentController(ITransferDocumentService service)
+        public TransferDocumentController(ITransferDocumentService service, IDocumentService documentService)
         {
             _service = service;
+            _documentService = documentService;
         }
 
         private long? GetUserId()
@@ -30,6 +34,20 @@ namespace MenuGoBE.Controllers.Document
         // ==========================================
         // 3. TRANSFER DOCUMENT (Chuyển kho - Type 3)
         // ==========================================
+        [HttpGet("transfer")]
+        public async Task<IActionResult> GetTransferDocuments([FromQuery] long? branchId)
+        {
+            try
+            {
+                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Transfer);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu chuyển kho.", error = ex.Message });
+            }
+        }
+
         [HttpPost("transfer")]
         public async Task<IActionResult> CreateTransfer([FromBody] TransferDocumentCreateDto dto)
         {
