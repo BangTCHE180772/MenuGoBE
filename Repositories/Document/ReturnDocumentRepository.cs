@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Models;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Repositories.Document
 {
@@ -12,8 +13,8 @@ namespace MenuGoBE.Repositories.Document
         {
         }
 
-        public async Task<Document> ExecuteReturnTransactionAsync(
-            Document document,
+        public async Task<DocumentEntity> ExecuteReturnTransactionAsync(
+            DocumentEntity document,
             List<DocumentDetail> details,
             List<DocumentPartner> docPartners,
             List<BInventory> updatedBInvs,

@@ -328,4 +328,10 @@ public static class ErrorCodes
         "Số lượng trả hàng không được vượt quá số lượng đã nhập.", 
         400
     );
+
+    public static readonly ErrorResult DocumentPartnerNotFound = new(
+        2111,
+        "Số lượng trả hàng không được vượt quá số lượng đã nhập.",
+        400
+    );
 }

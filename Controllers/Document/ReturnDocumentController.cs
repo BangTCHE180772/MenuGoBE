@@ -1,7 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers.Document
@@ -11,10 +13,12 @@ namespace MenuGoBE.Controllers.Document
     public class ReturnDocumentController : ControllerBase
     {
         private readonly IReturnDocumentService _service;
+        private readonly IDocumentService _documentService;
 
-        public ReturnDocumentController(IReturnDocumentService service)
+        public ReturnDocumentController(IReturnDocumentService service, IDocumentService documentService)
         {
             _service = service;
+            _documentService = documentService;
         }
 
         private long? GetUserId()
@@ -30,6 +34,20 @@ namespace MenuGoBE.Controllers.Document
         // ==========================================
         // 4. RETURN DOCUMENT (Trả hàng nhập - Type 4)
         // ==========================================
+        [HttpGet("return")]
+        public async Task<IActionResult> GetReturnDocuments([FromQuery] long? branchId)
+        {
+            try
+            {
+                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Return);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu trả hàng nhập.", error = ex.Message });
+            }
+        }
+
         [HttpPost("return")]
         public async Task<IActionResult> CreateReturn([FromBody] ReturnDocumentCreateDto dto)
         {

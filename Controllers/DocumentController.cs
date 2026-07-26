@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers
@@ -24,6 +25,44 @@ namespace MenuGoBE.Controllers
             return !string.IsNullOrEmpty(userIdStr) && long.TryParse(userIdStr, out var parsedId) && parsedId > 0
                 ? parsedId
                 : null;
+        }
+
+        // ==========================================
+        // GET DOCUMENTS BY BRANCH AND/OR TYPE
+        // GET /api/document?branchId=1&type=1
+        // ==========================================
+        [HttpGet]
+        public async Task<IActionResult> GetDocuments([FromQuery] long? branchId, [FromQuery] DocumentType? type)
+        {
+            try
+            {
+                var result = await _service.GetDocumentsAsync(branchId, type);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách chứng từ.", error = ex.Message });
+            }
+        }
+
+        // ==========================================
+        // GET DOCUMENT BY ID
+        // GET /api/document/101
+        // ==========================================
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetDocumentById(long id)
+        {
+            try
+            {
+                var result = await _service.GetDocumentByIdAsync(id);
+                if (result == null)
+                    return NotFound(new { message = "Không tìm thấy chứng từ." });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy chi tiết chứng từ.", error = ex.Message });
+            }
         }
 
         // ==========================================

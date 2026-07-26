@@ -9,6 +9,8 @@ using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 
+using DocumentEntity = MenuGoBE.Models.Document;
+
 namespace MenuGoBE.Service.Document
 {
     public class ImportDocumentService : DocumentServiceBase, IImportDocumentService
@@ -20,7 +22,7 @@ namespace MenuGoBE.Service.Document
             _repo = repo;
         }
 
-        public async Task<Document> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null)
+        public async Task<DocumentEntity> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null)
         {
             var branch = await _repo.GetBranchAsync(dto.BranchId);
             if (branch == null)
@@ -70,7 +72,7 @@ namespace MenuGoBE.Service.Document
             var rawDate = dto.BusinessDate.ToUniversalTime();
             var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day, rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
 
-            var document = new Document
+            var document = new DocumentEntity
             {
                 BranchId = dto.BranchId,
                 BusinessDate = exactSecondDate,

@@ -7,6 +7,7 @@ using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Repositories
 {
@@ -113,8 +114,8 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<Document> ExecuteDocumentTransactionAsync(
-            Document document,
+        public async Task<DocumentEntity> ExecuteDocumentTransactionAsync(
+            DocumentEntity document,
             List<DocumentDetail> details,
             List<DocumentPartner> docPartners,
             List<BInventory> updatedBInvs,
@@ -127,8 +128,8 @@ namespace MenuGoBE.Repositories
                 document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
         }
 
-        public async Task<Document> ExecuteImportTransactionAsync(
-            Document document,
+        public async Task<DocumentEntity> ExecuteImportTransactionAsync(
+            DocumentEntity document,
             List<DocumentDetail> details,
             List<DocumentPartner> docPartners,
             List<BInventory> updatedBInvs,
@@ -172,18 +173,12 @@ namespace MenuGoBE.Repositories
                 // 5. Update BInventories
                 _context.BInventories.UpdateRange(updatedBInvs);
 
-                // 6. Assign DocumentPartnerId to cashFlowDetails (optional, we can match by PartnerId and cost)
-                // Actually, wait, let's just save cashFlows first
+                // 6. Assign DocumentPartnerId to cashFlowDetails
                 await _context.CashFlows.AddRangeAsync(cashFlows);
                 await _context.SaveChangesAsync();
 
-                // Assign CashFlowId and DocumentPartnerId to CashFlowDetails
-                // We assume cashFlowDetails are in the same order as cashFlows and docPartners? 
-                // Better approach: the caller grouped them by Partner.
-                // We'll trust the caller has set up a way to map them or we map them here:
                 for (int i = 0; i < cashFlows.Count; i++)
                 {
-                    // This relies on the caller passing them in perfectly matched order.
                     if (i < cashFlowDetails.Count && i < docPartners.Count)
                     {
                         cashFlowDetails[i].CashFlowId = cashFlows[i].Id;
@@ -219,15 +214,50 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<Document?> GetDocumentWithDetailsAsync(long documentId)
+        public async Task<bool> HasReturnDocumentsAsync(long importDocumentId)
+        {
+            return await _context.Documents.AnyAsync(d => d.ParentDocumentId == importDocumentId && d.Type == DocumentType.Return && !d.IsDeleted);
+        }
+
+        public async Task<DocumentEntity?> GetDocumentWithDetailsAsync(long documentId)
         {
             return await _context.Documents
                 .Include(d => d.Branch)
+                .Include(d => d.Creator)
                 .Include(d => d.DocumentDetails)
                     .ThenInclude(dd => dd.BInventory)
                         .ThenInclude(b => b.Product)
                 .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.Partner)
                 .FirstOrDefaultAsync(d => d.Id == documentId);
+        }
+
+        public async Task<List<DocumentEntity>> GetDocumentsAsync(long? branchId = null, DocumentType? type = null)
+        {
+            var query = _context.Documents
+                .Include(d => d.Branch)
+                .Include(d => d.Creator)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dd => dd.BInventory)
+                        .ThenInclude(b => b.Product)
+                .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.Partner)
+                .Where(d => !d.IsDeleted);
+
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                query = query.Where(d => d.BranchId == branchId.Value);
+            }
+
+            if (type.HasValue)
+            {
+                query = query.Where(d => d.Type == type.Value);
+            }
+
+            return await query
+                .OrderByDescending(d => d.BusinessDate)
+                .ThenByDescending(d => d.Id)
+                .ToListAsync();
         }
 
         public async Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId)
@@ -245,7 +275,7 @@ namespace MenuGoBE.Repositories
         }
 
         public async Task ExecuteDeleteTransactionAsync(
-            Document document,
+            DocumentEntity document,
             List<InventoryLedger> ledgersToDelete,
             List<InventoryLedger> ledgersToUpdate,
             List<BInventory> updatedBInvs,
@@ -254,28 +284,23 @@ namespace MenuGoBE.Repositories
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Soft delete document
                 _context.Documents.Update(document);
 
-                // Hard delete the exact ledgers generated by this document
                 if (ledgersToDelete.Any())
                 {
                     _context.InventoryLedgers.RemoveRange(ledgersToDelete);
                 }
 
-                // Update subsequent ledgers due to ripple recalculation
                 if (ledgersToUpdate.Any())
                 {
                     _context.InventoryLedgers.UpdateRange(ledgersToUpdate);
                 }
 
-                // Update BInventories
                 if (updatedBInvs.Any())
                 {
                     _context.BInventories.UpdateRange(updatedBInvs);
                 }
 
-                // Soft delete associated cashflows
                 if (cashFlowsToSoftDelete.Any())
                 {
                     _context.CashFlows.UpdateRange(cashFlowsToSoftDelete);

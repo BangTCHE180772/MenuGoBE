@@ -1,13 +1,14 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MenuGoBE.Models;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Interface.Repository.Document
 {
     public interface IReturnDocumentRepository : IDocumentRepository
     {
-        Task<Document> ExecuteReturnTransactionAsync(
-            Document document,
+        Task<DocumentEntity> ExecuteReturnTransactionAsync(
+            DocumentEntity document,
             List<DocumentDetail> details,
             List<DocumentPartner> docPartners,
             List<BInventory> updatedBInvs,

@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
-using MenuGoBE.Interface.Repository.Documents;
-using MenuGoBE.Interface.Services.Documents;
+using MenuGoBE.Interface.Repository.Document;
+using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
+using DocumentEntity = MenuGoBE.Models.Document;
 
 namespace MenuGoBE.Service.Documents
 {
@@ -20,17 +21,15 @@ namespace MenuGoBE.Service.Documents
             _repo = repo;
         }
 
-        public async Task<Document> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null)
+        public async Task<DocumentEntity> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null)
         {
             var branch = await _repo.GetBranchAsync(dto.BranchId);
             if (branch == null)
                 throw new MenuGoException(ErrorCodes.DocumentBranchNotFound);
 
-            // 1. Validation: PostingLockDate
             if (branch.PostingLockDate.HasValue && dto.BusinessDate.Date <= branch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError);
 
-            // 2. Validation: Products
             var binvIds = dto.Details.Select(d => d.BInventoryId).Distinct().ToList();
             var binvs = await _repo.GetBInventoriesAsync(dto.BranchId, binvIds);
 
@@ -43,26 +42,27 @@ namespace MenuGoBE.Service.Documents
                     throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể nhập kho sản phẩm [{binv.Product.Name}] do thuộc loại Manufactured hoặc Processed.");
             }
 
-            // 3. Validation: Partners
             var partnerIds = dto.Partners.Select(p => p.PartnerId).Distinct().ToList();
             var partners = await _repo.GetPartnersAsync(partnerIds);
-            
-            var suppliers = dto.Partners.Where(dp => partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Supplier).ToList();
-            var guests = dto.Partners.Where(dp => partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Customer).ToList();
+
+            if (partners.Count != partnerIds.Count) //C:\Duos\CSharp\CapstoneProject\MenuGoBE\Service\Documents\ImportDocumentService.cs
+                throw new MenuGoException(ErrorCodes.DocumentPartnerNotFound);
+
+            var suppliers = partners.Where(p => p.Type == PartnerType.Supplier).ToList();
+            var guests = partners.Where(p => p.Type == PartnerType.Customer).ToList();
 
             if (suppliers.Count != 1)
                 throw new MenuGoException(ErrorCodes.DocumentExactlyOneSupplierRequired);
             if (guests.Any())
                 throw new MenuGoException(ErrorCodes.DocumentGuestNotAllowedInImport);
 
-            // 4. Cost Allocation
             decimal totalGoodsValue = dto.Details.Sum(d => d.Quantity * d.UnitPrice);
             
             var transAndOthers = dto.Partners.Where(dp => 
                 partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Transporter ||
                 partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Other).ToList();
             
-            decimal totalExtraCost = transAndOthers.Sum(p => p.Cost);
+            decimal totalExtraCost = transAndOthers.Sum(dp => dp.Cost);
 
             var now = DateTime.UtcNow;
             string code = $"IM{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
@@ -70,7 +70,7 @@ namespace MenuGoBE.Service.Documents
             var rawDate = dto.BusinessDate.ToUniversalTime();
             var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day, rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
 
-            var document = new Document
+            var document = new DocumentEntity
             {
                 BranchId = dto.BranchId,
                 BusinessDate = exactSecondDate,
@@ -94,134 +94,113 @@ namespace MenuGoBE.Service.Documents
 
             foreach (var detail in dto.Details)
             {
-                decimal itemValue = detail.Quantity * detail.UnitPrice;
-                decimal itemAllocatedFee = totalGoodsValue > 0 ? (itemValue / totalGoodsValue) * totalExtraCost : 0;
-                decimal incomingTotalValue = itemValue + itemAllocatedFee;
-                
-                decimal trueUnitCost = detail.UnitPrice + (itemAllocatedFee / detail.Quantity);
+                var binv = binvs.First(b => b.Id == detail.BInventoryId);
+                decimal extraCostPerUnit = totalGoodsValue > 0 ? (detail.Quantity * detail.UnitPrice / totalGoodsValue) * totalExtraCost / detail.Quantity : 0;
+                decimal actualUnitCost = detail.UnitPrice + extraCostPerUnit;
 
                 var docDetail = new DocumentDetail
                 {
                     BInventoryId = detail.BInventoryId,
                     Quantity = detail.Quantity,
                     SystemQuantity = detail.Quantity,
-                    UnitPrice = trueUnitCost,
+                    UnitPrice = actualUnitCost,
                     Note = detail.Note,
                     CreatedAt = DateTime.UtcNow
                 };
                 details.Add(docDetail);
 
-                var binv = binvs.First(b => b.Id == detail.BInventoryId);
-
-                var priorLedger = beforeLedgers.FirstOrDefault(l => l.BInventoryId == detail.BInventoryId);
-                decimal runningQuantity = priorLedger?.RunningQuantity ?? 0;
+                var priorLedger = beforeLedgers.FirstOrDefault(l => l.BInventoryId == binv.Id);
+                decimal runningQty = priorLedger?.RunningQuantity ?? 0;
                 decimal runningAvg = priorLedger?.RunningAverageCost ?? 0;
                 decimal runningLeftOver = priorLedger?.RunningLeftOver ?? 0;
-                decimal currentTotalValue = (runningQuantity * runningAvg) + runningLeftOver;
+                decimal currentTotalVal = (runningQty * runningAvg) + runningLeftOver;
 
-                var newLedger = new InventoryLedger
+                var ledger = new InventoryLedger
                 {
                     BInventoryId = binv.Id,
                     BusinessDate = document.BusinessDate,
                     DocumentType = document.Type,
                     QuantityDelta = detail.Quantity,
-                    InventoryValueDelta = incomingTotalValue,
+                    InventoryValueDelta = detail.Quantity * actualUnitCost,
                     RunningQuantity = 0,
                     RunningInventoryValue = 0,
                     RunningAverageCost = 0,
                     RunningLeftOver = 0,
-                    UnitCost = trueUnitCost,
+                    UnitCost = actualUnitCost,
+                    DocumentDetail = docDetail,
                     CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 
-                RecalculateLedgerState(newLedger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                
-                runningQuantity = newLedger.RunningQuantity;
-                currentTotalValue = newLedger.RunningInventoryValue;
-                runningAvg = newLedger.RunningAverageCost;
-                runningLeftOver = newLedger.RunningLeftOver;
-
-                ledgersToCreate.Add(newLedger);
+                RecalculateLedgerState(ledger, runningQty, currentTotalVal, runningAvg, runningLeftOver);
+                runningQty = ledger.RunningQuantity;
+                currentTotalVal = ledger.RunningInventoryValue;
+                runningAvg = ledger.RunningAverageCost;
+                runningLeftOver = ledger.RunningLeftOver;
+                ledgersToCreate.Add(ledger);
 
                 if (afterLedgersDict.TryGetValue(binv.Id, out var subsequentLedgers))
                 {
-                    foreach (var ledger in subsequentLedgers)
+                    foreach (var subLedger in subsequentLedgers)
                     {
-                        RecalculateLedgerState(ledger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                        
-                        runningQuantity = ledger.RunningQuantity;
-                        currentTotalValue = ledger.RunningInventoryValue;
-                        runningAvg = ledger.RunningAverageCost;
-                        runningLeftOver = ledger.RunningLeftOver;
-
-                        ledgersToUpdate.Add(ledger);
+                        RecalculateLedgerState(subLedger, runningQty, currentTotalVal, runningAvg, runningLeftOver);
+                        runningQty = subLedger.RunningQuantity;
+                        currentTotalVal = subLedger.RunningInventoryValue;
+                        runningAvg = subLedger.RunningAverageCost;
+                        runningLeftOver = subLedger.RunningLeftOver;
+                        ledgersToUpdate.Add(subLedger);
                     }
                 }
 
-                binv.Quantity = runningQuantity;
+                binv.Quantity = runningQty;
                 binv.Avg = runningAvg;
                 binv.LeftOver = runningLeftOver;
                 updatedBInvs.Add(binv);
             }
 
-            var docPartners = new List<DocumentPartner>();
+            var docPartners = dto.Partners.Select(p => new DocumentPartner
+            {
+                PartnerId = p.PartnerId,
+                Cost = p.Cost,
+                Note = p.Note,
+                CreatedAt = DateTime.UtcNow
+            }).ToList();
+
             var cashFlows = new List<CashFlow>();
             var cashFlowDetails = new List<CashFlowDetail>();
 
-            var supplierDto = suppliers.First();
-            docPartners.Add(new DocumentPartner
-            {
-                PartnerId = supplierDto.PartnerId,
-                Cost = totalGoodsValue,
-                Note = supplierDto.Note,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            foreach (var tp in transAndOthers)
-            {
-                docPartners.Add(new DocumentPartner
-                {
-                    PartnerId = tp.PartnerId,
-                    Cost = tp.Cost,
-                    Note = tp.Note,
-                    CreatedAt = DateTime.UtcNow
-                });
-            }
-
-            string cfCodePrefix = $"CF-{code}-";
-            int cfIndex = 1;
             foreach (var dp in docPartners)
             {
+                var partnerObj = partners.First(p => p.Id == dp.PartnerId);
                 var cf = new CashFlow
                 {
                     BranchId = dto.BranchId,
-                    Code = $"{cfCodePrefix}{cfIndex++}",
                     BusinessDate = document.BusinessDate,
                     Direction = CashFlowDirection.Outflow,
-                    Status = CashFlowStatus.Completed,
                     TotalAmount = dp.Cost,
+                    Status = CashFlowStatus.Completed,
+                    //Cre = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
                 cashFlows.Add(cf);
-                
+
                 var cfd = new CashFlowDetail
                 {
-                    PartnerId = dp.PartnerId,
                     Type = CashFlowDetailType.Payment,
-                    PaymentMethod = PaymentMethod.Cash,
                     Amount = dp.Cost,
-                    Note = $"Thanh toán cho phiếu nhập kho {code}"
+                    Note = $"Thanh toán cho {partnerObj.Name} phiếu nhập {code}"
                 };
                 cashFlowDetails.Add(cfd);
             }
 
-            return await _repo.ExecuteImportTransactionAsync(document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
+            return await _repo.ExecuteImportTransactionAsync(
+                document, details, docPartners, updatedBInvs,
+                ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
         }
 
         public async Task DeleteImportDocumentAsync(long documentId, long? deletedBy = null)
         {
-            await DeleteDocumentAsync(documentId, deletedBy);
+            await base.DeleteDocumentAsync(documentId, deletedBy);
         }
     }
 }
