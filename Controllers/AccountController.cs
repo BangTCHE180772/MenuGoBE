@@ -44,17 +44,15 @@ namespace MenuGoBE.Controllers
             if (!isAdmin && !isManager)
                 return StatusCode(403, new { message = "Bạn không có quyền quản lý tài khoản." });
 
-            List<long>? filterBranchIds = null;
-
             if (isAdmin)
             {
-                if (branchId.HasValue)
-                {
-                    filterBranchIds = new List<long> { branchId.Value };
-                }
+                // Owner / Admin ONLY sees Manager accounts (Role 3), optionally filtered by branchId
+                var result = await _service.GetAccountsByRolesAsync(new List<long> { 3 }, branchId);
+                return Ok(result);
             }
             else // isManager
             {
+                List<long>? filterBranchIds = null;
                 if (branchId.HasValue)
                 {
                     if (!branchIds.Contains(branchId.Value))
@@ -67,10 +65,26 @@ namespace MenuGoBE.Controllers
                 {
                     filterBranchIds = branchIds;
                 }
-            }
 
-            // Fetch accounts excluding role 1, 2 and 3
-            var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 }, filterBranchIds, currentUserId.Value);
+                // Manager ONLY sees staff accounts (excluding role 1, 2 and 3)
+                var result = await _service.GetAccountsExcludeRolesAsync(new List<long> { 1, 2, 3 }, filterBranchIds, currentUserId.Value);
+                return Ok(result);
+            }
+        }
+
+        [HttpGet("managers")]
+        public async Task<IActionResult> GetManagerAccounts()
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, _, _) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin)
+                return StatusCode(403, new { message = "Chỉ có Owner / Admin mới có quyền xem danh sách Quản lý." });
+
+            // Fetch accounts with role 3 (Quản lý)
+            var result = await _service.GetAccountsByRolesAsync(new List<long> { 3 });
             return Ok(result);
         }
 

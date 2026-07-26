@@ -33,6 +33,21 @@ namespace MenuGoBE.Repositories
             return await query.ToListAsync();
         }
 
+        public async Task<List<Account>> GetAccountsByRolesAsync(List<long> roleIds, long? branchId = null)
+        {
+            var query = _context.Accounts
+                .Include(a => a.Contracts)
+                .Where(a => a.Contracts.Any(c => roleIds.Contains(c.RoleId)))
+                .AsQueryable();
+
+            if (branchId.HasValue)
+            {
+                query = query.Where(a => a.Contracts.Any(c => c.BranchId == branchId.Value));
+            }
+
+            return await query.ToListAsync();
+        }
+
         public async Task<Account?> GetAccountByEmailAsync(string email)
         {
             return await _context.Accounts
