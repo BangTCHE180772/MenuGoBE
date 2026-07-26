@@ -21,9 +21,9 @@ namespace MenuGoBE.Service
             _mapper = mapper;
         }
 
-        public async Task<List<AccountViewDto>> GetAccountsExcludeRolesAsync(List<long> excludedRoles)
+        public async Task<List<AccountViewDto>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, List<long>? branchIds = null, long? managerAccountId = null)
         {
-            var accounts = await _repo.GetAccountsExcludeRolesAsync(excludedRoles);
+            var accounts = await _repo.GetAccountsExcludeRolesAsync(excludedRoles, branchIds, managerAccountId);
             return _mapper.Map<List<AccountViewDto>>(accounts);
         }
 
@@ -35,7 +35,7 @@ namespace MenuGoBE.Service
             return _mapper.Map<AccountViewDto>(account);
         }
 
-        public async Task<AccountViewDto> CreateAsync(AccountCreateDto dto)
+        public async Task<AccountViewDto> CreateAsync(AccountCreateDto dto, long creatorAccountId = 0)
         {
             // Validate uniqueness
             if (await _repo.ExistsByEmailAsync(dto.Email))
@@ -48,6 +48,10 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Account>(dto);
             entity.HashedPassword = HashHelper.HashPassword(dto.Password);
             entity.CreatedAt = DateTime.UtcNow;
+            if (creatorAccountId > 0)
+            {
+                entity.CreatedBy = creatorAccountId;
+            }
 
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -85,6 +89,16 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
 
             return true;
+        }
+
+        public async Task<(bool IsAdmin, bool IsManager, List<long> BranchIds)> GetAccountPermissionsAsync(long accountId)
+        {
+            return await _repo.GetAccountPermissionsAsync(accountId);
+        }
+
+        public async Task<bool> CanManagerAccessAccountAsync(long targetAccountId, List<long> managerBranchIds, long managerAccountId)
+        {
+            return await _repo.CanManagerAccessAccountAsync(targetAccountId, managerBranchIds, managerAccountId);
         }
     }
 }

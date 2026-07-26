@@ -18,12 +18,19 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles)
+        public async Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, List<long>? branchIds = null, long? managerAccountId = null)
         {
-            return await _context.Accounts
+            var query = _context.Accounts
                 .Include(a => a.Contracts)
                 .Where(a => !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)))
-                .ToListAsync();
+                .AsQueryable();
+
+            if (branchIds != null)
+            {
+                query = query.Where(a => a.Contracts.Any(c => branchIds.Contains(c.BranchId)) || (managerAccountId.HasValue && a.CreatedBy == managerAccountId.Value));
+            }
+
+            return await query.ToListAsync();
         }
 
         public async Task<Account?> GetAccountByEmailAsync(string email)
@@ -120,6 +127,60 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
 
             return activeContracts.Union(activeTempRoles).ToList();
+        }
+
+        public async Task<(bool IsAdmin, bool IsManager, List<long> BranchIds)> GetAccountPermissionsAsync(long accountId)
+        {
+            var activeContracts = await _context.Contracts
+                .Include(c => c.Role)
+                .Where(c => c.AccountId == accountId && c.Status == "Active")
+                .ToListAsync();
+
+            var activeTempRoles = await _context.TempRoles
+                .Include(tr => tr.Role)
+                .Where(tr => tr.AccountId == accountId && tr.Status == "Active")
+                .ToListAsync();
+
+            var allRoleIds = activeContracts.Select(c => c.RoleId)
+                .Union(activeTempRoles.Select(tr => tr.RoleId))
+                .ToList();
+
+            var allRoleNames = activeContracts.Where(c => c.Role != null).Select(c => c.Role.Name)
+                .Union(activeTempRoles.Where(tr => tr.Role != null).Select(tr => tr.Role.Name))
+                .ToList();
+
+            bool isAdmin = allRoleIds.Contains(1) || allRoleIds.Contains(2) ||
+                           allRoleNames.Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                                                 string.Equals(r, "OWNER", StringComparison.OrdinalIgnoreCase) ||
+                                                 string.Equals(r, "Quản trị viên", StringComparison.OrdinalIgnoreCase));
+
+            bool isManager = allRoleIds.Contains(3) ||
+                             allRoleNames.Any(r => string.Equals(r, "Manager", StringComparison.OrdinalIgnoreCase) ||
+                                                   string.Equals(r, "Quản lý", StringComparison.OrdinalIgnoreCase));
+
+            var branchIds = activeContracts
+                .Where(c => c.BranchId > 0)
+                .Select(c => c.BranchId)
+                .Distinct()
+                .ToList();
+
+            return (isAdmin, isManager, branchIds);
+        }
+
+        public async Task<bool> CanManagerAccessAccountAsync(long targetAccountId, List<long> managerBranchIds, long managerAccountId)
+        {
+            var account = await _context.Accounts
+                .Include(a => a.Contracts)
+                .FirstOrDefaultAsync(a => a.Id == targetAccountId);
+
+            if (account == null) return false;
+            if (account.CreatedBy == managerAccountId) return true;
+            if (managerBranchIds != null && managerBranchIds.Count > 0)
+            {
+                return account.Contracts.Any(c => managerBranchIds.Contains(c.BranchId));
+            }
+
+            return false;
         }
     }
 }
