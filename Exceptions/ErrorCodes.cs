@@ -274,6 +274,18 @@ public static class ErrorCodes
         404
     );
 
+    public static readonly ErrorResult DocumentNotFound = new(
+        2108, 
+        "Không tìm thấy chứng từ.", 
+        404
+    );
+
+    public static readonly ErrorResult DocumentAlreadyDeleted = new(
+        2109, 
+        "Chứng từ đã bị xóa trước đó.", 
+        400
+    );
+
     public static readonly ErrorResult DocumentPostingLockDateError = new(
         2102,
         "Ngày chứng từ phải sau ngày khóa sổ (PostingLockDate).",
@@ -301,6 +313,24 @@ public static class ErrorCodes
     public static readonly ErrorResult DocumentGuestNotAllowedInImport = new(
         2106,
         "Phiếu nhập kho không được có Khách lẻ (Customer).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentCannotDeleteHasReturn = new(
+        2107, 
+        "Không thể xóa phiếu nhập vì đã có phiếu trả hàng tham chiếu đến nó.", 
+        400
+    );
+
+    public static readonly ErrorResult DocumentInvalidReturnBusinessDate = new(
+        2110, 
+        "Ngày trả hàng không được nhỏ hơn ngày của phiếu nhập gốc.", 
+        400
+    );
+
+    public static readonly ErrorResult DocumentReturnQuantityExceeded = new(
+        2111, 
+        "Số lượng trả hàng không được vượt quá số lượng đã nhập.", 
         400
     );
 }
