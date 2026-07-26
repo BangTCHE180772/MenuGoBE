@@ -25,32 +25,8 @@ namespace MenuGoBE.Interface.Repository
             List<InventoryLedger> ledgersToUpdate,
             List<CashFlow> cashFlows,
             List<CashFlowDetail> cashFlowDetails);
-
-        Task<Document> ExecuteImportTransactionAsync(
-            Document document,
-            List<DocumentDetail> details,
-            List<DocumentPartner> docPartners,
-            List<BInventory> updatedBInvs,
-            List<InventoryLedger> ledgersToCreate,
-            List<InventoryLedger> ledgersToUpdate,
-            List<CashFlow> cashFlows,
-            List<CashFlowDetail> cashFlowDetails);
-            
-        Task<bool> HasReturnDocumentsAsync(long importDocumentId);
-        Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId);
-        
-        Task<Document> ExecuteReturnTransactionAsync(
-            Document document,
-            List<DocumentDetail> details,
-            List<DocumentPartner> docPartners,
-            List<BInventory> updatedBInvs,
-            List<InventoryLedger> ledgersToCreate,
-            List<InventoryLedger> ledgersToUpdate,
-            List<CashFlow> cashFlows,
-            List<CashFlowDetail> cashFlowDetails);
             
         Task<Document?> GetDocumentWithDetailsAsync(long documentId);
-        Task<Document?> GetChildReceiveDocumentAsync(long parentTransferDocumentId);
         Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId);
         Task<List<InventoryLedger>> GetLedgersByDocumentIdAsync(long documentId);
         Task ExecuteDeleteTransactionAsync(
