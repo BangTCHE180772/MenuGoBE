@@ -195,7 +195,7 @@ namespace MenuGoBE.Controllers
                                 tableName = table.Name,
                                 productName = productName,
                                 quantity = dto.Quantity,
-                                message = $"Bàn {table.Name} vừa gọi: {productName} (x{dto.Quantity})",
+                                message = $"{table.Name} vừa gọi: {productName} (x{dto.Quantity})",
                                 timestamp = System.DateTime.UtcNow
                             });
                         }
@@ -285,7 +285,7 @@ namespace MenuGoBE.Controllers
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
 
             string displayMessage = dto.CookingStatus == "Ready" 
-                ? $"Món {productName} (Bàn {tableName}) đã nấu xong!" 
+                ? $"Món {productName} ({tableName}) đã nấu xong!" 
                 : $"Trạng thái chế biến món {productName} đã đổi sang {dto.CookingStatus}";
 
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
