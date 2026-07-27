@@ -6,7 +6,8 @@ namespace MenuGoBE.Interface.Services
     public interface IPartnerService
     {
         Task<PagedResult<PartnerViewDto>> GetPagedPartnersAsync(PartnerQueryDto query);
-        Task<PartnerViewDto> GetPartnerByIdAsync(long id);
+        Task<PartnerViewDto> GetPartnerByIdAsync(long id, int? mode = null);
+        Task<List<PartnerViewDto>> GetPartnersByBranchAsync(long branchId, string? search = null, int? mode = null);
         Task<PartnerViewDto> CreatePartnerAsync(PartnerCreateDto dto, long? createdBy = null);
         Task<PartnerViewDto> UpdatePartnerAsync(long id, PartnerUpdateDto dto);
         Task<bool> DeletePartnerAsync(long id);
