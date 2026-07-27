@@ -40,12 +40,14 @@ namespace MenuGoBE.Service
             {
                 DocumentType.Import => "Nhập kho",
                 DocumentType.Export => "Xuất hủy",
-                DocumentType.Transfer => "Chuyển hàng",
+                DocumentType.Transfer => "Xuất chuyển kho",
                 DocumentType.Return => "Trả hàng nhập",
                 DocumentType.Check => "Kiểm kho",
                 DocumentType.Production => "Sản xuất",
+                DocumentType.ReceiveTransfer => "Nhận chuyển kho",
                 _ => "Khác"
             };
+
 
             return new DocumentResponseDto
             {

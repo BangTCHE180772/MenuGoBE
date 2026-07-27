@@ -8,6 +8,8 @@ namespace MenuGoBE.Interface.Services.Document
     {
         Task<DocumentEntity> CreateTransferDocumentAsync(TransferDocumentCreateDto dto, long? createdBy = null);
         Task<DocumentEntity> ReceiveTransferDocumentAsync(TransferReceiveDocumentCreateDto dto, long? createdBy = null);
+        Task<DocumentEntity> RejectTransferDocumentAsync(TransferRejectDocumentDto dto, long? rejectedBy = null);
         Task DeleteTransferDocumentAsync(long documentId, long? deletedBy = null);
     }
 }
+

@@ -12,11 +12,17 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public DateTime BusinessDate { get; set; }
 
+        /// <summary>
+        /// Tùy chọn: Id tài khoản người tạo truyền trực tiếp từ Frontend (nếu có).
+        /// </summary>
+        public long? AccountId { get; set; }
+
         [Required]
         public long FinishedBInventoryId { get; set; }
 
+
         [Required]
-        [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng thành phẩm sản xuất phải lớn hơn 0.")]
+        [Range(0.001, 10000000000.000, ErrorMessage = "Số lượng thành phẩm sản xuất phải từ 0,001 đến 10.000.000.000 (10 tỷ).")]
         public decimal FinishedQuantity { get; set; }
 
         public string? Note { get; set; }
@@ -32,9 +38,11 @@ namespace MenuGoBE.Dtos.Document
         public long BInventoryId { get; set; }
 
         [Required]
-        [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nguyên vật liệu phải lớn hơn 0.")]
+        [Range(0.001, 10000000000.000, ErrorMessage = "Số lượng nguyên vật liệu phải từ 0,001 đến 10.000.000.000 (10 tỷ).")]
         public decimal Quantity { get; set; }
 
         public string? Note { get; set; }
     }
+
+
 }

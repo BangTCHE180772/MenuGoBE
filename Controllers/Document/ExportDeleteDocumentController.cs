@@ -56,7 +56,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = GetUserId();
+                var createdBy = dto.AccountId ?? GetUserId();
                 var result = await _service.CreateExportDeleteDocumentAsync(dto, createdBy);
                 
                 return Ok(new
@@ -65,6 +65,10 @@ namespace MenuGoBE.Controllers.Document
                     documentId = result.Id,
                     code = result.Code
                 });
+            }
+            catch (Exceptions.MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
             }
             catch (Exception ex)
             {
