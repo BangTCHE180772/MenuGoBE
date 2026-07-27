@@ -80,7 +80,12 @@ namespace MenuGoBE.Repositories
 
         public async Task UpdateAsync(Payroll entity)
         {
-            _context.Payrolls.Update(entity);
+            var entry = _context.Entry(entity);
+            if (entry.State == EntityState.Detached)
+            {
+                _context.Payrolls.Attach(entity);
+                entry.State = EntityState.Modified;
+            }
             await SaveChangesAsync();
         }
 

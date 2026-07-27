@@ -163,7 +163,14 @@ namespace MenuGoBE.Service
             entity.Status = status;
             if (status == PayrollStatus.Paid)
             {
-                entity.PaymentDate = paymentDate ?? DateTime.UtcNow;
+                var dt = paymentDate ?? DateTime.UtcNow;
+                entity.PaymentDate = dt.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
+                    : dt.ToUniversalTime();
+            }
+            else
+            {
+                entity.PaymentDate = null;
             }
 
             await _payrollRepo.UpdateAsync(entity);
