@@ -44,7 +44,7 @@ namespace MenuGoBE.Controllers
             var table = await _tableService.GetByIdAsync(tableId);
             if (table == null) return NotFound("Bàn không tồn tại");
 
-            var message = $"Bàn {table.Name} yêu cầu thanh toán / dọn bàn!";
+            var message = $"{table.Name} yêu cầu thanh toán / dọn bàn!";
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
             { 
                 type = "request-bill", 
