@@ -1,7 +1,8 @@
-using MenuGoBE.Dtos.Base;
-using MenuGoBE.Dtos.Partner;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
+using MenuGoBE.Models.Enums;
+using MenuGoBE.Dtos.Partner;
+using MenuGoBE.Dtos.Base;
 
 namespace MenuGoBE.Controllers
 {
@@ -16,34 +17,24 @@ namespace MenuGoBE.Controllers
             _partnerService = partnerService;
         }
 
+        // 1. GetAll
         [HttpGet]
-        public async Task<ActionResult<PagedResult<PartnerViewDto>>> GetPartners([FromQuery] PartnerQueryDto query)
+        public async Task<ActionResult<PagedResult<PartnerViewDto>>> GetAll([FromQuery] PartnerQueryDto query)
         {
             var result = await _partnerService.GetPagedPartnersAsync(query);
             return Ok(result);
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<PartnerViewDto>> GetPartnerById(long id)
+        // 2. GetByBranchId
+        [HttpGet("branch/{branchId}")]
+        public async Task<ActionResult<List<PartnerViewDto>>> GetByBranchId(
+            long branchId,
+            [FromQuery] string? search)
         {
             try
             {
-                var result = await _partnerService.GetPartnerByIdAsync(id);
+                var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode: null);
                 return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<PartnerViewDto>> CreatePartner([FromBody] PartnerCreateDto dto)
-        {
-            try
-            {
-                var result = await _partnerService.CreatePartnerAsync(dto, 1); // Mock User ID 1 for now
-                return CreatedAtAction(nameof(GetPartnerById), new { id = result.Id }, result);
             }
             catch (Exception ex)
             {
@@ -51,8 +42,47 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        // 3. GetByBranchIdAndMode
+        [HttpGet("branch/{branchId}/mode/{mode}")]
+        public async Task<ActionResult<List<PartnerViewDto>>> GetByBranchIdAndMode(
+            long branchId,
+            int mode,
+            [FromQuery] string? search)
+        {
+            try
+            {
+                var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // 4. Create (NeedToProvide BranchId)
+        [HttpPost]
+        public async Task<ActionResult<PartnerViewDto>> Create([FromBody] PartnerCreateDto dto)
+        {
+            if (dto.BranchId <= 0)
+            {
+                return BadRequest(new { message = "BranchId là bắt buộc." });
+            }
+
+            try
+            {
+                var result = await _partnerService.CreatePartnerAsync(dto, 1); // Mock User ID 1 for now
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // 4. Update (Chỉ dựa vào partnerId, không cập nhật BranchId & Type)
         [HttpPut("{id}")]
-        public async Task<ActionResult<PartnerViewDto>> UpdatePartner(long id, [FromBody] PartnerUpdateDto dto)
+        public async Task<ActionResult<PartnerViewDto>> Update(long id, [FromBody] PartnerUpdateDto dto)
         {
             try
             {
@@ -65,8 +95,9 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        // 5. Delete By Id
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeletePartner(long id)
+        public async Task<ActionResult> Delete(long id)
         {
             try
             {
