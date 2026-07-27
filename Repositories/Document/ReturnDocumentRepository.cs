@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository.Document;
@@ -23,8 +24,10 @@ namespace MenuGoBE.Repositories.Document
             List<CashFlow> cashFlows,
             List<CashFlowDetail> cashFlowDetails)
         {
+            // Sequential index: cashFlows[i] → docPartners[i]
+            var indexes = Enumerable.Range(0, cashFlows.Count).ToList();
             return await ExecuteImportTransactionAsync(
-                document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
+                document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails, indexes);
         }
     }
 }

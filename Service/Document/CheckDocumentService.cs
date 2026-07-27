@@ -72,7 +72,6 @@ namespace MenuGoBE.Service.Document
                 BusinessDate = exactSecondDate,
                 Code = code,
                 Type = DocumentType.Check,
-                Status = DocumentStatus.Completed,
                 TransferStatus = DocumentTransferStatus.None,
                 TotalAmount = 0,
                 CreatedBy = createdBy,

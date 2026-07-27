@@ -188,10 +188,6 @@ public class AppDbContext : DbContext
             .HasConversion<string>();
 
         modelBuilder.Entity<Document>()
-            .Property(d => d.Status)
-            .HasConversion<string>();
-
-        modelBuilder.Entity<Document>()
             .Property(d => d.TransferStatus)
             .HasConversion<string>();
 

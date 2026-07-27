@@ -335,8 +335,26 @@ public static class ErrorCodes
     );
 
     public static readonly ErrorResult DocumentPartnerNotFound = new(
-        2111,
-        "Số lượng trả hàng không được vượt quá số lượng đã nhập.",
+        2112,
+        "Không tìm thấy đối tác trong hệ thống.",
+        404
+    );
+
+    public static readonly ErrorResult DocumentAmountDueRequiredForNonSupplier = new(
+        2113,
+        "Đối tác loại Vận chuyển / Khác phải khai báo số tiền cần trả (AmountDue).",
         400
+    );
+
+    public static readonly ErrorResult DocumentTotalAmountExceedsLimit = new(
+        2114,
+        "Tổng giá trị phiếu nhập (Supplier + các bên khác) không được vượt quá 10 tỷ đồng.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentUnitConversionNotFound = new(
+        2115,
+        "Không tìm thấy quy đổi đơn vị tương ứng.",
+        404
     );
 }

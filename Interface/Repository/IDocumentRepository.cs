@@ -38,5 +38,10 @@ namespace MenuGoBE.Interface.Repository
             List<InventoryLedger> ledgersToUpdate,
             List<BInventory> updatedBInvs,
             List<CashFlow> cashFlowsToSoftDelete);
+
+        /// <summary>
+        /// Lấy danh sách UnitConversion theo danh sách Id.
+        /// </summary>
+        Task<List<UnitConversion>> GetUnitConversionsByIdsAsync(List<long> ids);
     }
 }

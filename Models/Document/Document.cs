@@ -25,8 +25,6 @@ public class Document
 
     public DocumentType Type { get; set; }
 
-    public DocumentStatus Status { get; set; }
-
     public DocumentTransferStatus TransferStatus { get; set; }
 
     [Column(TypeName = "decimal(108,12)")]
