@@ -1,0 +1,71 @@
+using MenuGoBE.Dtos.Auth;
+using MenuGoBE.Helpers;
+using MenuGoBE.Interface.Repository;
+using MenuGoBE.Models;
+using MenuGoBE.Service;
+using Microsoft.Extensions.Configuration;
+using Moq;
+
+namespace MenuGoTest.UnitTests.ServiceTest.AuthServiceTest;
+
+public class LoginAsyncTests
+{
+    private readonly Mock<IAccountRepository> _accountRepoMock;
+    private readonly AuthService _service;
+
+    public LoginAsyncTests()
+    {
+        _accountRepoMock = new Mock<IAccountRepository>();
+        var configMock = new Mock<IConfiguration>();
+        configMock.Setup(c => c["Jwt:Key"]).Returns("SuperSecretTestKeyForUnitTestThatIsLongEnough123");
+        configMock.Setup(c => c["Jwt:Issuer"]).Returns("TestIssuer");
+        configMock.Setup(c => c["Jwt:Audience"]).Returns("TestAudience");
+        _service = new AuthService(_accountRepoMock.Object, configMock.Object);
+    }
+
+    [Fact]
+    public async Task ThrowsUnauthorized_WhenEmailNotFound()
+    {
+        var dto = new LoginDto { Email = "notexist@test.com", Password = "123456" };
+        _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("notexist@test.com")).ReturnsAsync((Account?)null);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _service.LoginAsync(dto));
+    }
+
+    [Fact]
+    public async Task ThrowsUnauthorized_WhenPasswordWrong()
+    {
+        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("correct") };
+        var dto = new LoginDto { Email = "test@test.com", Password = "wrong" };
+        _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _service.LoginAsync(dto));
+    }
+
+    [Fact]
+    public async Task ReturnsSetup2FA_WhenNoTwoFACode()
+    {
+        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), TwoFACode = null };
+        var dto = new LoginDto { Email = "test@test.com", Password = "123456" };
+        _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
+
+        var result = await _service.LoginAsync(dto);
+
+        // Result is anonymous type, use dynamic
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.Contains("setup_2fa_required", json);
+    }
+
+    [Fact]
+    public async Task ReturnsVerify2FA_WhenTwoFAEnabled()
+    {
+        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), TwoFACode = "ABCDEFGHIJ" };
+        var dto = new LoginDto { Email = "test@test.com", Password = "123456" };
+        _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
+
+        var result = await _service.LoginAsync(dto);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.Contains("verify_2fa_required", json);
+    }
+}
