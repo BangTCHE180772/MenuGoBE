@@ -142,12 +142,66 @@ namespace MenuGoBE.Service.Document
                 runningState[binvId] = (pq, (pq * pav) + plo, pav, plo);
             }
 
+            // 8.5. Phân bổ chi phí phụ (extraAmountsDue từ Transporter/Other) theo tỷ lệ giá trị tiền hàng
+            var allocatedExtraCosts = new decimal[dto.Details.Count];
+            if (extraAmountsDue > 0 && dto.Details.Count > 0)
+            {
+                if (totalGoodsValue > 0)
+                {
+                    decimal runningAllocatedSum = 0m;
+                    int maxValIndex = 0;
+                    decimal maxVal = -1m;
+
+                    for (int i = 0; i < dto.Details.Count; i++)
+                    {
+                        var d = dto.Details[i];
+                        decimal lineGoodsValue = d.Quantity * d.UnitPrice;
+                        if (lineGoodsValue > maxVal)
+                        {
+                            maxVal = lineGoodsValue;
+                            maxValIndex = i;
+                        }
+
+                        decimal rawAllocated = extraAmountsDue * (lineGoodsValue / totalGoodsValue);
+                        decimal roundedAllocated = Math.Max(0m, Math.Round(rawAllocated, 0, MidpointRounding.AwayFromZero));
+                        allocatedExtraCosts[i] = roundedAllocated;
+                        runningAllocatedSum += roundedAllocated;
+                    }
+
+                    // Bù phần lẻ dư (remainder) vào dòng hàng có giá trị lớn nhất
+                    decimal remainder = extraAmountsDue - runningAllocatedSum;
+                    if (remainder != 0)
+                    {
+                        allocatedExtraCosts[maxValIndex] = Math.Max(0m, allocatedExtraCosts[maxValIndex] + remainder);
+                    }
+                }
+                else
+                {
+                    // Nếu tổng tiền hàng bằng 0, chia đều cho các dòng hàng
+                    decimal perItem = Math.Max(0m, Math.Round(extraAmountsDue / dto.Details.Count, 0, MidpointRounding.AwayFromZero));
+                    decimal runningAllocatedSum = 0m;
+                    for (int i = 0; i < dto.Details.Count; i++)
+                    {
+                        allocatedExtraCosts[i] = perItem;
+                        runningAllocatedSum += perItem;
+                    }
+                    decimal remainder = extraAmountsDue - runningAllocatedSum;
+                    if (remainder != 0)
+                    {
+                        allocatedExtraCosts[dto.Details.Count - 1] = Math.Max(0m, allocatedExtraCosts[dto.Details.Count - 1] + remainder);
+                    }
+                }
+            }
+
             // 9. Build details & ledgers (one-to-one, parallel lists — allows duplicate BInventoryId)
             var details       = new List<DocumentDetail>();
             var ledgersToCreate = new List<InventoryLedger>();
 
-            foreach (var dtoDetail in dto.Details)
+            for (int i = 0; i < dto.Details.Count; i++)
             {
+                var dtoDetail = dto.Details[i];
+                decimal allocatedExtraCost = allocatedExtraCosts[i];
+
                 // UnitConversion lookup
                 UnitConversion? uc = dtoDetail.UnitConversionId.HasValue
                     ? unitConversions.First(u => u.Id == dtoDetail.UnitConversionId!.Value)
@@ -155,10 +209,13 @@ namespace MenuGoBE.Service.Document
 
                 decimal conversionPoint  = uc?.ConversionPoint ?? 1m;
                 decimal quantityDelta    = dtoDetail.Quantity * conversionPoint;          // Lưu ledger theo base unit
-                decimal inventoryValueDelta = dtoDetail.Quantity * dtoDetail.UnitPrice;  // TotalLineAmount
-                decimal unitCost         = conversionPoint > 0
-                    ? dtoDetail.UnitPrice / conversionPoint
-                    : dtoDetail.UnitPrice;
+                
+                // Giá trị hàng hóa gốc + Chi phí phụ phân bổ làm giá trị nhập kho
+                decimal goodsValue          = dtoDetail.Quantity * dtoDetail.UnitPrice;
+                decimal inventoryValueDelta = goodsValue + allocatedExtraCost;
+                decimal unitCost            = quantityDelta > 0
+                    ? inventoryValueDelta / quantityDelta
+                    : 0m;
 
                 var docDetail = new DocumentDetail
                 {
