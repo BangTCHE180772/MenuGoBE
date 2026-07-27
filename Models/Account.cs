@@ -44,4 +44,20 @@ public class Account
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
     public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
+    public ICollection<Payroll> Payrolls { get; set; } = new List<Payroll>();
+    public ICollection<SalaryDetail> SalaryDetails { get; set; } = new List<SalaryDetail>();
+
+    // 9. Inventory Module – Audit
+    [InverseProperty("Creator")]
+    public ICollection<Document> CreatedDocuments { get; set; } = new List<Document>();
+
+    [InverseProperty("Deleter")]
+    public ICollection<Document> DeletedDocuments { get; set; } = new List<Document>();
+
+    [InverseProperty("Deleter")]
+    public ICollection<CashFlow> DeletedCashFlows { get; set; } = new List<CashFlow>();
+
+    [InverseProperty("Creator")]
+    public ICollection<Partner> CreatedPartners { get; set; } = new List<Partner>();
+
 }

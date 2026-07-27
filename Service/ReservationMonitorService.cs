@@ -16,18 +16,15 @@ namespace MenuGoBE.Service;
 public class ReservationMonitorService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly IReservationSignalService _signalService;
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly HashSet<long> _warnedReservationIds = new HashSet<long>();
     private readonly HashSet<long> _lateWarnedReservationIds = new HashSet<long>();
 
     public ReservationMonitorService(
         IServiceProvider serviceProvider, 
-        IReservationSignalService signalService,
         IHubContext<NotificationHub> hubContext)
     {
         _serviceProvider = serviceProvider;
-        _signalService = signalService;
         _hubContext = hubContext;
     }
 
@@ -37,22 +34,12 @@ public class ReservationMonitorService : BackgroundService
         {
             try
             {
-                TimeSpan delay = Timeout.InfiniteTimeSpan;
-                bool shouldLoopImmediately = false;
                 List<long> updatedTableIds = new List<long>();
-                bool isPeakHour = false;
 
                 using (var scope = _serviceProvider.CreateScope())
                 {
                     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                     var now = DateTime.UtcNow;
-                    var localNow = now.AddHours(7); // Vietnam time (UTC+7)
-
-                    // Peak hours for Escargot/Seafood restaurant: 16:00-18:00 and 20:00-22:00
-                    int hour = localNow.Hour;
-                    int min = localNow.Minute;
-                    isPeakHour = (hour >= 16 && hour < 18) || (hour == 18 && min == 0) ||
-                                 (hour >= 20 && hour < 22) || (hour == 22 && min == 0);
 
                     var expiredTime = now.AddMinutes(-30);
                     var lockThreshold = now.AddMinutes(30);
@@ -75,6 +62,19 @@ public class ReservationMonitorService : BackgroundService
                             db.Tables.Update(table);
                             updatedTableIds.Add(table.Id);
                         }
+
+                        var childOrders = await db.Orders.Include(o => o.Table)
+                            .Where(o => o.FatherId == expired.Order.Id).ToListAsync(stoppingToken);
+                        
+                        foreach(var child in childOrders)
+                        {
+                            if(child.Table != null && child.Table.Status == "Reserved")
+                            {
+                                child.Table.Status = "Empty";
+                                db.Tables.Update(child.Table);
+                                updatedTableIds.Add(child.Table.Id);
+                            }
+                        }
                     }
 
                     // 2. Process upcoming reservations that need locking (<= 30 mins away)
@@ -91,6 +91,19 @@ public class ReservationMonitorService : BackgroundService
                         table.Status = "Reserved";
                         db.Tables.Update(table);
                         updatedTableIds.Add(table.Id);
+
+                        var childOrders = await db.Orders.Include(o => o.Table)
+                            .Where(o => o.FatherId == res.Order.Id).ToListAsync(stoppingToken);
+                        
+                        foreach(var child in childOrders)
+                        {
+                            if(child.Table != null && child.Table.Status == "Empty")
+                            {
+                                child.Table.Status = "Reserved";
+                                db.Tables.Update(child.Table);
+                                updatedTableIds.Add(child.Table.Id);
+                            }
+                        }
                     }
 
                     // 3. Process conflict warnings: <= 30 mins away, table Occupied
@@ -109,7 +122,6 @@ public class ReservationMonitorService : BackgroundService
                         var area = await db.Areas.FirstOrDefaultAsync(a => a.Id == table.AreaId);
                         long branchId = area?.BranchId ?? 0;
 
-                        // Send SignalR event
                         await _hubContext.Clients.All.SendAsync("TableConflictWarning", new
                         {
                             ReservationId = warnRes.Id,
@@ -117,7 +129,7 @@ public class ReservationMonitorService : BackgroundService
                             TableName = table.Name,
                             BranchId = branchId,
                             ReservationTime = warnRes.ReservationTime,
-                            Message = $"Bàn {table.Name} đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi! Vui lòng sắp xếp bàn dự phòng."
+                            Message = $"{table.Name} đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi! Vui lòng sắp xếp bàn dự phòng."
                         });
                         _warnedReservationIds.Add(warnRes.Id);
                     }
@@ -151,97 +163,13 @@ public class ReservationMonitorService : BackgroundService
                     if (expiredList.Any() || toLockList.Any())
                     {
                         await db.SaveChangesAsync(stoppingToken);
-                        shouldLoopImmediately = true;
-                    }
-                    else
-                    {
-                        if (isPeakHour)
-                        {
-                            // Fixed polling interval during peak hours to batch events and prevent Event Storms
-                            delay = TimeSpan.FromMinutes(5);
-                        }
-                        else
-                        {
-                            // Event-driven mode for off-peak: compute exact delay to the next event
-                            var nextExpiration = await db.Reservations
-                                .Where(r => r.Status == "Pending" && r.ReservationTime > expiredTime)
-                                .OrderBy(r => r.ReservationTime)
-                                .Select(r => (DateTime?)r.ReservationTime.AddMinutes(30))
-                                .FirstOrDefaultAsync(stoppingToken);
-
-                            var nextLockWarnCandidates = await db.Reservations
-                                .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null
-                                         && (r.Order.Table.Status == "Empty" || r.Order.Table.Status == "Occupied")
-                                         && r.ReservationTime > lockThreshold)
-                                .OrderBy(r => r.ReservationTime)
-                                .Take(20)
-                                .Include(r => r.Order).ThenInclude(o => o!.Table)
-                                .ToListAsync(stoppingToken);
-
-                            var nextLockWarn = nextLockWarnCandidates
-                                .Where(r => r.Order!.Table!.Status == "Empty" || !_warnedReservationIds.Contains(r.Id))
-                                .Select(r => (DateTime?)r.ReservationTime.AddMinutes(-30))
-                                .FirstOrDefault();
-
-                            var nextLateWarnCandidates = await db.Reservations
-                                .Where(r => r.Status == "Pending" && r.ReservationTime > lateWarningThreshold)
-                                .OrderBy(r => r.ReservationTime)
-                                .Take(20)
-                                .ToListAsync(stoppingToken);
-
-                            var nextLateWarn = nextLateWarnCandidates
-                                .Where(r => !_lateWarnedReservationIds.Contains(r.Id))
-                                .Select(r => (DateTime?)r.ReservationTime.AddMinutes(15))
-                                .FirstOrDefault();
-
-                            List<DateTime> events = new List<DateTime>();
-                            if (nextExpiration.HasValue) events.Add(nextExpiration.Value);
-                            if (nextLockWarn.HasValue) events.Add(nextLockWarn.Value);
-                            if (nextLateWarn.HasValue) events.Add(nextLateWarn.Value);
-
-                            if (events.Any())
-                            {
-                                var nextEventTime = events.Min();
-                                if (nextEventTime > now) delay = nextEventTime - now;
-                                else delay = TimeSpan.FromSeconds(30);
-                            }
-                        }
                     }
                 }
 
-                if (shouldLoopImmediately)
+                // Notify UI to refresh table statuses if any changes were made
+                if (updatedTableIds.Any())
                 {
-                    // Notify UI to refresh table statuses
-                    foreach (var tableId in updatedTableIds.Distinct())
-                    {
-                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
-                        {
-                            tableId = tableId,
-                            type = "ReservationUpdate",
-                            message = "Table status updated by reservation monitor."
-                        }, stoppingToken);
-                    }
-                    continue;
-                }
-
-                // Minimum sleep to prevent tight loops
-                if (delay != Timeout.InfiniteTimeSpan && delay.TotalMinutes < 1)
-                {
-                    delay = TimeSpan.FromMinutes(1);
-                }
-
-                var delayTask = Task.Delay(delay, stoppingToken);
-
-                if (isPeakHour)
-                {
-                    // Peak hour: Ignore manual signals to enforce batch processing
-                    await delayTask;
-                }
-                else
-                {
-                    // Off-peak: Wake up immediately on manual signal (new reservation)
-                    var signalTask = _signalService.WaitAsync(stoppingToken);
-                    await Task.WhenAny(delayTask, signalTask);
+                    await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate", stoppingToken);
                 }
             }
             catch (OperationCanceledException)
@@ -251,8 +179,10 @@ public class ReservationMonitorService : BackgroundService
             catch (Exception ex)
             {
                 Console.WriteLine($"ReservationMonitorService Error: {ex.Message}");
-                await Task.Delay(5000, stoppingToken);
             }
+
+            // Fixed 5-minute interval check
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
         }
     }
 }

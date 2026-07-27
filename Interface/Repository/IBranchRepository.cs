@@ -21,6 +21,8 @@ namespace MenuGoBE.Interface.Repository
 
         Task DeleteAsync(long id);
 
+        Task<(decimal Revenue, decimal Expenses, decimal Profit)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId);
+
         Task SaveChangesAsync();
     }
 }

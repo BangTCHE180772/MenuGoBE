@@ -24,6 +24,8 @@ public class Branch
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public DateTime? PostingLockDate { get; set; }
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;
@@ -35,4 +37,10 @@ public class Branch
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
     public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
+
+    // 9. Inventory Module
+    public ICollection<BInventory> BInventories { get; set; } = new List<BInventory>();
+    public ICollection<Document> Documents { get; set; } = new List<Document>();
+    public ICollection<Partner> Partners { get; set; } = new List<Partner>();
+    public ICollection<CashFlow> CashFlows { get; set; } = new List<CashFlow>();
 }

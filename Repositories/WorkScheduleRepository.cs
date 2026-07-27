@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository;
@@ -51,28 +52,54 @@ namespace MenuGoBE.Repositories
             return await _context.WorkSchedules.AnyAsync(ws => ws.AccountId == accountId && ws.ShiftId == shiftId && ws.WorkDate == workDate);
         }
 
-        public async Task<bool> BranchExistsAsync(long branchId)
+        public async Task<bool> HasOverlappingScheduleAsync(long accountId, System.DateOnly workDate, TimeOnly startTime, TimeOnly endTime)
         {
-            return await _context.Branches.AnyAsync(b => b.Id == branchId);
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .AnyAsync(ws => ws.AccountId == accountId 
+                             && ws.WorkDate == workDate
+                             && ws.Shift.StartTime < endTime 
+                             && ws.Shift.EndTime > startTime);
         }
 
-        public async Task<bool> ShiftExistsAsync(long shiftId)
+        public async Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId)
         {
-            return await _context.Shifts.AnyAsync(s => s.Id == shiftId);
-        }
-
-        public async Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds)
-        {
-            if (accountIds == null || accountIds.Count == 0) return new List<long>();
-            return await _context.Accounts
-                .Where(a => accountIds.Contains(a.Id))
-                .Select(a => a.Id)
+            return await _context.WorkSchedules
+                .Where(ws => ws.AccountId == accountId)
                 .ToListAsync();
         }
 
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<List<WorkSchedule>> GetTodaySchedulesAsync(long accountId, long branchId, DateOnly date)
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => ws.AccountId == accountId 
+                          && ws.BranchId == branchId 
+                          && ws.WorkDate == date)
+                .OrderBy(ws => ws.Shift.StartTime)
+                .ToListAsync();
+        }
+        public async Task<List<WorkSchedule>> GetOpenSchedulesAsync()
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => ws.CheckInAt != null && ws.CheckOutAt == null)
+                .ToListAsync();
+        }
+
+        public async Task<List<WorkSchedule>> GetPendingSchedulesByAccountIdsAsync(List<long> accountIds)
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => accountIds.Contains(ws.AccountId)
+                          && ws.CheckInAt == null
+                          && (ws.Status.ToUpper() == "APPROVED" || ws.Status.ToUpper() == "PENDING" || ws.Status.ToUpper() == "SCHEDULED"))
+                .ToListAsync();
         }
     }
 }

@@ -16,8 +16,9 @@ namespace MenuGoBE.Service
         private readonly ICustomerRepository _customerRepo;
         private readonly IPaymentRepository _paymentRepo;
         private readonly IVoucherRepository _voucherRepo;
+        private readonly IReservationRepository _reservationRepo;
 
-        public OrderService(IOrderRepository repo, IMapper mapper, ITableRepository tableRepo, ICustomerRepository customerRepo, IPaymentRepository paymentRepo, IVoucherRepository voucherRepo)
+        public OrderService(IOrderRepository repo, IMapper mapper, ITableRepository tableRepo, ICustomerRepository customerRepo, IPaymentRepository paymentRepo, IVoucherRepository voucherRepo, IReservationRepository reservationRepo)
         {
             _repo = repo;
             _mapper = mapper;
@@ -25,6 +26,7 @@ namespace MenuGoBE.Service
             _customerRepo = customerRepo;
             _paymentRepo = paymentRepo;
             _voucherRepo = voucherRepo;
+            _reservationRepo = reservationRepo;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -43,6 +45,15 @@ namespace MenuGoBE.Service
 
         public async Task<OrderViewDto> CreateAsync(OrderCreateDto dto)
         {
+            if (dto.TableId > 0)
+            {
+                var existingActiveOrder = await _repo.GetActiveOrderByTableIdAsync(dto.TableId);
+                if (existingActiveOrder != null)
+                {
+                    throw new Exception("Bàn này đã có hóa đơn chưa thanh toán. Không thể tạo hóa đơn mới.");
+                }
+            }
+
             var entity = _mapper.Map<Order>(dto);
 
             await _repo.CreateAsync(entity);
@@ -96,11 +107,12 @@ namespace MenuGoBE.Service
             foreach (var c in childrenOfChild)
             {
                 c.FatherId = fatherOrder.Id;
+                c.Status = fatherOrder.Status;
                 await _repo.UpdateAsync(c);
             }
 
             childOrder.FatherId = fatherOrder.Id;
-
+            childOrder.Status = fatherOrder.Status;
             await _repo.UpdateAsync(childOrder);
             await _repo.SaveChangesAsync();
 
@@ -255,6 +267,18 @@ namespace MenuGoBE.Service
             summary.Items = items;
             summary.PendingConfirmCount = items.Count(i => i.Status == "CustomerPending");
             summary.ReadyToServeCount = items.Count(i => i.CookingStatus == "Ready");
+
+            if (table?.Status == "Reserved")
+            {
+                var reservation = await _reservationRepo.GetByOrderIdAsync(summary.ActiveOrderId.Value);
+                if (reservation != null)
+                {
+                    summary.ReservationId = reservation.Id;
+                    summary.CustomerName = reservation.Customer?.Name;
+                    summary.CustomerPhone = reservation.Customer?.Phone;
+                    summary.ReservationTime = reservation.ReservationTime;
+                }
+            }
 
             return summary;
         }

@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using MenuGoBE.Dtos.Device;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Service;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Controllers
 {
@@ -11,17 +14,33 @@ namespace MenuGoBE.Controllers
     public class DeviceController : ControllerBase
     {
         private readonly IDeviceService _service;
+        private readonly IDeviceAuthService _authService;
+        private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IWorkScheduleService _workScheduleService;
 
-        public DeviceController(IDeviceService service)
+        public DeviceController(IDeviceService service, IDeviceAuthService authService, IHubContext<NotificationHub> hubContext, IWorkScheduleService workScheduleService)
         {
             _service = service;
+            _authService = authService;
+            _hubContext = hubContext;
+            _workScheduleService = workScheduleService;
+        }
+
+        [HttpGet("debug-claims")]
+        [Authorize]
+        public IActionResult DebugClaims()
+        {
+            var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+            var isAdmin = User.IsInRole("Admin");
+            var isOwner = User.IsInRole("Owner");
+            return Ok(new { claims, isAdmin, isOwner });
         }
 
         [HttpPost("setup")]
         [Authorize(Roles = "Manager,Admin,Owner")]
         public async Task<IActionResult> Setup([FromBody] DeviceSetupDto dto)
         {
-            var accountIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var accountIdClaim = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub" || c.Type == "id")?.Value;
             if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
                 return Unauthorized(new { message = "Không xác định được tài khoản." });
 
@@ -152,6 +171,101 @@ namespace MenuGoBE.Controllers
                     return Unauthorized(new { message = ex.Message });
                     
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("auth/challenge")]
+        [AllowAnonymous]
+        public IActionResult CreateChallenge([FromBody] DeviceCreateChallengeDto dto)
+        {
+            if (string.IsNullOrEmpty(dto.DeviceToken))
+            {
+                return BadRequest(new { message = "Thiếu DeviceToken." });
+            }
+
+            var challenge = _authService.CreateChallenge(dto.DeviceToken);
+            return Ok(new DeviceAuthChallengeDto
+            {
+                ChallengeId = challenge.ChallengeId,
+                ExpiresAt = challenge.ExpiresAt
+            });
+        }
+
+        [HttpPost("personal-login")]
+        [Authorize]
+        public async Task<IActionResult> PersonalLogin([FromBody] DeviceScanChallengeDto dto)
+        {
+            var email = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email || c.Type == "email")?.Value;
+            var name = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name || c.Type == "name")?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return Unauthorized(new { message = "Không xác định được email tài khoản." });
+
+            var challenge = _authService.GetChallenge(dto.ChallengeId);
+            if (challenge == null)
+            {
+                return BadRequest(new { message = "Mã QR đã hết hạn hoặc không hợp lệ." });
+            }
+
+            var device = await _service.GetDeviceByTokenAsync(challenge.DeviceToken);
+            if (device == null)
+            {
+                return BadRequest(new { message = "Thiết bị cấp mã QR không hợp lệ." });
+            }
+
+            if (device.DeviceType == "POS")
+            {
+                var success = _authService.MarkAsScanned(dto.ChallengeId, email, name!);
+                if (!success)
+                    return BadRequest(new { message = "Mã QR đã hết hạn." });
+
+                await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
+                    .SendAsync("DeviceAuthScanned", new { email, name });
+
+                return Ok(new
+                {
+                    success = true,
+                    isPos = true,
+                    message = "Đã gửi yêu cầu đăng nhập POS."
+                });
+            }
+            else if (device.DeviceType == "Attendance")
+            {
+                var accountIdStr = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub" || c.Type == "id" || c.Type == "AccountId")?.Value;
+                if (string.IsNullOrEmpty(accountIdStr) || !long.TryParse(accountIdStr, out var accountId))
+                {
+                    return BadRequest(new { message = "Không xác định được ID tài khoản." });
+                }
+
+                var (success, msg, action) = await _workScheduleService.RecordAttendanceAsync(accountId, device.BranchId);
+                
+                _authService.RemoveChallenge(dto.ChallengeId);
+                
+                if (success)
+                {
+                    await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
+                        .SendAsync("AttendanceSuccess", new { name, action, message = msg });
+                }
+
+                return Ok(new
+                {
+                    success = success,
+                    isPos = false,
+                    isAttendance = true,
+                    branchId = device.BranchId,
+                    message = msg
+                });
+            }
+            else
+            {
+                _authService.RemoveChallenge(dto.ChallengeId);
+                return Ok(new
+                {
+                    success = true,
+                    isPos = false,
+                    branchId = device.BranchId,
+                    message = "Đã nhận ca phục vụ thành công."
+                });
             }
         }
     }

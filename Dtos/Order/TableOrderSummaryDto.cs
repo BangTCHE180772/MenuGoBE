@@ -11,6 +11,12 @@ namespace MenuGoBE.Dtos.Order
         public bool IsMerged { get; set; }
         public int PendingConfirmCount { get; set; } 
         public int ReadyToServeCount { get; set; }    
+
+        public long? ReservationId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerPhone { get; set; }
+        public DateTime? ReservationTime { get; set; }
+
         public List<OrderItemDto> Items { get; set; } = new();
     }
 }
