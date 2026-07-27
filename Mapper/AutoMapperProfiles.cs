@@ -65,7 +65,7 @@ namespace MenuGoBE.Mapper
                     dest => dest.ManagerName,
                     opt => opt.MapFrom(src =>
                         src.Contracts
-                            .Where(c => c.Role != null && c.Role.Name == "MANAGER" && c.Status == "Active" && c.Account != null)
+                            .Where(c => c.Role != null && c.Role.Name.ToLower() == "Manager".ToLower() && c.Status.ToLower() == "Active".ToLower() && c.Account != null)
                             .Select(c => c.Account.Name)
                             .FirstOrDefault() ?? "Chưa phân công"
                     ));
