@@ -1,6 +1,8 @@
 using MenuGoBE.Data;
 using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Interface.Repository;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Service
 {
@@ -8,11 +10,13 @@ namespace MenuGoBE.Service
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AutoCheckoutService> _logger;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public AutoCheckoutService(IServiceScopeFactory scopeFactory, ILogger<AutoCheckoutService> logger)
+        public AutoCheckoutService(IServiceScopeFactory scopeFactory, ILogger<AutoCheckoutService> logger, IHubContext<NotificationHub> hubContext)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -80,18 +84,20 @@ namespace MenuGoBE.Service
                     shiftEndLocal = shiftEndLocal.AddDays(1);
                 }
                 
-                // Đợt 1: Đúng giờ EndTime -> kiểm tra xem có ca nối tiếp để transition không
+                // Đúng giờ EndTime -> kiểm tra xem có ca nối tiếp để transition không
                 if (shiftEndLocal <= localNow)
                 {
                     // Tìm ca nối tiếp
-                    var nextSchedule = pendingSchedules.FirstOrDefault(s => s.AccountId == ws.AccountId
-                                                                       && s.BranchId == ws.BranchId
-                                                                       && s.Shift.StartTime <= ws.Shift.EndTime.AddMinutes(30)
-                                                                       && s.Shift.StartTime >= ws.Shift.EndTime.AddMinutes(-30));
+                    var nextSchedule = pendingSchedules.FirstOrDefault(s => 
+                    {
+                        if (s.AccountId != ws.AccountId || s.BranchId != ws.BranchId) return false;
+                        var nextStartLocal = s.WorkDate.ToDateTime(s.Shift.StartTime);
+                        return Math.Abs((nextStartLocal - shiftEndLocal).TotalMinutes) <= 30;
+                    });
                     
                     if (nextSchedule != null)
                     {
-                        var checkOutTimeUtc = shiftEndLocal.AddHours(-7); // Convert local EndTime to UTC
+                        var checkOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Convert local EndTime to UTC
                         ws.CheckOutAt = checkOutTimeUtc;
                         ws.Status = "Completed";
                         if (ws.CheckInAt.HasValue)
@@ -103,7 +109,7 @@ namespace MenuGoBE.Service
                         _logger.LogInformation($"Auto-Transition: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {checkOutTimeUtc}");
 
                         var nextShiftStartLocal = nextSchedule.WorkDate.ToDateTime(nextSchedule.Shift.StartTime);
-                        var nextShiftStartUtc = nextShiftStartLocal.AddHours(-7);
+                        var nextShiftStartUtc = DateTime.SpecifyKind(nextShiftStartLocal.AddHours(-7), DateTimeKind.Utc);
                         
                         nextSchedule.CheckInAt = nextShiftStartUtc;
                         nextSchedule.Status = "Working";
@@ -112,23 +118,20 @@ namespace MenuGoBE.Service
                         _logger.LogInformation($"Auto-Transition: Checked-in AccountId: {nextSchedule.AccountId}, ScheduleId: {nextSchedule.Id} at {nextShiftStartUtc}");
                         
                         hasChanges = true;
-                        continue; // Đã check-out thành công qua Auto-Transition, bỏ qua đợt 2
+                        continue; // Đã check-out thành công qua Auto-Transition, sang ca tiếp theo
                     }
-                }
 
-                // Đợt 2: Đã quá 30 phút sau EndTime -> Ép check-out (dành cho những ai không có ca nối tiếp)
-                if (shiftEndLocal.AddMinutes(30) <= localNow)
-                {
-                    var checkOutTimeUtc = shiftEndLocal.AddHours(-7); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
-                    ws.CheckOutAt = checkOutTimeUtc;
+                    // Nếu không có ca nối tiếp -> Ép check-out NGAY LẬP TỨC
+                    var forcedCheckOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
+                    ws.CheckOutAt = forcedCheckOutTimeUtc;
                     ws.Status = "Completed";
                     if (ws.CheckInAt.HasValue)
                     {
-                        ws.ActualHours = (decimal)Math.Max(0, (checkOutTimeUtc - ws.CheckInAt.Value).TotalHours);
+                        ws.ActualHours = (decimal)Math.Max(0, (forcedCheckOutTimeUtc - ws.CheckInAt.Value).TotalHours);
                     }
                     
                     await _repo.UpdateAsync(ws);
-                    _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {checkOutTimeUtc}");
+                    _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
                     hasChanges = true;
                 }
             }
@@ -136,6 +139,9 @@ namespace MenuGoBE.Service
             if (hasChanges)
             {
                 await _repo.SaveChangesAsync();
+                
+                // Gửi thông báo SignalR cho Client để tự động refresh màn hình
+                await _hubContext.Clients.All.SendAsync("ReceiveScheduleUpdate");
             }
         }
 
@@ -150,16 +156,16 @@ namespace MenuGoBE.Service
 
             if (openSchedules.Any())
             {
-                // Tính danh sách các mốc giờ kết thúc thực tế của các ca đang làm (bao gồm cả mốc EndTime và EndTime + 30m)
+                // Tính danh sách các mốc giờ kết thúc thực tế của các ca đang làm (chỉ lấy EndTime)
                 var futureCutoffs = openSchedules
-                    .SelectMany(ws => 
+                    .Select(ws => 
                     {
                         var endLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
                         if (ws.Shift.EndTime < ws.Shift.StartTime)
                         {
                             endLocal = endLocal.AddDays(1);
                         }
-                        return new[] { endLocal, endLocal.AddMinutes(30) };
+                        return endLocal;
                     })
                     .Where(cutoff => cutoff > localNow)
                     .OrderBy(cutoff => cutoff)

@@ -98,7 +98,7 @@ namespace MenuGoBE.Repositories
                 .Include(ws => ws.Shift)
                 .Where(ws => accountIds.Contains(ws.AccountId)
                           && ws.CheckInAt == null
-                          && (ws.Status == "APPROVED" || ws.Status == "Pending"))
+                          && (ws.Status.ToUpper() == "APPROVED" || ws.Status.ToUpper() == "PENDING" || ws.Status.ToUpper() == "SCHEDULED"))
                 .ToListAsync();
         }
     }
