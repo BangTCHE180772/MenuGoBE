@@ -137,7 +137,6 @@ namespace MenuGoBE.Service.Document
                     RunningAverageCost = 0,
                     RunningLeftOver = 0,
                     UnitCost = runningAvg,
-                    CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 

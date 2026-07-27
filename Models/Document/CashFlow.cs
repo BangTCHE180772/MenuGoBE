@@ -25,7 +25,7 @@ public class CashFlow
 
     public CashFlowStatus Status { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal TotalAmount { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

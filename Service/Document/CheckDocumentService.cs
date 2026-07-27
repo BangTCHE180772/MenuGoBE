@@ -125,7 +125,6 @@ namespace MenuGoBE.Service.Document
                     RunningLeftOver = 0,
                     UnitCost = detail.UnitPrice ?? runningAvg,
                     DocumentDetail = docDetail,
-                    CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 
