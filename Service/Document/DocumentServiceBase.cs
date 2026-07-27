@@ -45,7 +45,6 @@ namespace MenuGoBE.Service.Document
             document.IsDeleted = true;
             document.DeletedBy = deletedBy;
             document.DeletedAt = DateTime.UtcNow;
-            document.Status = DocumentStatus.Cancelled;
 
             // 3. Prepare soft delete for associated CashFlows
             var cashFlows = await _repo.GetCashFlowsByDocumentIdAsync(documentId);

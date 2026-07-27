@@ -87,7 +87,6 @@ namespace MenuGoBE.Service.Document
                 BusinessDate = exactSecondDate,
                 Code = code,
                 Type = DocumentType.Return,
-                Status = DocumentStatus.Completed,
                 TransferStatus = DocumentTransferStatus.None,
                 TotalAmount = totalRefundValue,
                 ParentDocumentId = importDoc.Id,

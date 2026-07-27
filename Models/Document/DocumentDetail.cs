@@ -1,6 +1,5 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
@@ -34,7 +33,7 @@ public class DocumentDetail
     [Column(TypeName = "decimal(108,12)")]
     public decimal UnitPrice { get; set; }
 
-    public DocumentStatus? Status { get; set; }
+    public bool IsDeleted { get; set; } = false;
 
     public string? Note { get; set; }
 

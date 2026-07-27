@@ -28,6 +28,11 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public long BInventoryId { get; set; }
 
+        /// <summary>
+        /// Id của UnitConversion (tùy chọn). Nếu có, QuantityDelta = Quantity * ConversionPoint.
+        /// </summary>
+        public long? UnitConversionId { get; set; }
+
         [Required]
         [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nhập phải lớn hơn 0")]
         public decimal Quantity { get; set; }
@@ -44,9 +49,19 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public long PartnerId { get; set; }
 
-        [Required]
-        [Range(0, double.MaxValue, ErrorMessage = "Chi phí không được âm")]
-        public decimal Cost { get; set; }
+        /// <summary>
+        /// Số tiền cần trả (AmountDue).
+        /// - Supplier: bỏ trống (hệ thống tự tính = Tổng tiền hàng).
+        /// - Transport / Other: bắt buộc nhập.
+        /// </summary>
+        [Range(0, double.MaxValue, ErrorMessage = "Số tiền cần trả không được âm")]
+        public decimal? AmountDue { get; set; }
+
+        /// <summary>
+        /// Số tiền đã trả (AmountPaid). Nếu > 0 sẽ tự động sinh phiếu chi (CashFlow).
+        /// </summary>
+        [Range(0, double.MaxValue, ErrorMessage = "Số tiền đã trả không được âm")]
+        public decimal AmountPaid { get; set; } = 0;
 
         public string? Note { get; set; }
     }

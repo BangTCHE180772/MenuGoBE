@@ -54,7 +54,6 @@ namespace MenuGoBE.Service.Document
                 BusinessDate = exactSecondDate,
                 Code = code,
                 Type = DocumentType.Transfer,
-                Status = DocumentStatus.Completed,
                 TransferStatus = DocumentTransferStatus.Pending, // Treo hàng chờ kho nhận bấm nhận
                 TotalAmount = 0,
                 CreatedBy = createdBy,
@@ -216,7 +215,6 @@ namespace MenuGoBE.Service.Document
                 BusinessDate = exactReceiveDate,
                 Code = code,
                 Type = DocumentType.Transfer,
-                Status = DocumentStatus.Completed,
                 TransferStatus = DocumentTransferStatus.Received,
                 TotalAmount = parentTransferDoc.TotalAmount,
                 ParentDocumentId = parentTransferDoc.Id, // Father ID
