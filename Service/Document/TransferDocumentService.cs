@@ -116,7 +116,6 @@ namespace MenuGoBE.Service.Document
                     RunningLeftOver = 0,
                     UnitCost = fromAvg,
                     DocumentDetail = fromDocDetail,
-                    CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -275,7 +274,6 @@ namespace MenuGoBE.Service.Document
                     RunningLeftOver = 0,
                     UnitCost = unitCost,
                     DocumentDetail = docDetail,
-                    CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 

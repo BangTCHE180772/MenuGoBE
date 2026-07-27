@@ -20,7 +20,7 @@ public class CashFlowDetail
 
     public PaymentMethod PaymentMethod { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal Amount { get; set; }
 
     public string? Note { get; set; }

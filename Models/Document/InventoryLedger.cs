@@ -23,36 +23,34 @@ public class InventoryLedger
 
     public DocumentType DocumentType { get; set; }
 
-    [Column(TypeName = "decimal(21,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal QuantityDelta { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal InventoryValueDelta { get; set; }
 
-    [Column(TypeName = "decimal(21,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal RunningQuantity { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal RunningInventoryValue { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal RunningAverageCost { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal RunningLeftOver { get; set; }
 
-    [Column(TypeName = "decimal(21,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal? ActualQuantity { get; set; }
 
-    [Column(TypeName = "decimal(21,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal? VarianceQuantity { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal UnitCost { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-    public long? CreatedBy { get; set; }
 
     // Navigation
     [ForeignKey("BInventoryId")]
@@ -63,7 +61,4 @@ public class InventoryLedger
 
     [ForeignKey("DocumentDetailId")]
     public DocumentDetail? DocumentDetail { get; set; }
-
-    [ForeignKey("CreatedBy")]
-    public Account? Creator { get; set; }
 }

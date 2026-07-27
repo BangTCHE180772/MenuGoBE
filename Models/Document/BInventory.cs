@@ -16,13 +16,13 @@ public class BInventory
 
     public BInventoryType Type { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal Avg { get; set; }
 
-    [Column(TypeName = "decimal(30,12)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal LeftOver { get; set; }
 
-    [Column(TypeName = "decimal(21,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal Quantity { get; set; }
 
     public bool ChainActive { get; set; }
@@ -31,10 +31,10 @@ public class BInventory
 
     public bool IsManageQuantity { get; set; } = false;
 
-    [Column(TypeName = "decimal(18,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal MinStorage { get; set; } = 0;
 
-    [Column(TypeName = "decimal(18,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal MaxStorage { get; set; } = 1000000000;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
