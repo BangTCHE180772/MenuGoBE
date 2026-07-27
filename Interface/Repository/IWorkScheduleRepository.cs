@@ -16,5 +16,7 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> ExistsAsync(long accountId, long shiftId, System.DateOnly workDate);
         Task<bool> HasOverlappingScheduleAsync(long accountId, System.DateOnly workDate, TimeOnly startTime, TimeOnly endTime);
         Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId);
+        Task<List<WorkSchedule>> GetOpenSchedulesAsync();
+        Task<List<WorkSchedule>> GetPendingSchedulesByAccountIdsAsync(List<long> accountIds);
     }
 }

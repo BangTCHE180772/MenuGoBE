@@ -165,12 +165,7 @@ public class AppDbContext : DbContext
             .HasForeignKey(p => p.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // InventoryLedger: CreatedBy → Accounts
-        modelBuilder.Entity<InventoryLedger>()
-            .HasOne(il => il.Creator)
-            .WithMany(a => a.CreatedInventoryLedgers)
-            .HasForeignKey(il => il.CreatedBy)
-            .OnDelete(DeleteBehavior.Restrict);
+
 
         // Store enums as string names with fallback for legacy DB values (e.g. 'Food' -> Regular)
         modelBuilder.Entity<Product>()
@@ -190,10 +185,6 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Document>()
             .Property(d => d.Type)
-            .HasConversion<string>();
-
-        modelBuilder.Entity<Document>()
-            .Property(d => d.Status)
             .HasConversion<string>();
 
         modelBuilder.Entity<Document>()

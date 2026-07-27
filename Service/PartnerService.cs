@@ -4,6 +4,7 @@ using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using MenuGoBE.Dtos.Address;
 
 namespace MenuGoBE.Service
@@ -34,14 +35,46 @@ namespace MenuGoBE.Service
             };
         }
 
-        public async Task<PartnerViewDto> GetPartnerByIdAsync(long id)
+        public async Task<PartnerViewDto> GetPartnerByIdAsync(long id, int? mode = null)
         {
             var partner = await _partnerRepo.GetPartnerByIdAsync(id);
             if (partner == null)
             {
-                throw new Exception("Đối tác không tồn tại"); // Temporarily use standard Exception, you can add custom later
+                throw new Exception("Đối tác không tồn tại");
             }
+
+            if (mode.HasValue)
+            {
+                bool matches = mode.Value switch
+                {
+                    1 => partner.Type == PartnerType.Supplier,
+                    2 => partner.Type == PartnerType.Transporter || partner.Type == PartnerType.Other,
+                    3 => partner.Type == PartnerType.Customer,
+                    _ => true
+                };
+
+                if (!matches)
+                {
+                    throw new Exception($"Đối tác với Id {id} không phù hợp với mode {mode.Value}");
+                }
+            }
+
             return MapToViewDto(partner);
+        }
+
+        public async Task<List<PartnerViewDto>> GetPartnersByBranchAsync(long branchId, string? search = null, int? mode = null)
+        {
+            var query = new PartnerQueryDto
+            {
+                BranchId = branchId,
+                Search = search,
+                Mode = mode,
+                Page = 1,
+                PageSize = int.MaxValue
+            };
+
+            var (partners, _) = await _partnerRepo.GetPagedPartnersAsync(query);
+            return partners.Select(MapToViewDto).ToList();
         }
 
         public async Task<PartnerViewDto> CreatePartnerAsync(PartnerCreateDto dto, long? createdBy = null)
@@ -78,17 +111,6 @@ namespace MenuGoBE.Service
                 throw new Exception("Đối tác không tồn tại");
             }
 
-            // Check if Type changed, and if so, verify they have no transactions
-            if (partner.Type != dto.Type)
-            {
-                bool hasTransactions = await _partnerRepo.CheckPartnerInTransactionsAsync(id);
-                if (hasTransactions)
-                {
-                    throw new Exception("Không thể thay đổi Loại Đối tác (Type) vì đối tác này đã có phát sinh giao dịch.");
-                }
-            }
-
-            partner.Type = dto.Type;
             partner.Name = dto.Name;
             partner.AddressId = dto.AddressId;
             partner.Phone = dto.Phone;

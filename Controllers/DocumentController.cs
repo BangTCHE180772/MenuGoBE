@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
-using MenuGoBE.Dtos.Document;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MenuGoBE.Controllers
@@ -17,36 +17,69 @@ namespace MenuGoBE.Controllers
             _service = service;
         }
 
-        [HttpPost("import")]
-        public async Task<IActionResult> CreateImport([FromBody] ImportDocumentCreateDto dto)
+        private long? GetUserId()
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
+            var userIdStr = User.Identity?.IsAuthenticated == true
+                ? User.FindFirst("AccountId")?.Value
+                : null;
+            return !string.IsNullOrEmpty(userIdStr) && long.TryParse(userIdStr, out var parsedId) && parsedId > 0
+                ? parsedId
+                : null;
+        }
 
+        // ==========================================
+        // GET DOCUMENTS BY BRANCH AND/OR TYPE
+        // GET /api/document?branchId=1&type=1
+        // ==========================================
+        [HttpGet]
+        public async Task<IActionResult> GetDocuments([FromQuery] long? branchId, [FromQuery] DocumentType? type)
+        {
             try
             {
-                var createdBy = User.Identity?.IsAuthenticated == true
-                    ? long.Parse(User.FindFirst("AccountId")?.Value ?? "0")
-                    : (long?)null;
-
-                var result = await _service.CreateImportDocumentAsync(dto, createdBy > 0 ? createdBy : null);
-                
-                return Ok(new
-                {
-                    message = "Tạo phiếu nhập kho thành công",
-                    documentId = result.Id,
-                    code = result.Code
-                });
+                var result = await _service.GetDocumentsAsync(branchId, type);
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                return BadRequest(new
-                {
-                    message = "Đã xảy ra lỗi khi tạo phiếu nhập kho.",
-                    error = ex.Message
-                });
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách chứng từ.", error = ex.Message });
+            }
+        }
+
+        // ==========================================
+        // GET DOCUMENT BY ID
+        // GET /api/document/101
+        // ==========================================
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetDocumentById(long id)
+        {
+            try
+            {
+                var result = await _service.GetDocumentByIdAsync(id);
+                if (result == null)
+                    return NotFound(new { message = "Không tìm thấy chứng từ." });
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy chi tiết chứng từ.", error = ex.Message });
+            }
+        }
+
+        // ==========================================
+        // GENERIC DELETE ENDPOINT
+        // ==========================================
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteDocument(long id)
+        {
+            try
+            {
+                var deletedBy = GetUserId();
+                await _service.DeleteDocumentAsync(id, deletedBy);
+                return Ok(new { message = "Xóa chứng từ thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi xóa chứng từ.", error = ex.Message });
             }
         }
     }

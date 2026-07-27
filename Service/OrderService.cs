@@ -45,6 +45,15 @@ namespace MenuGoBE.Service
 
         public async Task<OrderViewDto> CreateAsync(OrderCreateDto dto)
         {
+            if (dto.TableId > 0)
+            {
+                var existingActiveOrder = await _repo.GetActiveOrderByTableIdAsync(dto.TableId);
+                if (existingActiveOrder != null)
+                {
+                    throw new Exception("Bàn này đã có hóa đơn chưa thanh toán. Không thể tạo hóa đơn mới.");
+                }
+            }
+
             var entity = _mapper.Map<Order>(dto);
 
             await _repo.CreateAsync(entity);
@@ -98,11 +107,12 @@ namespace MenuGoBE.Service
             foreach (var c in childrenOfChild)
             {
                 c.FatherId = fatherOrder.Id;
+                c.Status = fatherOrder.Status;
                 await _repo.UpdateAsync(c);
             }
 
             childOrder.FatherId = fatherOrder.Id;
-
+            childOrder.Status = fatherOrder.Status;
             await _repo.UpdateAsync(childOrder);
             await _repo.SaveChangesAsync();
 

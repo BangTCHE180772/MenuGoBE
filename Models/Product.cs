@@ -31,13 +31,13 @@ public class Product
 
     public bool IsManageQuantity { get; set; } = false;
 
-    [Column(TypeName = "decimal(18,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal MinStorage { get; set; } = 0;
 
-    [Column(TypeName = "decimal(18,3)")]
+    [Column(TypeName = "decimal(51,3)")]
     public decimal MaxStorage { get; set; } = 1000000000;
 
-    [Column(TypeName = "decimal(18,0)")]
+    [Column(TypeName = "decimal(108,12)")]
     public decimal SellPrice { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

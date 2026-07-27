@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Branch;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -66,24 +68,6 @@ namespace MenuGoBE.Controllers
                 return StatusCode(500, new
                 {
                     message = "Đã xảy ra lỗi khi lấy danh sách chi nhánh.",
-                    error = ex.Message
-                });
-            }
-        }
-
-        [HttpGet("dashboard-stats")]
-        public async Task<IActionResult> GetDashboardStats([FromQuery] string range = "thisMonth", [FromQuery] string? startDateStr = null, [FromQuery] string? endDateStr = null)
-        {
-            try
-            {
-                var stats = await _service.GetDashboardStatsAsync(range, startDateStr, endDateStr);
-                return Ok(stats);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
-                {
-                    message = "Đã xảy ra lỗi khi tính toán số liệu thống kê.",
                     error = ex.Message
                 });
             }
