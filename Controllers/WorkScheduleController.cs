@@ -1,5 +1,5 @@
 using System;
-using System.IdentityModel.Tokens.Jwt;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -16,30 +16,51 @@ namespace MenuGoBE.Controllers
     public class WorkScheduleController : ControllerBase
     {
         private readonly IWorkScheduleService _service;
+        private readonly IAccountService _accountService;
 
-        public WorkScheduleController(IWorkScheduleService service)
+        public WorkScheduleController(IWorkScheduleService service, IAccountService accountService)
         {
             _service = service;
+            _accountService = accountService;
+        }
+
+        private long? GetCurrentAccountId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (claim != null && long.TryParse(claim.Value, out var id))
+            {
+                return id;
+            }
+            return null;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] long? branchId, [FromQuery] long? accountId)
         {
-            var accountIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
-                return Unauthorized(new { message = "Không xác định được tài khoản." });
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            var roleIds = await _service.GetActiveRoleIdsAsync(accountId);
-            bool isRestricted = roleIds.Intersect(new[] { 4L, 5L, 6L }).Any() && !roleIds.Intersect(new[] { 1L, 2L }).Any();
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
 
-            if (isRestricted)
+            if (isManager)
             {
-                var result = await _service.GetByAccountIdAsync(accountId);
+                var result = await _service.GetAllAsync();
+                var filtered = result.Where(w => branchIds.Contains(w.BranchId));
+                if (branchId.HasValue) filtered = filtered.Where(w => w.BranchId == branchId.Value);
+                if (accountId.HasValue) filtered = filtered.Where(w => w.AccountId == accountId.Value);
+                return Ok(filtered.ToList());
+            }
+            else if (isAdmin)
+            {
+                var result = await _service.GetAllAsync();
+                if (branchId.HasValue) result = result.Where(w => w.BranchId == branchId.Value).ToList();
+                if (accountId.HasValue) result = result.Where(w => w.AccountId == accountId.Value).ToList();
                 return Ok(result);
             }
             else
             {
-                var result = await _service.GetAllAsync();
+                var result = await _service.GetByAccountIdAsync(currentUserId.Value);
                 return Ok(result);
             }
         }
@@ -47,20 +68,23 @@ namespace MenuGoBE.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(long id)
         {
-            var accountIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
-                return Unauthorized(new { message = "Không xác định được tài khoản." });
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            var roleIds = await _service.GetActiveRoleIdsAsync(accountId);
-            bool isRestricted = roleIds.Intersect(new[] { 4L, 5L, 6L }).Any() && !roleIds.Intersect(new[] { 1L, 2L }).Any();
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
 
             var result = await _service.GetByIdAsync(id);
             if (result == null)
-                return NotFound(new { message = "Không tìm thấy WorkSchedule" });
+                return NotFound(new { message = "Không tìm thấy lịch làm việc" });
 
-            if (isRestricted && result.AccountId != accountId)
+            if (isManager && !branchIds.Contains(result.BranchId))
             {
-                return Forbid();
+                return StatusCode(403, new { message = "Bạn không có quyền xem lịch làm việc thuộc chi nhánh khác." });
+            }
+            if (!isAdmin && !isManager && result.AccountId != currentUserId.Value)
+            {
+                return StatusCode(403, new { message = "Bạn không có quyền xem lịch làm việc của nhân viên khác." });
             }
 
             return Ok(result);
@@ -69,12 +93,34 @@ namespace MenuGoBE.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] WorkScheduleCreateDto dto)
         {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+
+            if (isAdmin)
+            {
+                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+            }
+            if (!isManager)
+            {
+                return StatusCode(403, new { message = "Chỉ Quản lý mới được tạo lịch làm việc." });
+            }
+
+            if (!branchIds.Contains(dto.BranchId))
+            {
+                return StatusCode(403, new { message = "Bạn chỉ có quyền tạo lịch làm việc tại chi nhánh do mình quản lý." });
+            }
+
+            if (dto.CreatedBy <= 0) dto.CreatedBy = currentUserId.Value;
+
             try
             {
                 var result = await _service.CreateAsync(dto);
                 return Ok(result);
             }
-            catch (ArgumentException ex)
+            catch (Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
@@ -83,12 +129,34 @@ namespace MenuGoBE.Controllers
         [HttpPost("assign")]
         public async Task<IActionResult> AssignBulk([FromBody] WorkScheduleAssignDto dto)
         {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+
+            if (isAdmin)
+            {
+                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+            }
+            if (!isManager)
+            {
+                return StatusCode(403, new { message = "Chỉ Quản lý mới được phân công ca làm việc hàng loạt." });
+            }
+
+            if (!branchIds.Contains(dto.BranchId))
+            {
+                return StatusCode(403, new { message = "Bạn chỉ có quyền phân công lịch làm việc tại chi nhánh do mình quản lý." });
+            }
+
+            if (dto.CreatedBy <= 0) dto.CreatedBy = currentUserId.Value;
+
             try
             {
                 var result = await _service.AssignBulkAsync(dto);
                 return Ok(result);
             }
-            catch (ArgumentException ex)
+            catch (Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
@@ -97,32 +165,93 @@ namespace MenuGoBE.Controllers
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] WorkScheduleUpdateDto dto)
         {
-            var result = await _service.UpdateAsync(dto);
-            if (!result)
-                return NotFound(new { message = "Không tìm thấy WorkSchedule để cập nhật" });
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            return Ok(new { message = "Cập nhật thành công" });
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+
+            if (isAdmin)
+            {
+                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+            }
+            if (!isManager)
+            {
+                return StatusCode(403, new { message = "Chỉ Quản lý mới được cập nhật lịch làm việc." });
+            }
+
+            var existing = await _service.GetByIdAsync(dto.Id);
+            if (existing == null)
+                return NotFound(new { message = "Không tìm thấy lịch làm việc để cập nhật" });
+
+            if (!branchIds.Contains(existing.BranchId) || !branchIds.Contains(dto.BranchId))
+            {
+                return StatusCode(403, new { message = "Bạn chỉ có quyền sửa lịch làm việc thuộc chi nhánh của mình." });
+            }
+
+            try
+            {
+                var result = await _service.UpdateAsync(dto);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy lịch làm việc để cập nhật" });
+
+                return Ok(new { message = "Cập nhật lịch làm việc thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
-            var result = await _service.DeleteAsync(id);
-            if (!result)
-                return NotFound(new { message = "Không tìm thấy WorkSchedule để xóa" });
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            return Ok(new { message = "Xóa thành công" });
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+
+            if (isAdmin)
+            {
+                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+            }
+            if (!isManager)
+            {
+                return StatusCode(403, new { message = "Chỉ Quản lý mới được xóa lịch làm việc." });
+            }
+
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound(new { message = "Không tìm thấy lịch làm việc để xóa" });
+
+            if (!branchIds.Contains(existing.BranchId))
+            {
+                return StatusCode(403, new { message = "Bạn chỉ có quyền xóa lịch làm việc thuộc chi nhánh của mình." });
+            }
+
+            try
+            {
+                var result = await _service.DeleteAsync(id);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy lịch làm việc để xóa" });
+
+                return Ok(new { message = "Xóa lịch làm việc thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
-        [Authorize]
         [HttpGet("mine")]
         public async Task<IActionResult> GetMySchedule()
         {
-            var accountIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-            if (string.IsNullOrEmpty(accountIdClaim) || !long.TryParse(accountIdClaim, out var accountId))
-                return Unauthorized(new { message = "Không xác định được tài khoản." });
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            var result = await _service.GetByAccountIdAsync(accountId);
+            var result = await _service.GetByAccountIdAsync(currentUserId.Value);
             return Ok(result);
         }
     }
