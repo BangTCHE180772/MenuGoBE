@@ -27,9 +27,9 @@ namespace MenuGoBE.Service
             _mapper = mapper;
         }
 
-        public async Task<List<PayrollViewDto>> GetAllAsync(long? branchId = null, int? month = null, int? year = null, long? accountId = null)
+        public async Task<List<PayrollViewDto>> GetAllAsync(long? branchId = null, int? month = null, int? year = null, long? accountId = null, List<long>? roleIds = null)
         {
-            var payrolls = await _payrollRepo.GetAllAsync(branchId, month, year, accountId);
+            var payrolls = await _payrollRepo.GetAllAsync(branchId, month, year, accountId, roleIds);
             return _mapper.Map<List<PayrollViewDto>>(payrolls);
         }
 
@@ -50,6 +50,19 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Payroll>(dto);
             entity.CreatedAt = DateTime.UtcNow;
 
+            var account = await _context.Accounts
+                .Include(a => a.Contracts)
+                .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
+
+            var contract = account?.Contracts.FirstOrDefault(c => c.Status == "Active")
+                           ?? account?.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+
+            if (contract != null && contract.BranchId > 0)
+            {
+                entity.BranchId = contract.BranchId;
+                entity.ContractId = contract.Id;
+            }
+
             // Recalculate totals from details if present
             RecalculateTotals(entity);
 
@@ -67,6 +80,22 @@ namespace MenuGoBE.Service
             if (entity.Status == PayrollStatus.Paid)
             {
                 throw new InvalidOperationException("Không thể cập nhật bảng lương đã thanh toán (Paid)");
+            }
+
+            var account = await _context.Accounts
+                .Include(a => a.Contracts)
+                .FirstOrDefaultAsync(a => a.Id == entity.AccountId);
+
+            var contract = account?.Contracts.FirstOrDefault(c => c.Status == "Active")
+                           ?? account?.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+
+            if (contract != null && contract.BranchId > 0)
+            {
+                entity.BranchId = contract.BranchId;
+                if (entity.ContractId == null || entity.ContractId <= 0)
+                {
+                    entity.ContractId = contract.Id;
+                }
             }
 
             entity.Month = dto.Month;
@@ -186,6 +215,10 @@ namespace MenuGoBE.Service
             var existingPayroll = await _payrollRepo.GetByAccountMonthYearAsync(dto.AccountId, dto.Month, dto.Year);
             if (existingPayroll != null)
             {
+                if (contract != null && contract.BranchId > 0)
+                {
+                    existingPayroll.BranchId = contract.BranchId;
+                }
                 existingPayroll.BaseSalary = baseSalary;
                 existingPayroll.BaseWorkDays = baseWorkDays;
                 existingPayroll.ActualWorkDays = actualWorkDays;
@@ -202,7 +235,7 @@ namespace MenuGoBE.Service
                 var payroll = new Payroll
                 {
                     AccountId = dto.AccountId,
-                    BranchId = dto.BranchId > 0 ? dto.BranchId : (contract?.BranchId ?? 1),
+                    BranchId = (contract != null && contract.BranchId > 0) ? contract.BranchId : (dto.BranchId > 0 ? dto.BranchId : 1),
                     ContractId = contract?.Id,
                     Month = dto.Month,
                     Year = dto.Year,
@@ -226,6 +259,75 @@ namespace MenuGoBE.Service
                 var created = await _payrollRepo.GetByIdAsync(payroll.Id);
                 return _mapper.Map<PayrollViewDto>(created!);
             }
+        }
+
+        public async Task<List<PayrollViewDto>> GenerateBatchPayrollAsync(PayrollBatchGenerateDto dto, bool isAdmin, bool isManager, List<long> managerBranchIds)
+        {
+            var results = new List<PayrollViewDto>();
+
+            var accountsQuery = _context.Accounts
+                .Include(a => a.Contracts)
+                .AsQueryable();
+
+            if (isAdmin)
+            {
+                accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => c.RoleId == 3));
+                if (dto.BranchId.HasValue && dto.BranchId.Value > 0)
+                {
+                    accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => c.BranchId == dto.BranchId.Value));
+                }
+            }
+            else if (isManager)
+            {
+                accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => (c.RoleId == 4 || c.RoleId == 5 || c.RoleId == 6)
+                                                                            && managerBranchIds.Contains(c.BranchId)));
+                if (dto.BranchId.HasValue && dto.BranchId.Value > 0)
+                {
+                    if (managerBranchIds.Contains(dto.BranchId.Value))
+                    {
+                        accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => c.BranchId == dto.BranchId.Value));
+                    }
+                    else
+                    {
+                        throw new UnauthorizedAccessException("Bạn không có quyền tính bảng lương cho chi nhánh khác.");
+                    }
+                }
+            }
+            else
+            {
+                throw new UnauthorizedAccessException("Bạn không có quyền tính toán bảng lương.");
+            }
+
+            var eligibleAccounts = await accountsQuery.ToListAsync();
+
+            foreach (var acc in eligibleAccounts)
+            {
+                var contract = acc.Contracts.FirstOrDefault(c => c.Status == "Active")
+                               ?? acc.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+
+                if (contract == null) continue;
+
+                var singleDto = new PayrollGenerateDto
+                {
+                    AccountId = acc.Id,
+                    BranchId = contract.BranchId,
+                    Month = dto.Month,
+                    Year = dto.Year,
+                    CreatedBy = dto.CreatedBy
+                };
+
+                try
+                {
+                    var generated = await GenerateEmployeePayrollAsync(singleDto);
+                    results.Add(generated);
+                }
+                catch
+                {
+                    // Continue batch calculation
+                }
+            }
+
+            return results;
         }
 
         private static void RecalculateTotals(Payroll payroll)
