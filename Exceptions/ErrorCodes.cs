@@ -348,7 +348,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult DocumentTotalAmountExceedsLimit = new(
         2114,
-        "Tổng giá trị phiếu nhập (Supplier + các bên khác) không được vượt quá 10 tỷ đồng.",
+        "Tổng giá trị chứng từ / chuyến chuyển kho không được vượt quá 10 tỷ đồng.",
         400
     );
 
@@ -357,4 +357,49 @@ public static class ErrorCodes
         "Không tìm thấy quy đổi đơn vị tương ứng.",
         404
     );
+
+    public static readonly ErrorResult DocumentInvalidQuantity = new(
+        2116,
+        "Số lượng không hợp lệ: tất cả các dòng chi tiết đều bằng 0.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentReturnInsufficientInventory = new(
+        2117,
+        "Tồn kho không đủ để trả hàng tại thời điểm được chọn.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferReceiveDateMustBeAfterSendDate = new(
+        2118,
+        "Ngày nhận hàng phải lớn hơn ngày xuất chuyển từ chi nhánh gửi.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferFromBranchPostingLockError = new(
+        2119,
+        "Không thể thực hiện do chi nhánh gửi đã khóa sổ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentProductionInsufficientRawMaterial = new(
+        2120,
+        "Tồn kho nguyên vật liệu không đủ tại thời điểm sản xuất.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentInvalidUnitPrice = new(
+        2121,
+        "Đơn giá/số tiền phải là số nguyên lớn hơn hoặc bằng 1.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentQuantityRangeExceeded = new(
+        2122,
+        "Số lượng hàng hóa phải từ 0,001 đến 1.000.000 đơn vị.",
+        400
+    );
 }
+
+
+

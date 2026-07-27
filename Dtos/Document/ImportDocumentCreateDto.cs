@@ -12,7 +12,13 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public DateTime BusinessDate { get; set; }
 
+        /// <summary>
+        /// Tùy chọn: Id tài khoản người tạo truyền trực tiếp từ Frontend (nếu có).
+        /// </summary>
+        public long? AccountId { get; set; }
+
         public string? Note { get; set; }
+
 
         [Required]
         [MinLength(1, ErrorMessage = "Phải có ít nhất 1 sản phẩm nhập kho")]
@@ -34,15 +40,16 @@ namespace MenuGoBE.Dtos.Document
         public long? UnitConversionId { get; set; }
 
         [Required]
-        [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nhập phải lớn hơn 0")]
+        [Range(0.001, 1000000.000, ErrorMessage = "Số lượng nhập phải từ 0,001 đến 1.000.000 đơn vị.")]
         public decimal Quantity { get; set; }
 
         [Required]
-        [Range(0, double.MaxValue, ErrorMessage = "Đơn giá không được âm")]
+        [Range(1, 999999999999, ErrorMessage = "Đơn giá phải là số nguyên lớn hơn hoặc bằng 1.")]
         public decimal UnitPrice { get; set; }
 
         public string? Note { get; set; }
     }
+
 
     public class ImportDocumentPartnerDto
     {

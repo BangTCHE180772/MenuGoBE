@@ -22,17 +22,24 @@ namespace MenuGoBE.Service.Document
             _repo = repo;
         }
 
+        // ──────────────────────────────────────────────────────────────────────
+        // CREATE
+        // ──────────────────────────────────────────────────────────────────────
         public async Task<DocumentEntity> CreateReturnDocumentAsync(ReturnDocumentCreateDto dto, long? createdBy = null)
         {
+            // ── 1. Validate phiếu nhập gốc ────────────────────────────────────
             var importDoc = await _repo.GetDocumentWithDetailsAsync(dto.ImportDocumentId);
             if (importDoc == null || importDoc.IsDeleted)
-                throw new MenuGoException(ErrorCodes.DocumentNotFound, "Không tìm thấy phiếu nhập gốc hoặc phiếu đã bị xóa.");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound,
+                    "Không tìm thấy phiếu nhập gốc hoặc phiếu đã bị xóa.");
 
             if (importDoc.Type != DocumentType.Import)
-                throw new MenuGoException(ErrorCodes.DocumentNotFound, "Chứng từ tham chiếu không phải là phiếu nhập kho.");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound,
+                    "Chứng từ tham chiếu không phải là phiếu nhập kho.");
 
             if (dto.BusinessDate.Date < importDoc.BusinessDate.Date)
-                throw new MenuGoException(ErrorCodes.DocumentInvalidReturnBusinessDate, "Ngày trả hàng không được nhỏ hơn ngày nhập kho gốc.");
+                throw new MenuGoException(ErrorCodes.DocumentInvalidReturnBusinessDate,
+                    "Ngày trả hàng không được nhỏ hơn ngày nhập kho gốc.");
 
             var branch = importDoc.Branch;
             if (branch == null)
@@ -41,45 +48,72 @@ namespace MenuGoBE.Service.Document
             if (branch.PostingLockDate.HasValue && dto.BusinessDate.Date <= branch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError);
 
-            var binvIds = dto.Details.Select(d => d.BInventoryId).Distinct().ToList();
-            var binvs = await _repo.GetBInventoriesAsync(branch.Id, binvIds);
+            // ── 2. Lọc bỏ dòng Quantity == 0 ─────────────────────────────────
+            var activeDetails = dto.Details.Where(d => d.Quantity > 0).ToList();
+            if (!activeDetails.Any())
+                throw new MenuGoException(ErrorCodes.DocumentInvalidQuantity,
+                    "Tất cả các dòng chi tiết đều có số lượng bằng 0. Không có gì để trả.");
 
-            if (binvs.Count != binvIds.Count)
-                throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory);
+            if (dto.PaidAmount > 0 && (dto.PaidAmount < 1m || dto.PaidAmount % 1m != 0))
+                throw new MenuGoException(ErrorCodes.DocumentInvalidUnitPrice,
+                    "Số tiền NCC thực nhận phải là số nguyên lớn hơn hoặc bằng 1.");
 
-            var previousReturnedDetails = await _repo.GetReturnedDetailsByImportIdAsync(importDoc.Id);
-            var returnedQuantitiesDict = previousReturnedDetails
-                .GroupBy(d => d.BInventoryId)
-                .ToDictionary(g => g.Key, g => g.Sum(d => d.Quantity));
+            // ── 3. Validate từng dòng chi tiết theo ImportDocumentDetailId ────
+            var validatedLines = new List<(ReturnDocumentDetailDto dto, DocumentDetail importDetail)>();
 
-            foreach (var detail in dto.Details)
+            foreach (var detailDto in activeDetails)
             {
-                var importDetail = importDoc.DocumentDetails.FirstOrDefault(d => d.BInventoryId == detail.BInventoryId);
-                if (importDetail == null)
-                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, "Sản phẩm trả lại không nằm trong phiếu nhập gốc.");
+                if (detailDto.UnitPrice < 1m || detailDto.UnitPrice % 1m != 0)
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidUnitPrice,
+                        $"Đơn giá hoàn trả ({detailDto.UnitPrice}) phải là số nguyên lớn hơn hoặc bằng 1.");
 
-                decimal alreadyReturned = returnedQuantitiesDict.ContainsKey(detail.BInventoryId) 
-                    ? returnedQuantitiesDict[detail.BInventoryId] 
-                    : 0m;
-                    
+                // 3a. Load ImportDocumentDetail kèm BInventory, UnitConversion
+                var importDetail = await _repo.GetImportDocumentDetailAsync(detailDto.ImportDocumentDetailId);
+
+
+                if (importDetail == null)
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory,
+                        $"Không tìm thấy dòng chi tiết nhập kho Id={detailDto.ImportDocumentDetailId}.");
+
+                // 3b. Kiểm tra dòng này thuộc đúng phiếu nhập gốc
+                if (importDetail.DocumentId != dto.ImportDocumentId)
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory,
+                        $"Dòng chi tiết Id={detailDto.ImportDocumentDetailId} không thuộc phiếu nhập Id={dto.ImportDocumentId}.");
+
+                // 3c. Tính RemainingQuantity = ImportDetail.Quantity - SUM(active returns)
+                var activeReturns = await _repo.GetReturnedDetailsByImportDetailIdAsync(importDetail.Id);
+                decimal alreadyReturned = activeReturns.Sum(r => r.Quantity);
                 decimal remainingQuantity = importDetail.Quantity - alreadyReturned;
 
-                if (detail.Quantity > remainingQuantity)
-                {
-                    throw new MenuGoException(ErrorCodes.DocumentReturnQuantityExceeded, 
-                        $"Số lượng trả vượt quá giới hạn. Đã nhập: {importDetail.Quantity}, " +
-                        $"Đã trả các lần trước: {alreadyReturned}, Còn lại được phép trả: {remainingQuantity}.");
-                }
+                if (detailDto.Quantity > remainingQuantity)
+                    throw new MenuGoException(ErrorCodes.DocumentReturnQuantityExceeded,
+                        $"Số lượng trả vượt quá giới hạn cho dòng Id={importDetail.Id}. " +
+                        $"Số lượng nhập: {importDetail.Quantity}, Đã trả: {alreadyReturned}, " +
+                        $"Còn được phép trả: {remainingQuantity}.");
+
+                validatedLines.Add((detailDto, importDetail));
             }
 
-            var supplierPartner = importDoc.DocumentPartners.FirstOrDefault();
-            decimal totalRefundValue = dto.Details.Sum(d => d.Quantity * d.UnitPrice);
+            // ── 4. Tổng hợp BInventoryId (loại trùng) để load ledger context ─
+            var binvIds = validatedLines
+                .Select(x => x.importDetail.BInventoryId)
+                .Distinct()
+                .ToList();
+
+            var binvs = await _repo.GetBInventoriesAsync(branch.Id, binvIds);
+            if (binvs.Count != binvIds.Count)
+                throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory,
+                    "Một hoặc nhiều sản phẩm không tồn tại trong kho chi nhánh này.");
+
+            // ── 5. Tính tổng tiền hoàn trả & build Document entity ────────────
+            decimal totalRefundAmount = validatedLines.Sum(x => x.dto.Quantity * x.dto.UnitPrice);
 
             var now = DateTime.UtcNow;
-            string code = $"RE{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
+            string code = $"RE{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString("N").Substring(0, 4).ToUpper()}";
 
             var rawDate = dto.BusinessDate.ToUniversalTime();
-            var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day, rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
+            var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day,
+                                               rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
 
             var document = new DocumentEntity
             {
@@ -88,130 +122,201 @@ namespace MenuGoBE.Service.Document
                 Code = code,
                 Type = DocumentType.Return,
                 TransferStatus = DocumentTransferStatus.None,
-                TotalAmount = totalRefundValue,
+                TotalAmount = totalRefundAmount,
                 ParentDocumentId = importDoc.Id,
                 CreatedBy = createdBy,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = now
             };
 
-            var beforeLedgers = await _repo.GetLatestLedgersBeforeOrEqualDateAsync(binvIds, document.BusinessDate);
-            var afterLedgers = await _repo.GetLedgersAfterDateAsync(binvIds, document.BusinessDate);
-            var afterLedgersDict = afterLedgers.GroupBy(l => l.BInventoryId).ToDictionary(g => g.Key, g => g.ToList());
+            // ── 6. Load ledger context ────────────────────────────────────────
+            var beforeLedgers = await _repo.GetLatestLedgersBeforeOrEqualDateAsync(binvIds, exactSecondDate);
+            var afterLedgers = await _repo.GetLedgersAfterDateAsync(binvIds, exactSecondDate);
+            var afterLedgersDict = afterLedgers
+                .GroupBy(l => l.BInventoryId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Running state per BInventoryId (khởi tạo từ prior ledger hoặc 0)
+            var runningState = new Dictionary<long, (decimal qty, decimal totalValue, decimal avgCost, decimal leftOver)>();
+            foreach (var binvId in binvIds)
+            {
+                var prior = beforeLedgers.FirstOrDefault(l => l.BInventoryId == binvId);
+                decimal pq  = prior?.RunningQuantity    ?? 0;
+                decimal pav = prior?.RunningAverageCost ?? 0;
+                decimal plo = prior?.RunningLeftOver     ?? 0;
+                runningState[binvId] = (pq, (pq * pav) + plo, pav, plo);
+            }
+
+            // ── 6b. KIỂM TRA TỒN KHO tại thời điểm BusinessDate ─────────────
+            // Gom tổng systemQuantity cần trả theo từng BInventoryId,
+            // sau đó so sánh với RunningQuantity tại thời điểm được chọn.
+            var requiredQtyByBinv = validatedLines
+                .GroupBy(x => x.importDetail.BInventoryId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Sum(x => x.dto.Quantity * (x.importDetail.UnitConversion?.ConversionPoint ?? 1m))
+                );
+
+            foreach (var (binvId, requiredQty) in requiredQtyByBinv)
+            {
+                decimal availableQty = runningState[binvId].qty;
+                if (requiredQty > availableQty)
+                {
+                    var binvName = binvs.FirstOrDefault(b => b.Id == binvId)?.Product?.Name ?? $"BInventoryId={binvId}";
+                    throw new MenuGoException(ErrorCodes.DocumentReturnInsufficientInventory,
+                        $"Tồn kho sản phẩm [{binvName}] không đủ tại ngày {exactSecondDate:dd/MM/yyyy}. " +
+                        $"Tồn hiện tại: {availableQty:0.###}, Cần trả: {requiredQty:0.###}.");
+                }
+            }
+
+            // ── 7. Build DocumentDetails & InventoryLedgers ───────────────────
 
             var details = new List<DocumentDetail>();
             var ledgersToCreate = new List<InventoryLedger>();
-            var ledgersToUpdate = new List<InventoryLedger>();
-            var updatedBInvs = new List<BInventory>();
 
-            foreach (var detail in dto.Details)
+            foreach (var (detailDto, importDetail) in validatedLines)
             {
+                // Kế thừa UnitConversion từ phiếu nhập gốc
+                decimal conversionPoint = importDetail.UnitConversion?.ConversionPoint ?? 1m;
+                decimal systemQuantity  = detailDto.Quantity * conversionPoint; // base unit
+
                 var docDetail = new DocumentDetail
                 {
-                    BInventoryId = detail.BInventoryId,
-                    Quantity = detail.Quantity,
-                    SystemQuantity = detail.Quantity,
-                    UnitPrice = detail.UnitPrice, 
-                    Note = detail.Note,
-                    CreatedAt = DateTime.UtcNow
+                    BInventoryId     = importDetail.BInventoryId,
+                    FatherId         = importDetail.Id,                  // Trỏ đến ImportDocumentDetailId
+                    UnitConversionId = importDetail.UnitConversionId,    // Kế thừa đơn vị từ nhập gốc
+                    Quantity         = detailDto.Quantity,
+                    SystemQuantity   = systemQuantity,
+                    UnitPrice        = detailDto.UnitPrice,
+                    Note             = detailDto.Note,
+                    CreatedAt        = now
                 };
                 details.Add(docDetail);
 
-                var binv = binvs.First(b => b.Id == detail.BInventoryId);
+                // Tính ledger — Return là outflow (giảm tồn kho)
+                var (runQ, runTV, runAvg, runLO) = runningState[importDetail.BInventoryId];
 
-                var priorLedger = beforeLedgers.FirstOrDefault(l => l.BInventoryId == detail.BInventoryId);
-                decimal runningQuantity = priorLedger?.RunningQuantity ?? 0;
-                decimal runningAvg = priorLedger?.RunningAverageCost ?? 0;
-                decimal runningLeftOver = priorLedger?.RunningLeftOver ?? 0;
-                decimal currentTotalValue = (runningQuantity * runningAvg) + runningLeftOver;
-
-                var newLedger = new InventoryLedger
+                var ledger = new InventoryLedger
                 {
-                    BInventoryId = binv.Id,
-                    BusinessDate = document.BusinessDate,
-                    DocumentType = document.Type,
-                    QuantityDelta = -detail.Quantity,
+                    BInventoryId        = importDetail.BInventoryId,
+                    BusinessDate        = exactSecondDate,
+                    DocumentType        = DocumentType.Return,
+                    QuantityDelta       = -systemQuantity,   // Xuất kho (âm)
                     InventoryValueDelta = 0,
-                    RunningQuantity = 0,
+                    RunningQuantity     = 0,
                     RunningInventoryValue = 0,
-                    RunningAverageCost = 0,
-                    RunningLeftOver = 0,
-                    UnitCost = runningAvg,
-                    CreatedAt = DateTime.UtcNow
+                    RunningAverageCost  = 0,
+                    RunningLeftOver     = 0,
+                    UnitCost            = runAvg,
+                    CreatedAt           = now
                 };
 
-                RecalculateLedgerState(newLedger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                
-                runningQuantity = newLedger.RunningQuantity;
-                currentTotalValue = newLedger.RunningInventoryValue;
-                runningAvg = newLedger.RunningAverageCost;
-                runningLeftOver = newLedger.RunningLeftOver;
+                RecalculateLedgerState(ledger, runQ, runTV, runAvg, runLO);
 
-                ledgersToCreate.Add(newLedger);
+                // Cập nhật running state cho dòng kế tiếp cùng BInventoryId
+                runningState[importDetail.BInventoryId] = (
+                    ledger.RunningQuantity,
+                    ledger.RunningInventoryValue,
+                    ledger.RunningAverageCost,
+                    ledger.RunningLeftOver
+                );
 
-                if (afterLedgersDict.TryGetValue(binv.Id, out var subsequentLedgers))
+                ledgersToCreate.Add(ledger);
+            }
+
+            // ── 8. Ripple-recalculate subsequent ledgers & update BInventories ─
+            var ledgersToUpdate = new List<InventoryLedger>();
+            var updatedBInvs    = new List<BInventory>();
+
+            foreach (var binvId in binvIds)
+            {
+                var (runQ, runTV, runAvg, runLO) = runningState[binvId];
+
+                if (afterLedgersDict.TryGetValue(binvId, out var subsequentLedgers))
                 {
                     foreach (var ledger in subsequentLedgers)
                     {
-                        RecalculateLedgerState(ledger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                        
-                        runningQuantity = ledger.RunningQuantity;
-                        currentTotalValue = ledger.RunningInventoryValue;
-                        runningAvg = ledger.RunningAverageCost;
-                        runningLeftOver = ledger.RunningLeftOver;
-
+                        RecalculateLedgerState(ledger, runQ, runTV, runAvg, runLO);
+                        runQ   = ledger.RunningQuantity;
+                        runTV  = ledger.RunningInventoryValue;
+                        runAvg = ledger.RunningAverageCost;
+                        runLO  = ledger.RunningLeftOver;
                         ledgersToUpdate.Add(ledger);
                     }
                 }
 
-                binv.Quantity = runningQuantity;
-                binv.Avg = runningAvg;
-                binv.LeftOver = runningLeftOver;
+                var binv = binvs.First(b => b.Id == binvId);
+                binv.Quantity = runQ;
+                binv.Avg      = runAvg;
+                binv.LeftOver = runLO;
                 updatedBInvs.Add(binv);
             }
 
-            var docPartners = new List<DocumentPartner>();
-            var cashFlows = new List<CashFlow>();
-            var cashFlowDetails = new List<CashFlowDetail>();
+            // ── 9. DocumentPartner: ghi nhận công nợ NCC (tổng tiền phải trả) ─
+            var supplierPartner = importDoc.DocumentPartners
+                .FirstOrDefault(dp => dp.Partner?.Type == PartnerType.Supplier)
+                ?? importDoc.DocumentPartners.FirstOrDefault();
 
-            if (supplierPartner != null && totalRefundValue > 0)
+            var docPartners = new List<DocumentPartner>();
+
+            if (supplierPartner != null)
             {
                 docPartners.Add(new DocumentPartner
                 {
                     PartnerId = supplierPartner.PartnerId,
-                    Cost = totalRefundValue,
-                    Note = "Hoàn trả tiền từ phiếu trả hàng nhập",
-                    CreatedAt = DateTime.UtcNow
+                    Cost      = totalRefundAmount,   // Tổng công nợ NCC phải hoàn trả
+                    Note      = dto.Note ?? $"Hoàn tiền từ phiếu trả hàng nhập {code}",
+                    CreatedAt = now
                 });
+            }
 
+            // ── 10. CashFlow: chỉ tạo khi PaidAmount > 0 ─────────────────────
+            var cashFlows       = new List<CashFlow>();
+            var cashFlowDetails = new List<CashFlowDetail>();
+
+            if (dto.PaidAmount > 0)
+            {
                 var cf = new CashFlow
                 {
-                    BranchId = branch.Id,
-                    Code = $"CF-{code}-1",
-                    BusinessDate = document.BusinessDate,
-                    Direction = CashFlowDirection.Inflow,
-                    Status = CashFlowStatus.Completed,
-                    TotalAmount = totalRefundValue,
-                    CreatedAt = DateTime.UtcNow
+                    BranchId     = branch.Id,
+                    Code         = $"CF-{code}-1",
+                    BusinessDate = exactSecondDate,
+                    Direction    = CashFlowDirection.Inflow,       // Thu tiền vào
+                    Status       = CashFlowStatus.Completed,
+                    TotalAmount  = dto.PaidAmount,                 // Tiền NCC đã thực trả
+                    CreatedAt    = now
                 };
                 cashFlows.Add(cf);
-                
+
                 var cfd = new CashFlowDetail
                 {
-                    PartnerId = supplierPartner.PartnerId,
-                    Type = CashFlowDetailType.Refund,
-                    PaymentMethod = PaymentMethod.Cash,
-                    Amount = totalRefundValue,
-                    Note = $"Thu tiền từ phiếu trả hàng nhập {code}"
+                    PartnerId     = supplierPartner?.PartnerId,
+                    Type          = CashFlowDetailType.Refund,     // Loại: hoàn tiền
+                    PaymentMethod = dto.PaymentMethod,
+                    Amount        = dto.PaidAmount,
+                    Note          = $"Thu tiền hoàn từ NCC – phiếu trả {code}"
                 };
                 cashFlowDetails.Add(cfd);
             }
 
-            return await _repo.ExecuteReturnTransactionAsync(document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
+            // ── 11. Execute trong transaction ─────────────────────────────────
+            return await _repo.ExecuteReturnTransactionAsync(
+                document, details, docPartners, updatedBInvs,
+                ledgersToCreate, ledgersToUpdate,
+                cashFlows, cashFlowDetails);
         }
 
+        // ──────────────────────────────────────────────────────────────────────
+        // DELETE
+        // ──────────────────────────────────────────────────────────────────────
         public async Task DeleteReturnDocumentAsync(long documentId, long? deletedBy = null)
         {
+            // Kế thừa từ DocumentServiceBase:
+            // - Soft delete Document + tất cả DocumentDetails
+            // - Soft delete CashFlows liên quan
+            // - Ripple-recalculate InventoryLedger
+            // - Cập nhật BInventory running state
             await DeleteDocumentAsync(documentId, deletedBy);
         }
     }
 }
+

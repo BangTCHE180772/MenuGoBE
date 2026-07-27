@@ -12,7 +12,13 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public DateTime ReceivedDate { get; set; }
 
+        /// <summary>
+        /// Tùy chọn: Id tài khoản người nhận truyền trực tiếp từ Frontend (nếu có).
+        /// </summary>
+        public long? AccountId { get; set; }
+
         public string? Note { get; set; }
+
 
         [Required]
         [MinLength(1, ErrorMessage = "Phải có ít nhất 1 sản phẩm nhận kho.")]
@@ -25,9 +31,10 @@ namespace MenuGoBE.Dtos.Document
         public long ToBInventoryId { get; set; }
 
         [Required]
-        [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nhận phải lớn hơn 0.")]
+        [Range(0.001, 1000000.000, ErrorMessage = "Số lượng nhận phải từ 0,001 đến 1.000.000 đơn vị.")]
         public decimal ReceivedQuantity { get; set; }
 
         public string? Note { get; set; }
     }
+
 }

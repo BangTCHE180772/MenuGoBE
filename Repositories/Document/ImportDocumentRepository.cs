@@ -17,7 +17,7 @@ namespace MenuGoBE.Repositories.Document
         /// <summary>
         /// Lấy danh sách DocumentDetail trả hàng liên quan đến phiếu nhập.
         /// </summary>
-        public async Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId)
+        public new async Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId)
         {
             return await _context.DocumentDetails
                 .Include(d => d.Document)
