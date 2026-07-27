@@ -21,8 +21,10 @@ namespace MenuGoBE.Validator.Branch
                 .Must(x => string.IsNullOrEmpty(x)
                     || x.ToLower() == "name"
                     || x.ToLower() == "createdat"
-                    || x.ToLower() == "id")
-                .WithMessage("SortBy must be Name, CreatedAt, or Id.");
+                    || x.ToLower() == "id"
+                    || x.ToLower() == "managerName"
+                    )
+                .WithMessage("SortBy must be Name, CreatedAt, Id or ManagerName.");
 
             RuleFor(x => x.Keyword)
                 .MaximumLength(100);

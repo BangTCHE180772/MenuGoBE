@@ -12,6 +12,11 @@ using AutoMapper;
 using Microsoft.AspNetCore.OData;
 using Microsoft.OData.ModelBuilder;
 using MenuGoBE.Models;
+using MenuGoBE.Helpers;
+using MenuGoBE.Interface.Repository.Document;
+using MenuGoBE.Repositories.Document;
+using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Service.Document;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -33,7 +38,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? string.Empty))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? string.Empty)),
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+            NameClaimType = "name"
         };
     });
 
@@ -66,11 +73,26 @@ builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<IMenuRepository, MenuRepository>();
 builder.Services.AddScoped<IUnitRepository, UnitRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
-builder.Services.AddScoped<IRecipeRepository, RecipeRepository>();
 builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<IVoucherRepository, VoucherRepository>();
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();
+builder.Services.AddScoped<INewWardRepository, NewWardRepository>();
+builder.Services.AddScoped<IOldWardRepository, OldWardRepository>();
+builder.Services.AddScoped<INewProvinceRepository, NewProvinceRepository>();
+builder.Services.AddScoped<IOldProvinceRepository, OldProvinceRepository>();
+builder.Services.AddScoped<IOldDistrictRepository, OldDistrictRepository>();
+builder.Services.AddScoped<IPayrollRepository, PayrollRepository>();
+builder.Services.AddScoped<ISalaryDetailRepository, SalaryDetailRepository>();
+builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
+builder.Services.AddScoped<IImportDocumentRepository, ImportDocumentRepository>();
+builder.Services.AddScoped<IReturnDocumentRepository, ReturnDocumentRepository>();
+builder.Services.AddScoped<ITransferDocumentRepository, TransferDocumentRepository>();
+builder.Services.AddScoped<IExportDeleteDocumentRepository, ExportDeleteDocumentRepository>();
+builder.Services.AddScoped<ICheckDocumentRepository, CheckDocumentRepository>();
+builder.Services.AddScoped<IProductionDocumentRepository, ProductionDocumentRepository>();
+builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
+builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 
 // Service
 builder.Services.AddScoped<IChainService, ChainService>();
@@ -79,6 +101,7 @@ builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderDetailService, OrderDetailService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IWorkScheduleService, WorkScheduleService>();
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<IShiftService, ShiftService>();
@@ -88,17 +111,40 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
-builder.Services.AddScoped<IRecipeService, RecipeService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
-builder.Services.Configure<MenuGoBE.Helpers.CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.AddHostedService<AutoCheckoutService>();
+builder.Services.AddScoped<INewWardService, NewWardService>();
+builder.Services.AddScoped<IOldWardService, OldWardService>();
+builder.Services.AddScoped<INewProvinceService, NewProvinceService>();
+builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
+builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
+builder.Services.AddScoped<IPayrollService, PayrollService>();
+builder.Services.AddScoped<ISalaryDetailService, SalaryDetailService>();
+builder.Services.AddScoped<IDocumentService, DocumentService>();
+builder.Services.AddScoped<IImportDocumentService, ImportDocumentService>();
+builder.Services.AddScoped<IReturnDocumentService, ReturnDocumentService>();
+builder.Services.AddScoped<ITransferDocumentService, TransferDocumentService>();
+builder.Services.AddScoped<IExportDeleteDocumentService, ExportDeleteDocumentService>();
+builder.Services.AddScoped<ICheckDocumentService, CheckDocumentService>();
+builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
+builder.Services.AddScoped<IPartnerService, PartnerService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
+builder.Services.AddScoped<IEmailService,EmailService>();
 
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
 builder.Services.AddHostedService<ReservationMonitorService>();
+
+// Device Auth Service (QR + SignalR)
+builder.Services.AddSingleton<DeviceAuthService>();
+builder.Services.AddSingleton<IDeviceAuthService>(provider => provider.GetRequiredService<DeviceAuthService>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<DeviceAuthService>());
 
 // PayOS setup
 var payOsConfig = builder.Configuration.GetSection("PayOS");
@@ -148,7 +194,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection(); // REMOVED to fix CORS / Token stripping on redirect
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -157,5 +203,3 @@ app.MapControllers();
 app.MapHub<MenuGoBE.Hubs.NotificationHub>("/notificationHub");
 
 app.Run();
-
-

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using MenuGoBE.Dtos.Chain;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
@@ -43,7 +44,34 @@ namespace MenuGoBE.Service
 
         public async Task<ChainViewDto> CreateAsync(ChainCreateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                throw new MenuGoException(ErrorCodes.ChainNameRequired);
+            }
+
+            if (dto.Name.Length > 100)
+            {
+                throw new MenuGoException(ErrorCodes.ChainNameLengthExceeded);
+            }
+
+            if (dto.OpenTime >= dto.CloseTime)
+            {
+                throw new MenuGoException(ErrorCodes.ChainOpenCloseTimeInvalid);
+            }
+
+            if (!string.IsNullOrEmpty(dto.LogoImage) && dto.LogoImage.Length > 255)
+            {
+                throw new MenuGoException(ErrorCodes.ChainImageLengthExceeded);
+            }
+
+            if (!string.IsNullOrEmpty(dto.BackgroundImage) && dto.BackgroundImage.Length > 255)
+            {
+                throw new MenuGoException(ErrorCodes.ChainImageLengthExceeded);
+            }
+
             var entity = _mapper.Map<Chain>(dto);
+
+            entity.Address.Type = "Chuỗi";
 
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -53,10 +81,53 @@ namespace MenuGoBE.Service
 
         public async Task<bool> UpdateAsync(ChainUpdateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                throw new MenuGoException(ErrorCodes.ChainNameRequired);
+            }
+
+            if (dto.Name.Length > 100)
+            {
+                throw new MenuGoException(ErrorCodes.ChainNameLengthExceeded);
+            }
+
+            if (dto.OpenTime >= dto.CloseTime)
+            {
+                throw new MenuGoException(ErrorCodes.ChainOpenCloseTimeInvalid);
+            }
+
+            if (!string.IsNullOrEmpty(dto.LogoImage) && dto.LogoImage.Length > 255)
+            {
+                throw new MenuGoException(ErrorCodes.ChainImageLengthExceeded);
+            }
+
+            if (!string.IsNullOrEmpty(dto.BackgroundImage) && dto.BackgroundImage.Length > 255)
+            {
+                throw new MenuGoException(ErrorCodes.ChainImageLengthExceeded);
+            }
+
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
 
+            // Lưu giữ WardId cũ trước khi map
+            var oldNewWardId = entity.Address?.NewWardId;
+            var oldOldWardId = entity.Address?.OldWardId;
+
             _mapper.Map(dto, entity);
+
+            if (entity.Address != null)
+            {
+                entity.Address.Type = "Chuỗi";
+                // Nếu dto truyền null (không chọn địa chỉ mới), giữ nguyên WardId cũ trong DB
+                if (!dto.Address.NewWardId.HasValue)
+                {
+                    entity.Address.NewWardId = oldNewWardId;
+                }
+                if (!dto.Address.OldWardId.HasValue)
+                {
+                    entity.Address.OldWardId = oldOldWardId;
+                }
+            }
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();

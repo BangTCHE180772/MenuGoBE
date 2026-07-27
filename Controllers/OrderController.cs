@@ -14,13 +14,15 @@ namespace MenuGoBE.Controllers
         private readonly IOrderDetailService _detailService;
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly ITableService _tableService;
+        private readonly IProductService _productService;
 
-        public OrderController(IOrderService service, IOrderDetailService detailService, IHubContext<NotificationHub> hubContext, ITableService tableService)
+        public OrderController(IOrderService service, IOrderDetailService detailService, IHubContext<NotificationHub> hubContext, ITableService tableService, IProductService productService)
         {
             _service = service;
             _detailService = detailService;
             _hubContext = hubContext;
             _tableService = tableService;
+            _productService = productService;
         }
 
         [HttpGet]
@@ -183,12 +185,17 @@ namespace MenuGoBE.Controllers
                         var table = await _tableService.GetByIdAsync(order.TableId);
                         if (table != null)
                         {
+                            var product = await _productService.GetByIdAsync(dto.ProductId);
+                            string productName = product?.Name ?? "Món mới";
+
                             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
                             { 
                                 type = "new-order", 
                                 tableId = table.Id, 
                                 tableName = table.Name,
-                                message = $"Bàn {table.Name} vừa đặt món mới!",
+                                productName = productName,
+                                quantity = dto.Quantity,
+                                message = $"{table.Name} vừa gọi: {productName} (x{dto.Quantity})",
                                 timestamp = System.DateTime.UtcNow
                             });
                         }
@@ -254,16 +261,42 @@ namespace MenuGoBE.Controllers
         [HttpPut("details/{id}/cooking-status")]
         public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
         {
+            long? tableId = null;
+            string tableName = "Không rõ";
+            string productName = "Không rõ";
+
+            var detail = await _detailService.GetByIdAsync(id);
+            if (detail != null)
+            {
+                var order = await _service.GetByIdAsync(detail.OrderId);
+                if (order != null)
+                {
+                    tableId = order.TableId;
+                    var table = await _tableService.GetByIdAsync(order.TableId);
+                    if (table != null) tableName = table.Name;
+                }
+
+                var product = await _productService.GetByIdAsync(detail.ProductId);
+                if (product != null) productName = product.Name;
+            }
+
             var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
+
+            string displayMessage = dto.CookingStatus == "Ready" 
+                ? $"Món {productName} ({tableName}) đã nấu xong!" 
+                : $"Trạng thái chế biến món {productName} đã đổi sang {dto.CookingStatus}";
 
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
             {
                 type = "cooking-status-changed",
                 orderDetailId = id,
                 cookingStatus = dto.CookingStatus,
-                message = $"Trạng thái chế biến món #{id} đã đổi sang {dto.CookingStatus}",
+                tableId = tableId,
+                tableName = tableName,
+                productName = productName,
+                message = displayMessage,
                 timestamp = DateTime.UtcNow
             });
 

@@ -11,14 +11,12 @@ namespace MenuGoBE.Service
     {
         private readonly IOrderDetailRepository _detailRepo;
         private readonly IOrderRepository _orderRepo;
-        private readonly IRecipeRepository _recipeRepo;
         private readonly IMapper _mapper;
 
-        public OrderDetailService(IOrderDetailRepository detailRepo, IOrderRepository orderRepo, IRecipeRepository recipeRepo, IMapper mapper)
+        public OrderDetailService(IOrderDetailRepository detailRepo, IOrderRepository orderRepo, IMapper mapper)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
-            _recipeRepo = recipeRepo;
             _mapper = mapper;
         }
 
@@ -46,24 +44,6 @@ namespace MenuGoBE.Service
             if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
             {
                 entity.CookingStatus = "Waiting";
-            }
-
-            if (dto.RecipeId == null || dto.RecipeId == 0)
-            {
-                var activeRecipe = await _recipeRepo.GetActiveByProductIdAsync(dto.ProductId);
-
-                if (activeRecipe != null)
-                {
-                    entity.RecipeId = activeRecipe.Id;
-                }
-                else
-                {
-                    entity.RecipeId = null;
-                }
-            }
-            else
-            {
-                entity.RecipeId = dto.RecipeId.Value;
             }
 
             await _detailRepo.CreateAsync(entity);

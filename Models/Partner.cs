@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
@@ -11,18 +12,21 @@ public class Partner
 
     public long BranchId { get; set; }
 
-    public string Type { get; set; } = string.Empty;
+    public PartnerType Type { get; set; }
 
     [Required]
+    [MaxLength(255)]
     public string Name { get; set; } = string.Empty;
 
     public long? AddressId { get; set; }
 
-    public string Phone { get; set; } = string.Empty;
+    [MaxLength(50)]
+    public string? Phone { get; set; }
 
-    public string Email { get; set; } = string.Empty;
+    [MaxLength(255)]
+    public string? Email { get; set; }
 
-    public long CreatedBy { get; set; }
+    public long? CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -34,8 +38,7 @@ public class Partner
     public Address? Address { get; set; }
 
     [ForeignKey("CreatedBy")]
-    public Account CreatedByAccount { get; set; } = null!;
+    public Account? Creator { get; set; }
 
     public ICollection<DocumentPartner> DocumentPartners { get; set; } = new List<DocumentPartner>();
-    public ICollection<CashFlowDetail> CashFlowDetails { get; set; } = new List<CashFlowDetail>();
 }

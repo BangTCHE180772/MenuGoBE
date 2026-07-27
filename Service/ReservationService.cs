@@ -3,6 +3,9 @@ using MenuGoBE.Dtos.Reservation;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using MenuGoBE.Dtos.Table;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Service;
 
@@ -16,6 +19,7 @@ public class ReservationService : IReservationService
     private readonly ICustomerRepository _customerRepo;
     private readonly IMapper _mapper;
     private readonly IReservationSignalService _signalService;
+    private readonly IHubContext<NotificationHub> _hubContext;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -25,7 +29,8 @@ public class ReservationService : IReservationService
         IProductRepository productRepo,
         ICustomerRepository customerRepo,
         IMapper mapper,
-        IReservationSignalService signalService)
+        IReservationSignalService signalService,
+        IHubContext<NotificationHub> hubContext)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -35,6 +40,7 @@ public class ReservationService : IReservationService
         _customerRepo = customerRepo;
         _mapper = mapper;
         _signalService = signalService;
+        _hubContext = hubContext;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -76,8 +82,45 @@ public class ReservationService : IReservationService
         return dtos;
     }
 
+    public async Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime)
+    {
+        var allTables = await _tableRepo.GetByBranchIdsAsync(new List<long> { branchId });
+        var validTables = allTables.Where(t => t.Status == "Empty" || t.Status == "Available").ToList();
+
+        var startTime = reservationTime.AddMinutes(-89);
+        var endTime = reservationTime.AddMinutes(89);
+
+        var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
+        
+        var bookedTableIds = overlappingReservations
+            .Where(r => r.OrderId.HasValue && r.Order != null)
+            .Select(r => r.Order.TableId)
+            .ToHashSet();
+
+        // Include child tables from reservations
+        foreach (var r in overlappingReservations)
+        {
+            if (r.OrderId.HasValue)
+            {
+                var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value);
+                foreach (var child in childOrders)
+                {
+                    bookedTableIds.Add(child.TableId);
+                }
+            }
+        }
+
+        var availableTables = validTables.Where(t => !bookedTableIds.Contains(t.Id)).ToList();
+        return _mapper.Map<List<MenuGoBE.Dtos.Table.TableViewDto>>(availableTables);
+    }
+
     public async Task<ReservationViewDto> CreateAsync(ReservationCreateDto dto)
     {
+        if (dto.ReservationTime < DateTime.UtcNow.AddMinutes(10))
+        {
+            throw new InvalidOperationException("Thời gian đặt bàn phải cách thời gian hiện tại ít nhất 10 phút.");
+        }
+
         var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
         if (customer == null)
         {
@@ -107,6 +150,36 @@ public class ReservationService : IReservationService
 
         if (dto.TableIds != null && dto.TableIds.Any())
         {
+            // VALIDATION: Check for overlapping tables
+            var startTime = dto.ReservationTime.AddMinutes(-89);
+            var endTime = dto.ReservationTime.AddMinutes(89);
+            var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
+            
+            var bookedTableIds = overlappingReservations
+                .Where(r => r.OrderId.HasValue && r.Order != null)
+                .Select(r => r.Order.TableId)
+                .ToHashSet();
+
+            foreach (var r in overlappingReservations)
+            {
+                if (r.OrderId.HasValue)
+                {
+                    var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value);
+                    foreach (var child in childOrders)
+                    {
+                        bookedTableIds.Add(child.TableId);
+                    }
+                }
+            }
+
+            foreach (var tableId in dto.TableIds)
+            {
+                if (bookedTableIds.Contains(tableId))
+                {
+                    throw new InvalidOperationException("Bàn đã được đặt trong khoảng thời gian này.");
+                }
+            }
+
             var fatherTableId = dto.TableIds.First();
             var fatherOrder = new Order
             {
@@ -119,8 +192,18 @@ public class ReservationService : IReservationService
             await _orderRepo.CreateAsync(fatherOrder);
             await _orderRepo.SaveChangesAsync();
 
-            // Do NOT forcefully lock the table status here.
-            // Let the ReservationMonitorService smart task handle the lock 2 hours prior!
+            // Do NOT forcefully lock the table status here unless it's within 30 minutes.
+            bool shouldLockImmediately = (dto.ReservationTime - DateTime.UtcNow).TotalMinutes <= 30;
+
+            if (shouldLockImmediately)
+            {
+                var fatherTable = await _tableRepo.GetByIdAsync(fatherTableId);
+                if (fatherTable != null && (fatherTable.Status == "Empty" || fatherTable.Status == "Available"))
+                {
+                    fatherTable.Status = "Reserved";
+                    await _tableRepo.UpdateAsync(fatherTable);
+                }
+            }
 
             decimal totalAmount = 0;
             if (dto.PreOrderItems != null && dto.PreOrderItems.Any())
@@ -161,9 +244,19 @@ public class ReservationService : IReservationService
                     CreatedAt = DateTime.UtcNow
                 };
                 await _orderRepo.CreateAsync(childOrder);
+                if (shouldLockImmediately)
+                {
+                    var childTable = await _tableRepo.GetByIdAsync(childTableId);
+                    if (childTable != null && (childTable.Status == "Empty" || childTable.Status == "Available"))
+                    {
+                        childTable.Status = "Reserved";
+                        await _tableRepo.UpdateAsync(childTable);
+                    }
+                }
             }
 
             await _orderRepo.SaveChangesAsync();
+            await _tableRepo.SaveChangesAsync();
             await _detailRepo.SaveChangesAsync();
 
             reservation.OrderId = fatherOrder.Id;
@@ -174,6 +267,11 @@ public class ReservationService : IReservationService
 
         // Notify Background Task to recalculate the sleep timer
         _signalService.TriggerSignal();
+
+        if (dto.TableIds != null && dto.TableIds.Any() && (dto.ReservationTime - DateTime.UtcNow).TotalMinutes <= 30)
+        {
+            await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        }
 
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
@@ -240,6 +338,7 @@ public class ReservationService : IReservationService
 
         await _reservationRepo.SaveChangesAsync();
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 
@@ -302,6 +401,7 @@ public class ReservationService : IReservationService
 
         await _reservationRepo.SaveChangesAsync();
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 
@@ -315,6 +415,7 @@ public class ReservationService : IReservationService
         await _reservationRepo.SaveChangesAsync();
 
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 
@@ -356,6 +457,7 @@ public class ReservationService : IReservationService
         }
 
         _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         return true;
     }
 }

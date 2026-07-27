@@ -8,8 +8,6 @@ namespace MenuGoBE.Dtos.Order
 
         public long ProductId { get; set; }
 
-        public long? RecipeId { get; set; }
-
         public int Quantity { get; set; }
 
         public decimal Price { get; set; }

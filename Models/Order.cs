@@ -27,7 +27,7 @@ public class Order
     [Column(TypeName = "decimal(18,4)")]
     public decimal TotalAmount { get; set; }
 
-    public long CreatedBy { get; set; }
+    public long? CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

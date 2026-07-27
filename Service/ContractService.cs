@@ -26,6 +26,18 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<ContractViewDto>>(data);
         }
 
+        public async Task<List<ContractViewDto>> GetByBranchIdsAsync(List<long> branchIds)
+        {
+            var data = await _repo.GetByBranchIdsAsync(branchIds);
+            return _mapper.Map<List<ContractViewDto>>(data);
+        }
+
+        public async Task<List<ContractViewDto>> GetContractsByRolesAsync(List<long> roleIds, long? branchId = null, List<long>? branchIds = null)
+        {
+            var data = await _repo.GetContractsByRolesAsync(roleIds, branchId, branchIds);
+            return _mapper.Map<List<ContractViewDto>>(data);
+        }
+
         public async Task<ContractViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
@@ -35,6 +47,14 @@ namespace MenuGoBE.Service
 
         public async Task<ContractViewDto> CreateAsync(ContractCreateDto dto)
         {
+            if (dto.Status == "Active" && await _repo.IsManagerRoleAsync(dto.RoleId))
+            {
+                if (await _repo.HasActiveManagerAsync(dto.BranchId))
+                {
+                    throw new Exception("Chi nhánh này đã có Quản lý. Mỗi chi nhánh chỉ được phép có duy nhất 1 Quản lý.");
+                }
+            }
+
             var entity = _mapper.Map<Contract>(dto);
             entity.CreatedAt = DateTime.UtcNow;
 
@@ -48,6 +68,14 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            if (dto.Status == "Active" && await _repo.IsManagerRoleAsync(dto.RoleId))
+            {
+                if (await _repo.HasActiveManagerAsync(dto.BranchId, dto.Id))
+                {
+                    throw new Exception("Chi nhánh này đã có Quản lý. Mỗi chi nhánh chỉ được phép có duy nhất 1 Quản lý.");
+                }
+            }
 
             _mapper.Map(dto, entity);
 

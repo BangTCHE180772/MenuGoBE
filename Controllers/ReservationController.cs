@@ -22,11 +22,25 @@ public class ReservationController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("available-tables")]
+    public async Task<IActionResult> GetAvailableTables([FromQuery] long branchId, [FromQuery] DateTime reservationTime)
+    {
+        var result = await _service.GetAvailableTablesAsync(branchId, reservationTime);
+        return Ok(result);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ReservationCreateDto dto)
     {
-        var result = await _service.CreateAsync(dto);
-        return Ok(result);
+        try
+        {
+            var result = await _service.CreateAsync(dto);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id}/check-in")]

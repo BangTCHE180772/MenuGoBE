@@ -46,4 +46,20 @@ public class ReservationRepository : IReservationRepository
     {
         await _context.SaveChangesAsync();
     }
+
+    public async Task<List<Reservation>> GetOverlappingReservationsAsync(DateTime startTime, DateTime endTime)
+    {
+        return await _context.Reservations
+            .Include(r => r.Order)
+            .Where(r => r.Status == "Pending" || r.Status == "Confirmed")
+            .Where(r => r.ReservationTime >= startTime && r.ReservationTime <= endTime)
+            .ToListAsync();
+    }
+
+    public async Task<Reservation?> GetByOrderIdAsync(long orderId)
+    {
+        return await _context.Reservations
+            .Include(r => r.Customer)
+            .FirstOrDefaultAsync(r => r.OrderId == orderId);
+    }
 }

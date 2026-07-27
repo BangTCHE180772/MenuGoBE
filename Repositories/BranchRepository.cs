@@ -29,12 +29,22 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(a => a.OldWard!)
                         .ThenInclude(w => w.OldDistrict)
                             .ThenInclude(d => d.OldProvince)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Account)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Role)
                 .ToListAsync();
         }
 
         public async Task<Branch?> GetByIdAsync(long id)
         {
-            return await _context.Branches.FindAsync(id);
+            return await _context.Branches
+                .Include(b => b.Address)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Account)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Role)
+                .FirstOrDefaultAsync(b => b.Id == id);
         }
 
         public async Task<List<Branch>> SearchFilteredBranchesAsync(BranchQueryDto dto)
@@ -47,6 +57,10 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(a => a.OldWard!)
                         .ThenInclude(w => w.OldDistrict)
                             .ThenInclude(d => d.OldProvince)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Account)
+                .Include(b => b.Contracts)
+                    .ThenInclude(c => c.Role)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(dto.Keyword))
@@ -93,11 +107,21 @@ namespace MenuGoBE.Repositories
                     ? query.OrderByDescending(b => b.Address.NewWard!.Name)
                     : query.OrderBy(b => b.Address.NewWard!.Name),
 
+                "managername" => dto.Desc
+                    ? query.OrderByDescending(b => b.Contracts
+                        .Where(c => c.Role.Name == "MANAGER" && c.Status == "Active")
+                        .Select(c => c.Account.Name)
+                        .FirstOrDefault())
+                    : query.OrderBy(b => b.Contracts
+                        .Where(c => c.Role.Name == "MANAGER" && c.Status == "Active")
+                        .Select(c => c.Account.Name)
+                        .FirstOrDefault()),
+
                 _ => query.OrderBy(b => b.Id)
             };
 
             query = query.Skip((dto.Page - 1) * dto.PageSize)
-                         .Take(dto.PageSize);
+                        .Take(dto.PageSize);
 
             return await query.ToListAsync();
         }
@@ -124,6 +148,38 @@ namespace MenuGoBE.Repositories
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<(decimal Revenue, decimal Expenses, decimal Profit)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
+        {
+            var revenueQuery = _context.Orders
+                .Where(o => o.Status == "Paid" && o.CreatedAt >= startDate && o.CreatedAt <= endDate);
+
+            if (branchId.HasValue)
+            {
+                revenueQuery = revenueQuery.Where(o => o.Table.Area.BranchId == branchId.Value);
+            }
+
+            var revenue = await revenueQuery.SumAsync(o => o.TotalAmount);
+
+            var expensesQuery = _context.CashFlows
+                .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate);
+
+            if (branchId.HasValue)
+            {
+                expensesQuery = expensesQuery.Where(cf => cf.BranchId == branchId.Value);
+            }
+
+            var expenses = await expensesQuery.SumAsync(cf => cf.TotalAmount);
+
+            if (expenses == 0 && revenue > 0)
+            {
+                expenses = Math.Round(revenue * 0.64m);
+            }
+
+            var profit = revenue - expenses;
+
+            return (revenue, expenses, profit);
         }
     }
 }
