@@ -52,6 +52,10 @@ namespace MenuGoBE.Repositories
             if (entity == null) return false;
 
             entity.Status = status;
+            if (status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
+            {
+                entity.CookingStatus = "Waiting";
+            }
             return true;
         }
 

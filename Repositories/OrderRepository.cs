@@ -74,6 +74,7 @@ namespace MenuGoBE.Repositories
                 .Where(o => o.Status == "Active")
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
+                        .ThenInclude(p => p.Image)
                 .Include(o => o.Table)
                 .ToListAsync();
         }
