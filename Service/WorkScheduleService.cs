@@ -231,7 +231,7 @@ namespace MenuGoBE.Service
                     {
                         // Auto-split: Chốt ca hiện tại ở đúng giờ EndTime
                         var localEndTime = today.ToDateTime(currentWs.Shift.EndTime);
-                        var utcEndTime = localEndTime.AddHours(-7);
+                        var utcEndTime = DateTime.SpecifyKind(localEndTime.AddHours(-7), DateTimeKind.Utc);
                         
                         currentWs.CheckOutAt = utcEndTime;
                         var duration1 = currentWs.CheckOutAt.Value - currentWs.CheckInAt.Value;
@@ -241,7 +241,7 @@ namespace MenuGoBE.Service
                         
                         // Mở ca tiếp theo ở đúng giờ StartTime
                         var localStartTime = today.ToDateTime(nextWs.Shift.StartTime);
-                        var utcStartTime = localStartTime.AddHours(-7);
+                        var utcStartTime = DateTime.SpecifyKind(localStartTime.AddHours(-7), DateTimeKind.Utc);
                         
                         nextWs.CheckInAt = utcStartTime;
                         nextWs.Status = "Working";

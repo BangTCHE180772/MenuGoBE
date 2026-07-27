@@ -114,6 +114,7 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
+builder.Services.AddHostedService<AutoCheckoutService>();
 builder.Services.AddScoped<INewWardService, NewWardService>();
 builder.Services.AddScoped<IOldWardService, OldWardService>();
 builder.Services.AddScoped<INewProvinceService, NewProvinceService>();
