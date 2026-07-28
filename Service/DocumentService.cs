@@ -78,13 +78,35 @@ namespace MenuGoBE.Service
                     Note = d.Note,
                     IsDeleted = d.IsDeleted
                 }).ToList(),
-                Partners = doc.DocumentPartners.Select(p => new DocumentPartnerResponseDto
+                Partners = doc.DocumentPartners.Select(p =>
                 {
-                    Id = p.Id,
-                    PartnerId = p.PartnerId,
-                    PartnerName = p.Partner?.Name ?? string.Empty,
-                    Cost = p.Cost,
-                    Note = p.Note
+                    var activeCashFlows = p.CashFlowDetails?
+                        .Where(cfd => !cfd.IsDeleted && cfd.CashFlow != null && !cfd.CashFlow.IsDeleted)
+                        .ToList() ?? new List<CashFlowDetail>();
+
+                    var paidAmount = activeCashFlows.Sum(cfd => cfd.Amount);
+
+                    return new DocumentPartnerResponseDto
+                    {
+                        Id = p.Id,
+                        PartnerId = p.PartnerId,
+                        PartnerName = p.Partner?.Name ?? string.Empty,
+                        PartnerType = p.Partner?.Type ?? PartnerType.Other,
+                        Cost = p.Cost,
+                        AmountDue = p.Cost,
+                        AmountPaid = paidAmount,
+                        Note = p.Note,
+                        CashFlowDetails = activeCashFlows.Select(cfd => new CashFlowDetailResponseDto
+                        {
+                            Id = cfd.Id,
+                            CashFlowId = cfd.CashFlowId,
+                            CashFlowCode = cfd.CashFlow?.Code ?? string.Empty,
+                            Amount = cfd.Amount,
+                            PaymentMethod = cfd.PaymentMethod.ToString(),
+                            BusinessDate = cfd.CashFlow?.BusinessDate ?? cfd.CashFlow?.CreatedAt ?? DateTime.MinValue,
+                            Note = cfd.Note ?? cfd.CashFlow?.Code
+                        }).ToList()
+                    };
                 }).ToList()
             };
         }
