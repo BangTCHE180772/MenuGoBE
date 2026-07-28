@@ -19,8 +19,8 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public long CreatedByAccountId { get; set; }
 
+        [StringLength(250, ErrorMessage = "Ghi chú không được vượt quá 250 ký tự.")]
         public string? Note { get; set; }
-
 
         [Required]
         [MinLength(1, ErrorMessage = "Phải có ít nhất 1 sản phẩm nhập kho")]
@@ -50,6 +50,7 @@ namespace MenuGoBE.Dtos.Document
         [IntegerOnly(ErrorMessage = "Đơn giá phải là số nguyên lớn hơn hoặc bằng 1.")]
         public decimal UnitPrice { get; set; }
 
+        [StringLength(250, ErrorMessage = "Ghi chú sản phẩm không được vượt quá 250 ký tự.")]
         public string? Note { get; set; }
     }
 
@@ -75,6 +76,7 @@ namespace MenuGoBE.Dtos.Document
         [IntegerOnly(ErrorMessage = "Số tiền đã trả phải là số nguyên.")]
         public decimal AmountPaid { get; set; } = 0;
 
+        [StringLength(250, ErrorMessage = "Ghi chú đối tác không được vượt quá 250 ký tự.")]
         public string? Note { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
