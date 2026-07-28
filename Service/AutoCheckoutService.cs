@@ -141,7 +141,10 @@ namespace MenuGoBE.Service
                 await _repo.SaveChangesAsync();
                 
                 // Gửi thông báo SignalR cho Client để tự động refresh màn hình
-                await _hubContext.Clients.All.SendAsync("ReceiveScheduleUpdate");
+                if (_hubContext?.Clients != null)
+                {
+                    await _hubContext.Clients.All.SendAsync("ReceiveScheduleUpdate");
+                }
             }
         }
 
