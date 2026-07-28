@@ -141,7 +141,7 @@ namespace MenuGoBE.Service
             {
                 var tableName = order.Table?.Name ?? $"Bàn #{order.TableId}";
                 var items = order.OrderDetails
-                    .Where(od => od.Status == "Confirmed")
+                    .Where(od => od.Status == "Confirmed" && (string.IsNullOrEmpty(od.CookingStatus) || od.CookingStatus == "Waiting" || od.CookingStatus == "Accepted" || od.CookingStatus == "Cooking" || od.CookingStatus == "Ready"))
                     .Select(od => new KitchenItemDto
                     {
                         OrderDetailId = od.Id,
@@ -155,7 +155,7 @@ namespace MenuGoBE.Service
                         Price = od.Price,
                         Note = od.Note ?? string.Empty,
                         Status = od.Status ?? "Confirmed",
-                        CookingStatus = string.IsNullOrEmpty(od.CookingStatus) ? "Waiting" : od.CookingStatus,
+                        CookingStatus = string.IsNullOrEmpty(od.CookingStatus) || od.CookingStatus == "Accepted" ? "Waiting" : od.CookingStatus,
                         CreatedAt = od.CreatedAt
                     });
                 result.AddRange(items);
