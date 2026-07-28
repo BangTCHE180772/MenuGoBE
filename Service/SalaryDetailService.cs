@@ -27,9 +27,9 @@ namespace MenuGoBE.Service
             _mapper = mapper;
         }
 
-        public async Task<List<SalaryDetailViewDto>> GetAllAsync(long? payrollId = null, long? accountId = null)
+        public async Task<List<SalaryDetailViewDto>> GetAllAsync(long? payrollId = null, long? accountId = null, List<long>? branchIds = null, List<long>? roleIds = null)
         {
-            var details = await _salaryDetailRepo.GetAllAsync(payrollId, accountId);
+            var details = await _salaryDetailRepo.GetAllAsync(payrollId, accountId, branchIds, roleIds);
             return _mapper.Map<List<SalaryDetailViewDto>>(details);
         }
 

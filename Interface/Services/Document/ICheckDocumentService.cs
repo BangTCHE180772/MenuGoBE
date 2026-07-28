@@ -7,7 +7,7 @@ namespace MenuGoBE.Interface.Services.Document
     public interface ICheckDocumentService
     {
         Task<DocumentEntity> CreateCheckDocumentAsync(CheckDocumentCreateDto dto, long? createdBy = null);
-        Task<DocumentEntity> CreateAdjustmentDocumentAsync(AdjustmentDocumentCreateDto dto, long? createdBy = null);
         Task DeleteCheckDocumentAsync(long documentId, long? deletedBy = null);
     }
 }
+

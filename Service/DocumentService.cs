@@ -40,12 +40,14 @@ namespace MenuGoBE.Service
             {
                 DocumentType.Import => "Nhập kho",
                 DocumentType.Export => "Xuất hủy",
-                DocumentType.Transfer => "Chuyển hàng",
+                DocumentType.Transfer => "Xuất chuyển kho",
                 DocumentType.Return => "Trả hàng nhập",
                 DocumentType.Check => "Kiểm kho",
                 DocumentType.Production => "Sản xuất",
+                DocumentType.ReceiveTransfer => "Nhận chuyển kho",
                 _ => "Khác"
             };
+
 
             return new DocumentResponseDto
             {
@@ -58,7 +60,7 @@ namespace MenuGoBE.Service
                 Code = doc.Code,
                 Type = doc.Type,
                 TypeLabel = typeLabel,
-                Status = doc.Status.ToString(),
+                IsDeleted = doc.IsDeleted,
                 TransferStatus = doc.TransferStatus.ToString(),
                 TotalAmount = doc.TotalAmount,
                 Creator = doc.Creator?.Name ?? doc.Creator?.Email ?? "Hệ thống",
@@ -73,7 +75,8 @@ namespace MenuGoBE.Service
                     SystemQuantity = d.SystemQuantity ?? d.Quantity,
                     UnitPrice = d.UnitPrice,
                     Amount = d.Quantity * d.UnitPrice,
-                    Note = d.Note
+                    Note = d.Note,
+                    IsDeleted = d.IsDeleted
                 }).ToList(),
                 Partners = doc.DocumentPartners.Select(p => new DocumentPartnerResponseDto
                 {

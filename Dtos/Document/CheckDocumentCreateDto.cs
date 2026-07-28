@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using MenuGoBE.Helpers;
 
 namespace MenuGoBE.Dtos.Document
 {
@@ -12,7 +13,14 @@ namespace MenuGoBE.Dtos.Document
         [Required]
         public DateTime BusinessDate { get; set; }
 
+        /// <summary>
+        /// Bắt buộc: Id tài khoản người tạo phiếu (truyền từ Frontend).
+        /// </summary>
+        [Required]
+        public long CreatedByAccountId { get; set; }
+
         public string? Note { get; set; }
+
 
         [Required]
         [MinLength(1, ErrorMessage = "Phải có ít nhất 1 chi tiết kiểm kho.")]
@@ -25,12 +33,14 @@ namespace MenuGoBE.Dtos.Document
         public long BInventoryId { get; set; }
 
         [Required]
-        [Range(0, 99999999.999, ErrorMessage = "Số lượng kiểm đếm thực tế không hợp lệ (>= 0).")]
+        [Range(0, 10000000000.000, ErrorMessage = "Số lượng kiểm đếm thực tế không hợp lệ (từ 0 đến 10.000.000.000).")]
         public decimal ActualQuantity { get; set; }
 
-        [Range(0, 99999999999.999, ErrorMessage = "Đơn giá không hợp lệ (>= 0).")]
+        [Range(1, 999999999999, ErrorMessage = "Đơn giá phải là số nguyên lớn hơn hoặc bằng 1.")]
+        [IntegerOnly(ErrorMessage = "Đơn giá phải là số nguyên lớn hơn hoặc bằng 1.")]
         public decimal? UnitPrice { get; set; }
 
         public string? Note { get; set; }
     }
+
 }

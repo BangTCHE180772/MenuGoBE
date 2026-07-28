@@ -335,8 +335,87 @@ public static class ErrorCodes
     );
 
     public static readonly ErrorResult DocumentPartnerNotFound = new(
-        2111,
-        "Số lượng trả hàng không được vượt quá số lượng đã nhập.",
+        2112,
+        "Không tìm thấy đối tác trong hệ thống.",
+        404
+    );
+
+    public static readonly ErrorResult DocumentAmountDueRequiredForNonSupplier = new(
+        2113,
+        "Đối tác loại Vận chuyển / Khác phải khai báo số tiền cần trả (AmountDue).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTotalAmountExceedsLimit = new(
+        2114,
+        "Tổng giá trị chứng từ / chuyến chuyển kho không được vượt quá 10 tỷ đồng.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentUnitConversionNotFound = new(
+        2115,
+        "Không tìm thấy quy đổi đơn vị tương ứng.",
+        404
+    );
+
+    public static readonly ErrorResult DocumentInvalidQuantity = new(
+        2116,
+        "Số lượng không hợp lệ: tất cả các dòng chi tiết đều bằng 0.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentReturnInsufficientInventory = new(
+        2117,
+        "Tồn kho không đủ để trả hàng tại thời điểm được chọn.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferReceiveDateMustBeAfterSendDate = new(
+        2118,
+        "Ngày nhận hàng phải lớn hơn ngày xuất chuyển từ chi nhánh gửi.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferFromBranchPostingLockError = new(
+        2119,
+        "Không thể thực hiện do chi nhánh gửi đã khóa sổ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentProductionInsufficientRawMaterial = new(
+        2120,
+        "Tồn kho nguyên vật liệu không đủ tại thời điểm sản xuất.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentInvalidUnitPrice = new(
+        2121,
+        "Đơn giá/số tiền phải là số nguyên lớn hơn hoặc bằng 1.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentQuantityRangeExceeded = new(
+        2122,
+        "Số lượng hàng hóa phải từ 0,001 đến 1.000.000 đơn vị.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentAmountPaidExceedsAmountDue = new(
+        2123,
+        "Số tiền đã trả không được vượt quá số tiền phải trả.",
+        400
+    );
+
+    /// <summary>
+    /// ERR_STOCK_AUDIT_LOCKED – BusinessDate của chứng từ phải lớn hơn (>)
+    /// BusinessDate của phiếu kiểm kho (Chốt sổ) mới nhất cho từng sản phẩm liên quan.
+    /// </summary>
+    public static readonly ErrorResult DocumentStockAuditLocked = new(
+        2124,
+        "Ngày chứng từ phải lớn hơn ngày phiếu kiểm kho chốt sổ gần nhất của tất cả sản phẩm liên quan.",
         400
     );
 }
+
+
+

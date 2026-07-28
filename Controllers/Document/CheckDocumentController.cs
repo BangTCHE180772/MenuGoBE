@@ -35,9 +35,13 @@ namespace MenuGoBE.Controllers.Document
         // 5. CHECK DOCUMENT (Kiểm kho - Type 5)
         // ==========================================
         [HttpGet("check")]
-        [HttpGet("adjustment")]
         public async Task<IActionResult> GetCheckDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Check);
@@ -57,8 +61,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = GetUserId();
-                var result = await _service.CreateCheckDocumentAsync(dto, createdBy);
+                var result = await _service.CreateCheckDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -67,29 +70,9 @@ namespace MenuGoBE.Controllers.Document
                     code = result.Code
                 });
             }
-            catch (Exception ex)
+            catch (Exceptions.MenuGoException ex)
             {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi tạo phiếu kiểm kho.", error = ex.Message });
-            }
-        }
-
-        [HttpPost("adjustment")]
-        public async Task<IActionResult> CreateAdjustment([FromBody] AdjustmentDocumentCreateDto dto)
-        {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            try
-            {
-                var createdBy = GetUserId();
-                var result = await _service.CreateAdjustmentDocumentAsync(dto, createdBy);
-                
-                return Ok(new
-                {
-                    message = "Tạo phiếu kiểm kho thành công.",
-                    documentId = result.Id,
-                    code = result.Code
-                });
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -98,7 +81,6 @@ namespace MenuGoBE.Controllers.Document
         }
 
         [HttpDelete("check/{id}")]
-        [HttpDelete("adjustment/{id}")]
         public async Task<IActionResult> DeleteCheck(long id)
         {
             try
@@ -114,3 +96,4 @@ namespace MenuGoBE.Controllers.Document
         }
     }
 }
+

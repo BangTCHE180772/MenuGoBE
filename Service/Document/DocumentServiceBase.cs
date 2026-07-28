@@ -41,11 +41,15 @@ namespace MenuGoBE.Service.Document
             if (document.Branch.PostingLockDate.HasValue && document.BusinessDate.Date <= document.Branch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError, "Không thể xóa chứng từ do ngày chứng từ nằm trước hoặc bằng ngày khóa sổ.");
 
+            // 1b. Validation: Stock Audit Lock (ERR_STOCK_AUDIT_LOCKED)
+            // Chặn xóa nếu BusinessDate của chứng từ <= BusinessDate của phiếu kiểm kho gần nhất
+            var deleteBinvIds = document.DocumentDetails.Select(d => d.BInventoryId).Distinct().ToList();
+            await ValidateStockAuditLockAsync(deleteBinvIds, document.BusinessDate);
+
             // 2. Prepare soft delete for Document
             document.IsDeleted = true;
             document.DeletedBy = deletedBy;
             document.DeletedAt = DateTime.UtcNow;
-            document.Status = DocumentStatus.Cancelled;
 
             // 3. Prepare soft delete for associated CashFlows
             var cashFlows = await _repo.GetCashFlowsByDocumentIdAsync(documentId);
@@ -215,6 +219,29 @@ namespace MenuGoBE.Service.Document
             ledger.RunningAverageCost = newAvgCost;
             ledger.RunningLeftOver = newLeftOver;
             ledger.RunningInventoryValue = newTotalValue;
+        }
+
+        /// <summary>
+        /// Kiểm tra Business Date Validation – Stock Audit Lock (ERR_STOCK_AUDIT_LOCKED).
+        /// Điều kiện: documentBusinessDate phải STRICTLY GREATER THAN (>) BusinessDate của
+        /// phiếu kiểm kho (DocumentType.Check) mới nhất cho từng BInventoryId trong danh sách.
+        /// Nếu vi phạm → throw MenuGoException với mã 2124 kèm thông tin phiếu kiểm kho chặn lại.
+        /// </summary>
+        protected async Task ValidateStockAuditLockAsync(List<long> binvIds, DateTime documentBusinessDate)
+        {
+            var auditLedgers = await _repo.GetLatestCheckLedgersForBInventoriesAsync(binvIds);
+            foreach (var auditLedger in auditLedgers)
+            {
+                if (documentBusinessDate <= auditLedger.BusinessDate)
+                {
+                    string auditCode = auditLedger.Document?.Code ?? $"Id={auditLedger.DocumentId}";
+                    throw new MenuGoException(
+                        ErrorCodes.DocumentStockAuditLocked,
+                        $"Ngày chứng từ ({documentBusinessDate:dd/MM/yyyy HH:mm}) phải lớn hơn ngày chốt sổ của phiếu kiểm kho [{auditCode}]" +
+                        $" ({auditLedger.BusinessDate:dd/MM/yyyy HH:mm}) đang chặn BInventory Id={auditLedger.BInventoryId}."
+                    );
+                }
+            }
         }
     }
 }

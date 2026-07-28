@@ -17,11 +17,13 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<SalaryDetail>> GetAllAsync(long? payrollId = null, long? accountId = null)
+        public async Task<List<SalaryDetail>> GetAllAsync(long? payrollId = null, long? accountId = null, List<long>? branchIds = null, List<long>? roleIds = null)
         {
             var query = _context.SalaryDetails
                 .Include(sd => sd.Account)
+                    .ThenInclude(a => a.Contracts)
                 .Include(sd => sd.Payroll)
+                    .ThenInclude(p => p.Contract)
                 .AsQueryable();
 
             if (payrollId.HasValue && payrollId.Value > 0)
@@ -32,6 +34,17 @@ namespace MenuGoBE.Repositories
             if (accountId.HasValue && accountId.Value > 0)
             {
                 query = query.Where(sd => sd.AccountId == accountId.Value);
+            }
+
+            if (branchIds != null && branchIds.Count > 0)
+            {
+                query = query.Where(sd => sd.Payroll != null && branchIds.Contains(sd.Payroll.BranchId));
+            }
+
+            if (roleIds != null && roleIds.Count > 0)
+            {
+                query = query.Where(sd => (sd.Payroll != null && sd.Payroll.Contract != null && roleIds.Contains(sd.Payroll.Contract.RoleId))
+                                       || (sd.Account != null && sd.Account.Contracts.Any(c => roleIds.Contains(c.RoleId))));
             }
 
             return await query.OrderByDescending(sd => sd.CreatedAt).ToListAsync();

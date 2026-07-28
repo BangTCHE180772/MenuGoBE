@@ -17,5 +17,6 @@ namespace MenuGoBE.Dtos.Account
         public long? AddressId { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<long> RoleIds { get; set; } = new List<long>();
+        public long? BranchId { get; set; }
     }
 }

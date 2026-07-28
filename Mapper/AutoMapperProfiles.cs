@@ -84,7 +84,9 @@ namespace MenuGoBE.Mapper
             CreateMap<AreaUpdateDto, Area>();
 
             //order
-            CreateMap<Order, OrderViewDto>();
+            CreateMap<Order, OrderViewDto>()
+                .ForMember(dest => dest.TableName, opt => opt.MapFrom(src => src.Table != null ? (src.ChildOrders.Any() ? src.Table.Name + ", " + string.Join(", ", src.ChildOrders.Select(c => c.Table.Name)) : src.Table.Name) : null))
+                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.Payments.OrderByDescending(p => p.CreatedAt).Select(p => p.Method).FirstOrDefault()));
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
             CreateMap<OrderDetail, OrderDetailViewDto>()
@@ -94,7 +96,8 @@ namespace MenuGoBE.Mapper
 
             //account
             CreateMap<Account, AccountViewDto>()
-                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()));
+                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()))
+                .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Contracts.Where(c => c.Status == "Active").Select(c => (long?)c.BranchId).FirstOrDefault() ?? src.Contracts.Select(c => (long?)c.BranchId).FirstOrDefault()));
 
             CreateMap<AccountCreateDto, Account>();
             CreateMap<AccountUpdateDto, Account>();

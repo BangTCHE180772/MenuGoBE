@@ -52,6 +52,9 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể xuất nguyên liệu [{rawBinv.Product.Name}] do thuộc loại Processed.");
             }
 
+            // Stock Audit Lock Validation (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(allBinvIds, dto.BusinessDate);
+
             var now = DateTime.UtcNow;
             string code = $"PR{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
 
@@ -64,10 +67,9 @@ namespace MenuGoBE.Service.Document
                 BusinessDate = exactSecondDate,
                 Code = code,
                 Type = DocumentType.Production,
-                Status = DocumentStatus.Completed,
                 TransferStatus = DocumentTransferStatus.None,
                 TotalAmount = 0,
-                CreatedBy = createdBy,
+                CreatedBy = createdBy ?? dto.CreatedByAccountId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -75,13 +77,36 @@ namespace MenuGoBE.Service.Document
             var afterLedgers = await _repo.GetLedgersAfterDateAsync(allBinvIds, document.BusinessDate);
             var afterLedgersDict = afterLedgers.GroupBy(l => l.BInventoryId).ToDictionary(g => g.Key, g => g.ToList());
 
+            // ── KIỂM TRA TỒN KHO NGUYÊN LIỆU (Strict Check) ─────────────────────
+            // Gom tổng số lượng nguyên liệu cần dùng theo từng BInventoryId,
+            // sau đó so sánh với RunningQuantity tại mốc BusinessDate.
+            var requiredRawQtyByBinv = dto.RawMaterials
+                .GroupBy(r => r.BInventoryId)
+                .ToDictionary(g => g.Key, g => g.Sum(r => r.Quantity));
+
+            foreach (var (binvId, requiredQty) in requiredRawQtyByBinv)
+            {
+                var prior = beforeLedgers.FirstOrDefault(l => l.BInventoryId == binvId);
+                decimal availableQty = prior?.RunningQuantity ?? 0;
+
+                if (requiredQty > availableQty)
+                {
+                    var rawBinv = binvs.FirstOrDefault(b => b.Id == binvId);
+                    string rawName = rawBinv?.Product?.Name ?? $"BInventoryId={binvId}";
+                    throw new MenuGoException(
+                        ErrorCodes.DocumentProductionInsufficientRawMaterial,
+                        $"Không đủ số lượng nguyên vật liệu [{rawName}] tại mốc thời gian sản xuất {exactSecondDate:dd/MM/yyyy}. " +
+                        $"Tồn sổ sách hiện tại: {availableQty:0.###}, Cần dùng: {requiredQty:0.###}.");
+                }
+            }
+
             var details = new List<DocumentDetail>();
             var ledgersToCreate = new List<InventoryLedger>();
             var ledgersToUpdate = new List<InventoryLedger>();
             var updatedBInvs = new List<BInventory>();
             decimal totalConsumedRawMaterialValue = 0;
 
-            // 1. OUTFLOW RAW MATERIALS
+            // 1. OUTFLOW RAW MATERIALS (Đơn vị base)
             foreach (var raw in dto.RawMaterials)
             {
                 var binv = binvs.First(b => b.Id == raw.BInventoryId);
@@ -91,26 +116,19 @@ namespace MenuGoBE.Service.Document
                 decimal runningAvg = priorLedger?.RunningAverageCost ?? 0;
                 decimal runningLeftOver = priorLedger?.RunningLeftOver ?? 0;
 
-                // RÀNG BUỘC PHƯƠNG ÁN 2: Bắt buộc phải đủ hàng tồn kho tại mốc thời gian sản xuất
-                if (runningQuantity < raw.Quantity)
-                {
-                    throw new MenuGoException(
-                        ErrorCodes.DocumentReturnQuantityExceeded, 
-                        $"Không đủ số lượng nguyên vật liệu [{binv.Product.Name}] tại mốc thời gian sản xuất. Tồn sổ sách hiện tại: {runningQuantity}, Cần xuất: {raw.Quantity}.");
-                }
-
                 decimal currentTotalValue = (runningQuantity * runningAvg) + runningLeftOver;
 
                 var docDetail = new DocumentDetail
                 {
                     BInventoryId = raw.BInventoryId,
                     Quantity = raw.Quantity,
-                    SystemQuantity = raw.Quantity,
+                    SystemQuantity = raw.Quantity, // Chỉ dùng đơn vị base
                     UnitPrice = runningAvg,
                     Note = $"Xuất nguyên vật liệu cho sản xuất: {raw.Note}",
                     CreatedAt = DateTime.UtcNow
                 };
                 details.Add(docDetail);
+
 
                 var newLedger = new InventoryLedger
                 {
@@ -125,7 +143,6 @@ namespace MenuGoBE.Service.Document
                     RunningLeftOver = 0,
                     UnitCost = runningAvg,
                     DocumentDetail = docDetail,
-                    CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -191,7 +208,6 @@ namespace MenuGoBE.Service.Document
                 RunningLeftOver = 0,
                 UnitCost = finishedUnitCost,
                 DocumentDetail = finishedDocDetail,
-                CreatedBy = createdBy,
                 CreatedAt = DateTime.UtcNow
             };
 

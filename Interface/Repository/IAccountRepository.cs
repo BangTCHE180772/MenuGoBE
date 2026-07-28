@@ -6,7 +6,8 @@ namespace MenuGoBE.Interface.Repository
 {
     public interface IAccountRepository
     {
-        Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, long? branchId);
+        Task<List<Account>> GetAccountsExcludeRolesAsync(List<long> excludedRoles, List<long>? branchIds = null, long? managerAccountId = null);
+        Task<List<Account>> GetAccountsByRolesAsync(List<long> roleIds, long? branchId = null);
         Task<Account?> GetByIdAsync(long id);
         Task<Account?> GetAccountByEmailAsync(string email);
         Task<Account?> GetAccountWithRolesAsync(long id);
@@ -19,5 +20,7 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> ExistsByCitizenIdCodeAsync(string citizenIdCode, long? excludeId = null);
         Task<List<long>> GetValidAccountIdsAsync(List<long> accountIds);
         Task<List<long>> GetActiveRoleIdsAsync(long accountId);
+        Task<(bool IsAdmin, bool IsManager, List<long> BranchIds)> GetAccountPermissionsAsync(long accountId);
+        Task<bool> CanManagerAccessAccountAsync(long targetAccountId, List<long> managerBranchIds, long managerAccountId);
     }
 }

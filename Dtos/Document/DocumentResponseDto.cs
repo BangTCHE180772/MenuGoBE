@@ -15,7 +15,7 @@ namespace MenuGoBE.Dtos.Document
         public string Code { get; set; } = string.Empty;
         public DocumentType Type { get; set; }
         public string TypeLabel { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
+        public bool IsDeleted { get; set; }
         public string TransferStatus { get; set; } = string.Empty;
         public decimal TotalAmount { get; set; }
         public string Creator { get; set; } = string.Empty;
@@ -36,6 +36,7 @@ namespace MenuGoBE.Dtos.Document
         public decimal UnitPrice { get; set; }
         public decimal Amount { get; set; }
         public string? Note { get; set; }
+        public bool IsDeleted { get; set; }
     }
 
     public class DocumentPartnerResponseDto

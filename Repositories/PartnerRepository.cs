@@ -2,6 +2,7 @@ using MenuGoBE.Data;
 using MenuGoBE.Dtos.Partner;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Repositories
@@ -27,7 +28,20 @@ namespace MenuGoBE.Repositories
                 queryable = queryable.Where(p => p.BranchId == query.BranchId.Value);
             }
 
-            if (query.Type.HasValue)
+            if (query.Mode.HasValue)
+            {
+                queryable = query.Mode.Value switch
+                {
+                    // Mode 1: Supplier
+                    1 => queryable.Where(p => p.Type == PartnerType.Supplier),
+                    // Mode 2: Transport and Other
+                    2 => queryable.Where(p => p.Type == PartnerType.Transporter || p.Type == PartnerType.Other),
+                    // Mode 3: Customer
+                    3 => queryable.Where(p => p.Type == PartnerType.Customer),
+                    _ => queryable
+                };
+            }
+            else if (query.Type.HasValue)
             {
                 queryable = queryable.Where(p => p.Type == query.Type.Value);
             }
