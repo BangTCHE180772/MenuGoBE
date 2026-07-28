@@ -17,5 +17,6 @@ namespace MenuGoBE.Dtos.Dashboard
         public List<DashboardMonthlyPointDto>? MonthlyStats { get; set; }
         public List<DashboardPaymentMethodDto> PaymentMethods { get; set; } = new();
         public List<DashboardHourSlotDto> HourSlots { get; set; } = new();
+        public List<DashboardDishDto> TopDishes { get; set; } = new();
     }
 }

@@ -18,7 +18,7 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<(decimal Revenue, decimal Expenses, decimal Profit, int CompletedBills, int TotalItemsSold, decimal AvgOrderValue, List<DashboardPaymentMethodDto> PaymentMethods, List<DashboardHourSlotDto> HourSlots)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
+        public async Task<(decimal Revenue, decimal Expenses, decimal Profit, int CompletedBills, int TotalItemsSold, decimal AvgOrderValue, List<DashboardPaymentMethodDto> PaymentMethods, List<DashboardHourSlotDto> HourSlots, List<DashboardDishDto> TopDishes)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
         {
             var paymentsQuery = _context.Payments
                 .Where(p => p.Status == "Success" && p.CreatedAt >= startDate && p.CreatedAt <= endDate);
@@ -87,7 +87,45 @@ namespace MenuGoBE.Repositories
                 new() { Slot = "Tối (18-22h)", Value = (double)eveningSum }
             };
 
-            return (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots);
+            // Get ChainId if branchId is provided
+            long? chainId = null;
+            if (branchId.HasValue)
+            {
+                var branch = await _context.Branches.FindAsync(branchId.Value);
+                if (branch != null)
+                {
+                    chainId = branch.ChainId;
+                }
+            }
+
+            var productsQuery = _context.Products.AsQueryable();
+            if (chainId.HasValue)
+            {
+                productsQuery = productsQuery.Where(p => p.ChainId == chainId.Value);
+            }
+
+            var allProducts = await productsQuery.Select(p => p.Name).Distinct().ToListAsync();
+
+            // Group Top/Least Dishes from paid orders
+            var realSales = await _context.OrderDetails
+                .Where(od => paidOrderIds.Contains(od.OrderId))
+                .GroupBy(od => od.Product.Name)
+                .Select(g => new
+                {
+                    Name = g.Key,
+                    Quantity = g.Sum(od => od.Quantity)
+                })
+                .ToDictionaryAsync(x => x.Name, x => x.Quantity);
+
+            var topDishes = allProducts.Select(name => new DashboardDishDto
+            {
+                Name = name,
+                Quantity = realSales.TryGetValue(name, out var qty) ? qty : 0
+            })
+            .OrderByDescending(d => d.Quantity)
+            .ToList();
+
+            return (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots, topDishes);
         }
 
         public async Task<(DashboardOrderSummaryDto OrderSummary, List<DashboardAlertDto> Alerts, List<DashboardCashFlowDto> CashFlowList)> GetTodayDetailStatsAsync(long? branchId)
