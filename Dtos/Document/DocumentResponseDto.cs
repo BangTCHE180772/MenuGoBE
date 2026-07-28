@@ -44,7 +44,23 @@ namespace MenuGoBE.Dtos.Document
         public long Id { get; set; }
         public long PartnerId { get; set; }
         public string PartnerName { get; set; } = string.Empty;
+        public PartnerType PartnerType { get; set; }
         public decimal Cost { get; set; }
+        public decimal AmountDue { get; set; }
+        public decimal AmountPaid { get; set; }
+        public string? Note { get; set; }
+
+        public List<CashFlowDetailResponseDto> CashFlowDetails { get; set; } = new List<CashFlowDetailResponseDto>();
+    }
+
+    public class CashFlowDetailResponseDto
+    {
+        public long Id { get; set; }
+        public long CashFlowId { get; set; }
+        public string CashFlowCode { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string PaymentMethod { get; set; } = string.Empty;
+        public DateTime BusinessDate { get; set; }
         public string? Note { get; set; }
     }
 }

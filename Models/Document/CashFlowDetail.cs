@@ -25,6 +25,8 @@ public class CashFlowDetail
 
     public string? Note { get; set; }
 
+    public bool IsDeleted { get; set; } = false;
+
     // Navigation
     [ForeignKey("CashFlowId")]
     public CashFlow CashFlow { get; set; } = null!;

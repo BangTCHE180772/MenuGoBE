@@ -245,6 +245,9 @@ namespace MenuGoBE.Repositories
                         .ThenInclude(b => b.Product)
                 .Include(d => d.DocumentPartners)
                     .ThenInclude(dp => dp.Partner)
+                .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.CashFlowDetails)
+                        .ThenInclude(cfd => cfd.CashFlow)
                 .FirstOrDefaultAsync(d => d.Id == documentId);
         }
 
@@ -258,6 +261,9 @@ namespace MenuGoBE.Repositories
                         .ThenInclude(b => b.Product)
                 .Include(d => d.DocumentPartners)
                     .ThenInclude(dp => dp.Partner)
+                .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.CashFlowDetails)
+                        .ThenInclude(cfd => cfd.CashFlow)
                 .Where(d => !d.IsDeleted);
 
             if (branchId.HasValue && branchId.Value > 0)
