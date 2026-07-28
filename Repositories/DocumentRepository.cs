@@ -353,5 +353,25 @@ namespace MenuGoBE.Repositories
                 .Where(u => ids.Contains(u.Id))
                 .ToListAsync();
         }
+
+        public async Task<List<InventoryLedger>> GetLatestCheckLedgersForBInventoriesAsync(List<long> binvIds)
+        {
+            var result = new List<InventoryLedger>();
+            foreach (var binvId in binvIds)
+            {
+                var latest = await _context.InventoryLedgers
+                    .Include(l => l.Document)
+                    .Where(l => l.BInventoryId == binvId
+                             && l.DocumentType == DocumentType.Check
+                             && l.Document != null && !l.Document.IsDeleted)
+                    .OrderByDescending(l => l.BusinessDate)
+                    .ThenByDescending(l => l.PostingSequence)
+                    .FirstOrDefaultAsync();
+
+                if (latest != null)
+                    result.Add(latest);
+            }
+            return result;
+        }
     }
 }

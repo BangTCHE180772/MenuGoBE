@@ -81,8 +81,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateTransferDocumentAsync(dto, createdBy);
+                var result = await _service.CreateTransferDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -110,8 +109,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.ReceiveTransferDocumentAsync(dto, createdBy);
+                var result = await _service.ReceiveTransferDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -139,8 +137,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var rejectedBy = dto.AccountId ?? GetUserId();
-                var result = await _service.RejectTransferDocumentAsync(dto, rejectedBy);
+                var result = await _service.RejectTransferDocumentAsync(dto, dto.CreatedByAccountId);
 
 
                 return Ok(new

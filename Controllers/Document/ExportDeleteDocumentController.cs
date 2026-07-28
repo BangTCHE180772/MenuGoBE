@@ -56,8 +56,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateExportDeleteDocumentAsync(dto, createdBy);
+                var result = await _service.CreateExportDeleteDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
