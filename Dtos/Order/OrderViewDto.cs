@@ -28,5 +28,9 @@ namespace MenuGoBE.Dtos.Order
         public long? CreatedBy { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public string? TableName { get; set; }
+
+        public string? PaymentMethod { get; set; }
     }
 }
