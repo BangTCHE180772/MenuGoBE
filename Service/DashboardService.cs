@@ -73,21 +73,20 @@ namespace MenuGoBE.Service
                 endDate = DateTime.SpecifyKind(today.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
             }
 
-            var (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue) =
+            var (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots) =
                 await _repo.GetFinancialStatsAsync(startDate, endDate, branchId);
 
             DashboardOrderSummaryDto? orderSummary = null;
             List<DashboardAlertDto>? alerts = null;
-            List<DashboardCashFlowDto>? cashFlowList = null;
 
             if (range == "today")
             {
                 var detailStats = await _repo.GetTodayDetailStatsAsync(branchId);
                 orderSummary = detailStats.OrderSummary;
                 alerts = detailStats.Alerts;
-                cashFlowList = detailStats.CashFlowList;
             }
 
+            var cashFlowList = await _repo.GetCashFlowListAsync(startDate, endDate, branchId);
             var dailyStats = await _repo.GetDailyBreakdownAsync(startDate, endDate, branchId);
             var monthlyStats = await _repo.GetMonthlyBreakdownAsync(today.Year, branchId);
 
@@ -103,7 +102,9 @@ namespace MenuGoBE.Service
                 Alerts = alerts,
                 CashFlowList = cashFlowList,
                 DailyStats = dailyStats,
-                MonthlyStats = monthlyStats
+                MonthlyStats = monthlyStats,
+                PaymentMethods = paymentMethods,
+                HourSlots = hourSlots
             };
         }
     }
