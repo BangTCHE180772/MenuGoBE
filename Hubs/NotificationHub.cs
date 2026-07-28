@@ -9,5 +9,10 @@ namespace MenuGoBE.Hubs
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"device_{deviceToken}");
         }
+
+        public async Task JoinBranchGroup(long branchId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"branch_{branchId}");
+        }
     }
 }

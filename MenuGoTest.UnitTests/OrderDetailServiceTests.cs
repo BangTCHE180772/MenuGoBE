@@ -15,7 +15,6 @@ namespace MenuGoTest.UnitTests
     {
         private readonly Mock<IOrderDetailRepository> _detailRepoMock;
         private readonly Mock<IOrderRepository> _orderRepoMock;
-        private readonly Mock<IRecipeRepository> _recipeRepoMock;
         private readonly Mock<IMapper> _mapperMock;
         private readonly OrderDetailService _service;
 
@@ -23,13 +22,11 @@ namespace MenuGoTest.UnitTests
         {
             _detailRepoMock = new Mock<IOrderDetailRepository>();
             _orderRepoMock = new Mock<IOrderRepository>();
-            _recipeRepoMock = new Mock<IRecipeRepository>();
             _mapperMock = new Mock<IMapper>();
 
             _service = new OrderDetailService(
                 _detailRepoMock.Object,
                 _orderRepoMock.Object,
-                _recipeRepoMock.Object,
                 _mapperMock.Object
             );
         }
