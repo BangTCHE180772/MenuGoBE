@@ -39,10 +39,6 @@ namespace MenuGoBE.Controllers
             if (!currentUserId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
-            if (!isAdmin && !isManager)
-                return StatusCode(403, new { message = "Bạn không có quyền xem thông tin ca làm việc." });
-
             var result = await _service.GetAllAsync();
             return Ok(result);
         }
@@ -53,10 +49,6 @@ namespace MenuGoBE.Controllers
             var currentUserId = GetCurrentAccountId();
             if (!currentUserId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
-
-            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
-            if (!isAdmin && !isManager)
-                return StatusCode(403, new { message = "Bạn không có quyền xem thông tin ca làm việc." });
 
             var result = await _service.GetByIdAsync(id);
             if (result == null)
