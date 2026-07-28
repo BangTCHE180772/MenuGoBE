@@ -37,6 +37,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("export-delete")]
         public async Task<IActionResult> GetExportDeleteDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Export);

@@ -38,6 +38,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("transfer")]
         public async Task<IActionResult> GetTransferDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Transfer);
@@ -57,6 +62,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("receive-transfer")]
         public async Task<IActionResult> GetReceiveTransferDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.ReceiveTransfer);
