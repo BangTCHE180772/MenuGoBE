@@ -1,10 +1,13 @@
 using System.Reflection;
+using MenuGoBE.Hubs;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Xunit;
 
 namespace MenuGoTest.UnitTests.ServiceTest.AutoCheckoutServiceTest;
 
@@ -13,11 +16,13 @@ public class ProcessAutoCheckoutsTests
     private readonly Mock<IWorkScheduleRepository> _workScheduleRepoMock;
     private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
     private readonly Mock<ILogger<AutoCheckoutService>> _loggerMock;
+    private readonly Mock<IHubContext<NotificationHub>> _hubContextMock;
 
     public ProcessAutoCheckoutsTests()
     {
         _workScheduleRepoMock = new Mock<IWorkScheduleRepository>();
         _loggerMock = new Mock<ILogger<AutoCheckoutService>>();
+        _hubContextMock = new Mock<IHubContext<NotificationHub>>();
 
         var serviceProviderMock = new Mock<IServiceProvider>();
         serviceProviderMock.Setup(sp => sp.GetService(typeof(IWorkScheduleRepository)))
@@ -64,7 +69,7 @@ public class ProcessAutoCheckoutsTests
         _workScheduleRepoMock.Setup(r => r.SaveChangesAsync())
             .Returns(Task.CompletedTask);
 
-        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object);
+        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object, _hubContextMock.Object);
 
         // Act - invoke private ProcessAutoCheckoutsAsync directly via Reflection
         var method = typeof(AutoCheckoutService).GetMethod("ProcessAutoCheckoutsAsync", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -129,7 +134,7 @@ public class ProcessAutoCheckoutsTests
         _workScheduleRepoMock.Setup(r => r.SaveChangesAsync())
             .Returns(Task.CompletedTask);
 
-        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object);
+        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object, _hubContextMock.Object);
 
         // Act
         var method = typeof(AutoCheckoutService).GetMethod("ProcessAutoCheckoutsAsync", BindingFlags.NonPublic | BindingFlags.Instance);
