@@ -60,6 +60,4 @@ public class Account
     [InverseProperty("Creator")]
     public ICollection<Partner> CreatedPartners { get; set; } = new List<Partner>();
 
-    [InverseProperty("Creator")]
-    public ICollection<InventoryLedger> CreatedInventoryLedgers { get; set; } = new List<InventoryLedger>();
 }

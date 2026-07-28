@@ -24,23 +24,6 @@ namespace MenuGoBE.Service.Document
 
         public async Task<DocumentEntity> CreateCheckDocumentAsync(CheckDocumentCreateDto dto, long? createdBy = null)
         {
-            var adjDto = new AdjustmentDocumentCreateDto
-            {
-                BranchId = dto.BranchId,
-                BusinessDate = dto.BusinessDate,
-                Details = dto.Details.Select(d => new AdjustmentDocumentDetailDto
-                {
-                    BInventoryId = d.BInventoryId,
-                    ActualQuantity = d.ActualQuantity,
-                    UnitPrice = d.UnitPrice,
-                    Note = d.Note
-                }).ToList()
-            };
-            return await CreateAdjustmentDocumentAsync(adjDto, createdBy);
-        }
-
-        public async Task<DocumentEntity> CreateAdjustmentDocumentAsync(AdjustmentDocumentCreateDto dto, long? createdBy = null)
-        {
             var branch = await _repo.GetBranchAsync(dto.BranchId);
             if (branch == null)
                 throw new MenuGoException(ErrorCodes.DocumentBranchNotFound);
@@ -60,6 +43,9 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể kiểm kho sản phẩm [{binv.Product.Name}] do thuộc loại Processed.");
             }
 
+            // Stock Audit Lock Validation (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(binvIds, dto.BusinessDate);
+
             var now = DateTime.UtcNow;
             string code = $"AD{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
 
@@ -71,11 +57,10 @@ namespace MenuGoBE.Service.Document
                 BranchId = dto.BranchId,
                 BusinessDate = exactSecondDate,
                 Code = code,
-                Type = DocumentType.Check,
-                Status = DocumentStatus.Completed,
+                Type = DocumentType.Check, // Type 5: Check
                 TransferStatus = DocumentTransferStatus.None,
                 TotalAmount = 0,
-                CreatedBy = createdBy,
+                CreatedBy = createdBy ?? dto.CreatedByAccountId,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -119,18 +104,17 @@ namespace MenuGoBE.Service.Document
                     DocumentType = document.Type,
                     QuantityDelta = quantityDelta,
                     InventoryValueDelta = 0,
-                    RunningQuantity = 0, 
+                    RunningQuantity = 0,
                     RunningInventoryValue = 0,
                     RunningAverageCost = 0,
                     RunningLeftOver = 0,
                     UnitCost = detail.UnitPrice ?? runningAvg,
                     DocumentDetail = docDetail,
-                    CreatedBy = createdBy,
                     CreatedAt = DateTime.UtcNow
                 };
 
                 RecalculateLedgerState(newLedger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                
+
                 runningQuantity = newLedger.RunningQuantity;
                 currentTotalValue = newLedger.RunningInventoryValue;
                 runningAvg = newLedger.RunningAverageCost;
@@ -144,7 +128,7 @@ namespace MenuGoBE.Service.Document
                     foreach (var ledger in subsequentLedgers)
                     {
                         RecalculateLedgerState(ledger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                        
+
                         runningQuantity = ledger.RunningQuantity;
                         currentTotalValue = ledger.RunningInventoryValue;
                         runningAvg = ledger.RunningAverageCost;
@@ -159,11 +143,11 @@ namespace MenuGoBE.Service.Document
                 binv.LeftOver = runningLeftOver;
                 updatedBInvs.Add(binv);
             }
-            
+
             document.TotalAmount = totalAdjustmentValue;
 
             return await _repo.ExecuteDocumentTransactionAsync(
-                document, details, new List<DocumentPartner>(), updatedBInvs, 
+                document, details, new List<DocumentPartner>(), updatedBInvs,
                 ledgersToCreate, ledgersToUpdate, new List<CashFlow>(), new List<CashFlowDetail>());
         }
 
@@ -173,3 +157,4 @@ namespace MenuGoBE.Service.Document
         }
     }
 }
+

@@ -41,6 +41,10 @@ namespace MenuGoBE.Service
                 throw new KeyNotFoundException($"Không tìm thấy Order với Id = {dto.OrderId}");
 
             var entity = _mapper.Map<OrderDetail>(dto);
+            if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
+            {
+                entity.CookingStatus = "Waiting";
+            }
 
             await _detailRepo.CreateAsync(entity);
             await _detailRepo.SaveChangesAsync();
@@ -89,6 +93,16 @@ namespace MenuGoBE.Service
             var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Confirmed");
             if (result)
             {
+                var detail = await _detailRepo.GetByIdAsync(orderDetailId);
+                if (detail != null)
+                {
+                    var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+                    if (order != null && (order.Status == "Reserved" || order.Status == "CustomerPending"))
+                    {
+                        order.Status = "Active";
+                        await _orderRepo.UpdateAsync(order);
+                    }
+                }
                 await _detailRepo.SaveChangesAsync();
             }
             return result;
@@ -137,7 +151,11 @@ namespace MenuGoBE.Service
             {
                 var tableName = order.Table?.Name ?? $"Bàn #{order.TableId}";
                 var items = order.OrderDetails
-                    .Where(od => od.Status != "Cancelled")
+                    .Where(od => string.Equals(od.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) || 
+                                 (!string.Equals(od.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && 
+                                  !string.IsNullOrEmpty(od.CookingStatus) && 
+                                  !string.Equals(od.CookingStatus, "Served", StringComparison.OrdinalIgnoreCase) && 
+                                  !string.Equals(od.CookingStatus, "CustomerPending", StringComparison.OrdinalIgnoreCase)))
                     .Select(od => new KitchenItemDto
                     {
                         OrderDetailId = od.Id,
@@ -146,6 +164,7 @@ namespace MenuGoBE.Service
                         TableName = tableName,
                         ProductId = od.ProductId,
                         ProductName = od.Product?.Name ?? "Mon ăn",
+                        ProductImage = od.Product?.Image?.ImageLink,
                         Quantity = od.Quantity,
                         Price = od.Price,
                         Note = od.Note ?? string.Empty,

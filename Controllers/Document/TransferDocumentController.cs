@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models.Enums;
@@ -37,16 +38,50 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("transfer")]
         public async Task<IActionResult> GetTransferDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Transfer);
                 return Ok(result);
             }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+            }
             catch (Exception ex)
             {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu chuyển kho.", error = ex.Message });
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu xuất chuyển kho.", error = ex.Message });
             }
         }
+
+        [HttpGet("transfer/receive")]
+        [HttpGet("receive-transfer")]
+        public async Task<IActionResult> GetReceiveTransferDocuments([FromQuery] long? branchId)
+        {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
+            try
+            {
+                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.ReceiveTransfer);
+                return Ok(result);
+            }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu nhận chuyển kho.", error = ex.Message });
+            }
+        }
+
 
         [HttpPost("transfer")]
         public async Task<IActionResult> CreateTransfer([FromBody] TransferDocumentCreateDto dto)
@@ -56,15 +91,18 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = GetUserId();
-                var result = await _service.CreateTransferDocumentAsync(dto, createdBy);
+                var result = await _service.CreateTransferDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
-                    message = "Tạo phiếu chuyển kho thành công (Đang treo chờ nhận hàng).",
+                    message = "Tạo phiếu chuyển kho thành công (Đã tự động khởi tạo phiếu nhận ở trạng thái chờ).",
                     documentId = result.Id,
                     code = result.Code
                 });
+            }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -81,8 +119,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = GetUserId();
-                var result = await _service.ReceiveTransferDocumentAsync(dto, createdBy);
+                var result = await _service.ReceiveTransferDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -91,9 +128,42 @@ namespace MenuGoBE.Controllers.Document
                     code = result.Code
                 });
             }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return BadRequest(new { message = "Đã xảy ra lỗi khi xác nhận nhận hàng chuyển kho.", error = ex.Message });
+            }
+        }
+
+        [HttpPost("transfer/reject")]
+        [HttpPost("transfer/{id}/reject")]
+        public async Task<IActionResult> RejectTransfer([FromBody] TransferRejectDocumentDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var result = await _service.RejectTransferDocumentAsync(dto, dto.CreatedByAccountId);
+
+
+                return Ok(new
+                {
+                    message = "Từ chối nhận hàng chuyển kho thành công. Hàng hóa đã hoàn quay trở lại kho chi nhánh gửi.",
+                    documentId = result.Id,
+                    code = result.Code
+                });
+            }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi từ chối nhận hàng chuyển kho.", error = ex.Message });
             }
         }
 
@@ -106,6 +176,10 @@ namespace MenuGoBE.Controllers.Document
                 await _service.DeleteTransferDocumentAsync(id, deletedBy);
                 return Ok(new { message = "Xóa phiếu chuyển kho thành công." });
             }
+            catch (MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+            }
             catch (Exception ex)
             {
                 return BadRequest(new { message = "Đã xảy ra lỗi khi xóa phiếu chuyển kho.", error = ex.Message });
@@ -113,3 +187,4 @@ namespace MenuGoBE.Controllers.Document
         }
     }
 }
+

@@ -17,13 +17,20 @@ namespace MenuGoBE.Service.Document
     {
         private new readonly IImportDocumentRepository _repo;
 
+        // 10 tỷ đồng
+        private const decimal MaxTotalAmount = 10_000_000_000m;
+
         public ImportDocumentService(IImportDocumentRepository repo) : base(repo)
         {
             _repo = repo;
         }
 
+        // ──────────────────────────────────────────────────────────────────────
+        // CREATE
+        // ──────────────────────────────────────────────────────────────────────
         public async Task<DocumentEntity> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null)
         {
+            // 1. Validate branch & posting lock date
             var branch = await _repo.GetBranchAsync(dto.BranchId);
             if (branch == null)
                 throw new MenuGoException(ErrorCodes.DocumentBranchNotFound);
@@ -31,8 +38,34 @@ namespace MenuGoBE.Service.Document
             if (branch.PostingLockDate.HasValue && dto.BusinessDate.Date <= branch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError);
 
+            // 2. Load partners & validate: đúng 1 Supplier, 0..n Transport/Other, cấm Customer
+            var partnerIds = dto.Partners.Select(p => p.PartnerId).Distinct().ToList();
+            var partners   = await _repo.GetPartnersAsync(partnerIds);
+
+            Partner? GetPartner(long id) => partners.FirstOrDefault(p => p.Id == id);
+
+            var supplierDtos   = dto.Partners.Where(dp => GetPartner(dp.PartnerId)?.Type == PartnerType.Supplier).ToList();
+            var customerDtos   = dto.Partners.Where(dp => GetPartner(dp.PartnerId)?.Type == PartnerType.Customer).ToList();
+            var extraDtos      = dto.Partners.Where(dp =>
+                                     GetPartner(dp.PartnerId)?.Type == PartnerType.Transporter ||
+                                     GetPartner(dp.PartnerId)?.Type == PartnerType.Other).ToList();
+
+            if (supplierDtos.Count != 1)
+                throw new MenuGoException(ErrorCodes.DocumentExactlyOneSupplierRequired);
+            if (customerDtos.Any())
+                throw new MenuGoException(ErrorCodes.DocumentGuestNotAllowedInImport);
+
+            // Transport / Other phải khai rõ AmountDue
+            foreach (var ep in extraDtos)
+            {
+                if (!ep.AmountDue.HasValue || ep.AmountDue.Value < 0)
+                    throw new MenuGoException(ErrorCodes.DocumentAmountDueRequiredForNonSupplier,
+                        $"Đối tác {GetPartner(ep.PartnerId)?.Name} (Transport/Other) phải khai báo AmountDue >= 0.");
+            }
+
+            // 3. Load BInventories (distinct IDs) & validate product types
             var binvIds = dto.Details.Select(d => d.BInventoryId).Distinct().ToList();
-            var binvs = await _repo.GetBInventoriesAsync(dto.BranchId, binvIds);
+            var binvs   = await _repo.GetBInventoriesAsync(dto.BranchId, binvIds);
 
             if (binvs.Count != binvIds.Count)
                 throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory);
@@ -40,183 +73,341 @@ namespace MenuGoBE.Service.Document
             foreach (var binv in binvs)
             {
                 if (binv.Product.Type == ProductType.Manufactured || binv.Product.Type == ProductType.Processed)
-                    throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể nhập kho sản phẩm [{binv.Product.Name}] do thuộc loại Manufactured hoặc Processed.");
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport,
+                        $"Không thể nhập kho sản phẩm [{binv.Product.Name}] do thuộc loại Manufactured hoặc Processed.");
             }
 
-            var partnerIds = dto.Partners.Select(p => p.PartnerId).Distinct().ToList();
-            var partners = await _repo.GetPartnersAsync(partnerIds);
-            
-            var suppliers = dto.Partners.Where(dp => partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Supplier).ToList();
-            var guests = dto.Partners.Where(dp => partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Customer).ToList();
+            // 3b. Stock Audit Lock Validation (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(binvIds, dto.BusinessDate);
 
-            if (suppliers.Count != 1)
-                throw new MenuGoException(ErrorCodes.DocumentExactlyOneSupplierRequired);
-            if (guests.Any())
-                throw new MenuGoException(ErrorCodes.DocumentGuestNotAllowedInImport);
+            // 4. Load UnitConversions for details that specify one
+            var ucIds = dto.Details
+                .Where(d => d.UnitConversionId.HasValue)
+                .Select(d => d.UnitConversionId!.Value)
+                .Distinct().ToList();
 
-            decimal totalGoodsValue = dto.Details.Sum(d => d.Quantity * d.UnitPrice);
-            
-            var transAndOthers = dto.Partners.Where(dp => 
-                partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Transporter ||
-                partners.FirstOrDefault(p => p.Id == dp.PartnerId)?.Type == PartnerType.Other).ToList();
-            
-            decimal totalExtraCost = transAndOthers.Sum(p => p.Cost);
+            var unitConversions = await _repo.GetUnitConversionsByIdsAsync(ucIds);
 
+            foreach (var d in dto.Details.Where(d => d.UnitConversionId.HasValue))
+            {
+                if (!unitConversions.Any(u => u.Id == d.UnitConversionId!.Value))
+                    throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound,
+                        $"UnitConversion Id={d.UnitConversionId} không tồn tại.");
+            }
+
+            // 5. Tính tiền hàng thực tế từng dòng (giữ nguyên thập phân để tính giá trị kho và phân bổ)
+            var rawLineGoodsValues = dto.Details
+                .Select(d => d.Quantity * d.UnitPrice)
+                .ToList();
+            decimal rawTotalGoodsValue = rawLineGoodsValues.Sum();
+
+            // 6. Khoản phải trả NCC (supplierAmountDue) làm tròn thành số nguyên theo AwayFromZero
+            decimal supplierAmountDue   = Math.Round(rawTotalGoodsValue, 0, MidpointRounding.AwayFromZero);
+            decimal extraAmountsDue     = extraDtos.Sum(ep => Math.Round(ep.AmountDue!.Value, 0, MidpointRounding.AwayFromZero));
+            decimal documentTotalAmount = supplierAmountDue + extraAmountsDue;
+
+            if (documentTotalAmount > MaxTotalAmount)
+                throw new MenuGoException(ErrorCodes.DocumentTotalAmountExceedsLimit,
+                    $"Tổng giá trị phiếu nhập ({documentTotalAmount:N0} ₫) vượt quá giới hạn 10 tỷ đồng.");
+
+            // Validate AmountPaid <= AmountDue cho từng đối tác
+            foreach (var partnerDto in dto.Partners)
+            {
+                var partner = GetPartner(partnerDto.PartnerId);
+                decimal due = partner?.Type == PartnerType.Supplier ? supplierAmountDue : Math.Round(partnerDto.AmountDue ?? 0m, 0, MidpointRounding.AwayFromZero);
+                decimal paid = Math.Round(partnerDto.AmountPaid, 0, MidpointRounding.AwayFromZero);
+                if (paid > due)
+                {
+                    throw new MenuGoException(ErrorCodes.DocumentAmountPaidExceedsAmountDue,
+                        $"Số tiền đã trả ({paid:N0} ₫) cho đối tác [{partner?.Name}] không được vượt quá số tiền phải trả ({due:N0} ₫).");
+                }
+            }
+
+            // 7. Build Document entity
             var now = DateTime.UtcNow;
-            string code = $"IM{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
+            string code = $"IM{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString("N").Substring(0, 4).ToUpper()}";
 
-            var rawDate = dto.BusinessDate.ToUniversalTime();
-            var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day, rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
+            var rawDate        = dto.BusinessDate.ToUniversalTime();
+            var exactSecondDate = new DateTime(rawDate.Year, rawDate.Month, rawDate.Day,
+                                               rawDate.Hour, rawDate.Minute, rawDate.Second, DateTimeKind.Utc);
 
             var document = new DocumentEntity
             {
-                BranchId = dto.BranchId,
-                BusinessDate = exactSecondDate,
-                Code = code,
-                Type = DocumentType.Import,
-                Status = DocumentStatus.Completed,
+                BranchId       = dto.BranchId,
+                BusinessDate   = exactSecondDate,
+                Code           = code,
+                Type           = DocumentType.Import,
                 TransferStatus = DocumentTransferStatus.None,
-                TotalAmount = totalGoodsValue + totalExtraCost,
-                CreatedBy = createdBy,
-                CreatedAt = DateTime.UtcNow
+                TotalAmount    = documentTotalAmount,
+                CreatedBy      = createdBy ?? dto.CreatedByAccountId,
+                CreatedAt      = now
             };
 
-            var beforeLedgers = await _repo.GetLatestLedgersBeforeOrEqualDateAsync(binvIds, document.BusinessDate);
-            var afterLedgers = await _repo.GetLedgersAfterDateAsync(binvIds, document.BusinessDate);
-            var afterLedgersDict = afterLedgers.GroupBy(l => l.BInventoryId).ToDictionary(g => g.Key, g => g.ToList());
+            // 8. Load ledger context for running-state calculation
+            var beforeLedgers    = await _repo.GetLatestLedgersBeforeOrEqualDateAsync(binvIds, exactSecondDate);
+            var afterLedgers     = await _repo.GetLedgersAfterDateAsync(binvIds, exactSecondDate);
+            var afterLedgersDict = afterLedgers
+                .GroupBy(l => l.BInventoryId)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
-            var details = new List<DocumentDetail>();
-            var ledgersToCreate = new List<InventoryLedger>();
-            var ledgersToUpdate = new List<InventoryLedger>();
-            var updatedBInvs = new List<BInventory>();
-
-            foreach (var detail in dto.Details)
+            // Running state per BInventoryId (init from prior ledger or zero)
+            var runningState = new Dictionary<long, (decimal qty, decimal totalValue, decimal avgCost, decimal leftOver)>();
+            foreach (var binvId in binvIds)
             {
-                decimal itemValue = detail.Quantity * detail.UnitPrice;
-                decimal itemAllocatedFee = totalGoodsValue > 0 ? (itemValue / totalGoodsValue) * totalExtraCost : 0;
-                decimal incomingTotalValue = itemValue + itemAllocatedFee;
+                var prior = beforeLedgers.FirstOrDefault(l => l.BInventoryId == binvId);
+                decimal pq  = prior?.RunningQuantity     ?? 0;
+                decimal pav = prior?.RunningAverageCost  ?? 0;
+                decimal plo = prior?.RunningLeftOver      ?? 0;
+                runningState[binvId] = (pq, (pq * pav) + plo, pav, plo);
+            }
+
+            // 8.5. Phân bổ chi phí phụ (extraAmountsDue từ Transporter/Other) theo tỷ lệ giá trị tiền hàng thực tế
+            var allocatedExtraCosts = new decimal[dto.Details.Count];
+            if (extraAmountsDue > 0 && dto.Details.Count > 0)
+            {
+                if (rawTotalGoodsValue > 0)
+                {
+                    decimal runningAllocatedSum = 0m;
+                    int maxValIndex = 0;
+                    decimal maxVal = -1m;
+
+                    for (int i = 0; i < dto.Details.Count; i++)
+                    {
+                        decimal rawLineValue = rawLineGoodsValues[i];
+                        if (rawLineValue > maxVal)
+                        {
+                            maxVal = rawLineValue;
+                            maxValIndex = i;
+                        }
+
+                        decimal rawAllocated = extraAmountsDue * (rawLineValue / rawTotalGoodsValue);
+                        decimal roundedAllocated = Math.Max(0m, Math.Round(rawAllocated, 0, MidpointRounding.AwayFromZero));
+                        allocatedExtraCosts[i] = roundedAllocated;
+                        runningAllocatedSum += roundedAllocated;
+                    }
+
+                    // Bù phần lẻ dư (remainder) vào dòng hàng có giá trị lớn nhất
+                    decimal remainder = extraAmountsDue - runningAllocatedSum;
+                    if (remainder != 0)
+                    {
+                        allocatedExtraCosts[maxValIndex] = Math.Max(0m, allocatedExtraCosts[maxValIndex] + remainder);
+                    }
+                }
+                else
+                {
+                    // Nếu tổng tiền hàng bằng 0, chia đều cho các dòng hàng
+                    decimal perItem = Math.Max(0m, Math.Round(extraAmountsDue / dto.Details.Count, 0, MidpointRounding.AwayFromZero));
+                    decimal runningAllocatedSum = 0m;
+                    for (int i = 0; i < dto.Details.Count; i++)
+                    {
+                        allocatedExtraCosts[i] = perItem;
+                        runningAllocatedSum += perItem;
+                    }
+                    decimal remainder = extraAmountsDue - runningAllocatedSum;
+                    if (remainder != 0)
+                    {
+                        allocatedExtraCosts[dto.Details.Count - 1] = Math.Max(0m, allocatedExtraCosts[dto.Details.Count - 1] + remainder);
+                    }
+                }
+            }
+
+            // 9. Build details & ledgers (one-to-one, parallel lists — allows duplicate BInventoryId)
+            var details       = new List<DocumentDetail>();
+            var ledgersToCreate = new List<InventoryLedger>();
+
+            for (int i = 0; i < dto.Details.Count; i++)
+            {
+                var dtoDetail = dto.Details[i];
+                decimal allocatedExtraCost = allocatedExtraCosts[i];
+
+                // UnitConversion lookup
+                UnitConversion? uc = dtoDetail.UnitConversionId.HasValue
+                    ? unitConversions.First(u => u.Id == dtoDetail.UnitConversionId!.Value)
+                    : null;
+
+                decimal conversionPoint  = uc?.ConversionPoint ?? 1m;
+                decimal quantityDelta    = dtoDetail.Quantity * conversionPoint;          // Lưu ledger theo base unit
                 
-                decimal trueUnitCost = detail.UnitPrice + (itemAllocatedFee / detail.Quantity);
+                // Giá trị hàng hóa nhập kho = Giá trị gốc (chưa làm tròn) + Chi phí phụ phân bổ
+                decimal goodsValue          = rawLineGoodsValues[i];
+                decimal inventoryValueDelta = goodsValue + allocatedExtraCost;
+                decimal unitCost            = quantityDelta > 0
+                    ? inventoryValueDelta / quantityDelta
+                    : 0m;
 
                 var docDetail = new DocumentDetail
                 {
-                    BInventoryId = detail.BInventoryId,
-                    Quantity = detail.Quantity,
-                    SystemQuantity = detail.Quantity,
-                    UnitPrice = trueUnitCost,
-                    Note = detail.Note,
-                    CreatedAt = DateTime.UtcNow
+                    BInventoryId    = dtoDetail.BInventoryId,
+                    UnitConversionId = dtoDetail.UnitConversionId,
+                    Quantity        = dtoDetail.Quantity,
+                    SystemQuantity  = quantityDelta,
+                    UnitPrice       = dtoDetail.UnitPrice,
+                    Note            = dtoDetail.Note,
+                    CreatedAt       = now
                 };
                 details.Add(docDetail);
 
-                var binv = binvs.First(b => b.Id == detail.BInventoryId);
+                // Get running state for this BInventory
+                var (runQ, runTV, runAvg, runLO) = runningState[dtoDetail.BInventoryId];
 
-                var priorLedger = beforeLedgers.FirstOrDefault(l => l.BInventoryId == detail.BInventoryId);
-                decimal runningQuantity = priorLedger?.RunningQuantity ?? 0;
-                decimal runningAvg = priorLedger?.RunningAverageCost ?? 0;
-                decimal runningLeftOver = priorLedger?.RunningLeftOver ?? 0;
-                decimal currentTotalValue = (runningQuantity * runningAvg) + runningLeftOver;
-
-                var newLedger = new InventoryLedger
+                var ledger = new InventoryLedger
                 {
-                    BInventoryId = binv.Id,
-                    BusinessDate = document.BusinessDate,
-                    DocumentType = document.Type,
-                    QuantityDelta = detail.Quantity,
-                    InventoryValueDelta = incomingTotalValue,
-                    RunningQuantity = 0,
+                    BInventoryId        = dtoDetail.BInventoryId,
+                    BusinessDate        = exactSecondDate,
+                    DocumentType        = DocumentType.Import,
+                    QuantityDelta       = quantityDelta,
+                    InventoryValueDelta = inventoryValueDelta,
+                    RunningQuantity     = 0,
                     RunningInventoryValue = 0,
-                    RunningAverageCost = 0,
-                    RunningLeftOver = 0,
-                    UnitCost = trueUnitCost,
-                    CreatedBy = createdBy,
-                    CreatedAt = DateTime.UtcNow
+                    RunningAverageCost  = 0,
+                    RunningLeftOver     = 0,
+                    UnitCost            = unitCost,
+                    CreatedAt           = now
                 };
 
-                RecalculateLedgerState(newLedger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                
-                runningQuantity = newLedger.RunningQuantity;
-                currentTotalValue = newLedger.RunningInventoryValue;
-                runningAvg = newLedger.RunningAverageCost;
-                runningLeftOver = newLedger.RunningLeftOver;
+                RecalculateLedgerState(ledger, runQ, runTV, runAvg, runLO);
 
-                ledgersToCreate.Add(newLedger);
+                // Update running state for next detail with the same BInventoryId
+                runningState[dtoDetail.BInventoryId] = (
+                    ledger.RunningQuantity,
+                    ledger.RunningInventoryValue,
+                    ledger.RunningAverageCost,
+                    ledger.RunningLeftOver
+                );
 
-                if (afterLedgersDict.TryGetValue(binv.Id, out var subsequentLedgers))
+                ledgersToCreate.Add(ledger);
+            }
+
+            // 10. Ripple-recalculate subsequent ledgers (one pass per BInventoryId)
+            var ledgersToUpdate = new List<InventoryLedger>();
+            var updatedBInvs    = new List<BInventory>();
+
+            foreach (var binvId in binvIds)
+            {
+                var (runQ, runTV, runAvg, runLO) = runningState[binvId];
+
+                if (afterLedgersDict.TryGetValue(binvId, out var subsequentLedgers))
                 {
                     foreach (var ledger in subsequentLedgers)
                     {
-                        RecalculateLedgerState(ledger, runningQuantity, currentTotalValue, runningAvg, runningLeftOver);
-                        
-                        runningQuantity = ledger.RunningQuantity;
-                        currentTotalValue = ledger.RunningInventoryValue;
-                        runningAvg = ledger.RunningAverageCost;
-                        runningLeftOver = ledger.RunningLeftOver;
-
+                        RecalculateLedgerState(ledger, runQ, runTV, runAvg, runLO);
+                        runQ   = ledger.RunningQuantity;
+                        runTV  = ledger.RunningInventoryValue;
+                        runAvg = ledger.RunningAverageCost;
+                        runLO  = ledger.RunningLeftOver;
                         ledgersToUpdate.Add(ledger);
                     }
                 }
 
-                binv.Quantity = runningQuantity;
-                binv.Avg = runningAvg;
-                binv.LeftOver = runningLeftOver;
+                var binv   = binvs.First(b => b.Id == binvId);
+                binv.Quantity  = runQ;
+                binv.Avg       = runAvg;
+                binv.LeftOver  = runLO;
                 updatedBInvs.Add(binv);
             }
 
+            // 11. Build DocumentPartners
+            var supplierDto = supplierDtos.First();
             var docPartners = new List<DocumentPartner>();
-            var cashFlows = new List<CashFlow>();
-            var cashFlowDetails = new List<CashFlowDetail>();
 
-            var supplierDto = suppliers.First();
+            // Supplier: AmountDue = tổng tiền hàng (auto)
             docPartners.Add(new DocumentPartner
             {
-                PartnerId = supplierDto.PartnerId,
-                Cost = totalGoodsValue,
-                Note = supplierDto.Note,
-                CreatedAt = DateTime.UtcNow
+                PartnerId  = supplierDto.PartnerId,
+                Cost       = supplierAmountDue,
+                Note       = supplierDto.Note,
+                CreatedAt  = now
             });
 
-            foreach (var tp in transAndOthers)
+            // Transport / Other: AmountDue do user khai
+            foreach (var ep in extraDtos)
             {
                 docPartners.Add(new DocumentPartner
                 {
-                    PartnerId = tp.PartnerId,
-                    Cost = tp.Cost,
-                    Note = tp.Note,
-                    CreatedAt = DateTime.UtcNow
+                    PartnerId  = ep.PartnerId,
+                    Cost       = ep.AmountDue!.Value,
+                    Note       = ep.Note,
+                    CreatedAt  = now
                 });
             }
 
+            // 12. Build CashFlows (PaymentVouchers) — chỉ sinh nếu AmountPaid > 0
+            var allPartnerDtos = new List<ImportDocumentPartnerDto> { supplierDto }.Concat(extraDtos).ToList();
+            var cashFlows        = new List<CashFlow>();
+            var cashFlowDetails  = new List<CashFlowDetail>();
+
+            // Maintain a parallel index between docPartners ↔ (cashFlows, cashFlowDetails)
+            // so the repo can link DocumentPartnerId correctly.
+            // We mark the partner index for each cashFlow via a helper list.
+            var cashFlowPartnerIndexes = new List<int>(); // maps cashFlows[i] → docPartners[partnerIndex]
+
             string cfCodePrefix = $"CF-{code}-";
             int cfIndex = 1;
-            foreach (var dp in docPartners)
+
+            for (int i = 0; i < allPartnerDtos.Count; i++)
             {
+                var partnerDto = allPartnerDtos[i];
+                decimal amountPaid = partnerDto.AmountPaid;
+
+                if (amountPaid <= 0) continue; // Không sinh phiếu chi nếu chưa trả tiền
+
                 var cf = new CashFlow
                 {
-                    BranchId = dto.BranchId,
-                    Code = $"{cfCodePrefix}{cfIndex++}",
-                    BusinessDate = document.BusinessDate,
-                    Direction = CashFlowDirection.Outflow,
-                    Status = CashFlowStatus.Completed,
-                    TotalAmount = dp.Cost,
-                    CreatedAt = DateTime.UtcNow
+                    BranchId     = dto.BranchId,
+                    Code         = $"{cfCodePrefix}{cfIndex++}",
+                    BusinessDate = exactSecondDate,
+                    Direction    = CashFlowDirection.Outflow,
+                    Status       = CashFlowStatus.Completed,
+                    TotalAmount  = amountPaid,
+                    CreatedAt    = now
                 };
                 cashFlows.Add(cf);
-                
+                cashFlowPartnerIndexes.Add(i); // docPartners[i] corresponds to this cashFlow
+
+                // Dòng thanh toán chính
                 var cfd = new CashFlowDetail
                 {
-                    PartnerId = dp.PartnerId,
-                    Type = CashFlowDetailType.Payment,
+                    Type          = CashFlowDetailType.Payment,
                     PaymentMethod = PaymentMethod.Cash,
-                    Amount = dp.Cost,
-                    Note = $"Thanh toán cho phiếu nhập kho {code}"
+                    Amount        = amountPaid,
+                    Note          = $"Thanh toán cho phiếu nhập kho {code} – {GetPartner(partnerDto.PartnerId)?.Name}"
                 };
                 cashFlowDetails.Add(cfd);
+
+                // Dòng điều chỉnh làm tròn (Rounding) — chỉ cho Supplier (i == 0)
+                // RoundingValue = rawTotalGoodsValue - supplierAmountDue
+                // Import (Outflow): Dương → Thu nhập khác (+Lãi); Âm → Chi phí khác (-Lãi)
+                if (i == 0)
+                {
+                    decimal roundingValue = rawTotalGoodsValue - supplierAmountDue;
+                    if (roundingValue != 0m)
+                    {
+                        cashFlowDetails.Add(new CashFlowDetail
+                        {
+                            Type          = CashFlowDetailType.Rounding,
+                            PaymentMethod = PaymentMethod.Cash,
+                            Amount        = roundingValue,
+                            Note          = $"Điều chỉnh làm tròn phiếu nhập {code}: " +
+                                           $"Giá gốc {rawTotalGoodsValue:N} ₫ → Làm tròn {supplierAmountDue:N0} ₫ " +
+                                           $"(Chênh lệch {roundingValue:+#,##0.##;-#,##0.##} ₫)"
+                        });
+                    }
+                }
             }
 
-            return await _repo.ExecuteImportTransactionAsync(document, details, docPartners, updatedBInvs, ledgersToCreate, ledgersToUpdate, cashFlows, cashFlowDetails);
+            // 13. Execute in transaction
+            var result = await _repo.ExecuteImportTransactionAsync(
+                document, details, docPartners, updatedBInvs,
+                ledgersToCreate, ledgersToUpdate,
+                cashFlows, cashFlowDetails,
+                cashFlowPartnerIndexes);
+
+            return result;
         }
 
+        // ──────────────────────────────────────────────────────────────────────
+        // DELETE
+        // ──────────────────────────────────────────────────────────────────────
         public async Task DeleteImportDocumentAsync(long documentId, long? deletedBy = null)
         {
             await DeleteDocumentAsync(documentId, deletedBy);

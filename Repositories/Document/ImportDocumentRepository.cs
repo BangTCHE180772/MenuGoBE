@@ -1,5 +1,5 @@
-using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository.Document;
@@ -14,9 +14,18 @@ namespace MenuGoBE.Repositories.Document
         {
         }
 
-        public async Task<bool> HasReturnDocumentsAsync(long importDocumentId)
+        /// <summary>
+        /// Lấy danh sách DocumentDetail trả hàng liên quan đến phiếu nhập.
+        /// </summary>
+        public new async Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId)
         {
-            return await _context.Documents.AnyAsync(d => d.ParentDocumentId == importDocumentId && !d.IsDeleted);
+            return await _context.DocumentDetails
+                .Include(d => d.Document)
+                .Where(d => d.Document != null
+                            && d.Document.ParentDocumentId == importDocumentId
+                            && d.Document.Type == MenuGoBE.Models.Enums.DocumentType.Return
+                            && !d.Document.IsDeleted)
+                .ToListAsync();
         }
     }
 }

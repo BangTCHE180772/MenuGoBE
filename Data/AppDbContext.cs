@@ -74,6 +74,31 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Auto-convert all DateTime and DateTime? columns to Utc kind
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            var properties = entityType.GetProperties()
+                .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?));
+
+            foreach (var property in properties)
+            {
+                if (property.ClrType == typeof(DateTime))
+                {
+                    property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+                        v => v.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v, DateTimeKind.Utc),
+                        v => DateTime.SpecifyKind(v, DateTimeKind.Utc)
+                    ));
+                }
+                else if (property.ClrType == typeof(DateTime?))
+                {
+                    property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime?, DateTime?>(
+                        v => !v.HasValue ? v : (v.Value.Kind == DateTimeKind.Utc ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc)),
+                        v => !v.HasValue ? v : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc)
+                    ));
+                }
+            }
+        }
+
         // Configure composite primary key for MenuProducts (many-to-many join table)
         modelBuilder.Entity<MenuProduct>()
             .HasKey(mp => new { mp.MenuId, mp.ProductId });
@@ -165,12 +190,7 @@ public class AppDbContext : DbContext
             .HasForeignKey(p => p.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // InventoryLedger: CreatedBy → Accounts
-        modelBuilder.Entity<InventoryLedger>()
-            .HasOne(il => il.Creator)
-            .WithMany(a => a.CreatedInventoryLedgers)
-            .HasForeignKey(il => il.CreatedBy)
-            .OnDelete(DeleteBehavior.Restrict);
+
 
         // Store enums as string names with fallback for legacy DB values (e.g. 'Food' -> Regular)
         modelBuilder.Entity<Product>()
@@ -190,10 +210,6 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Document>()
             .Property(d => d.Type)
-            .HasConversion<string>();
-
-        modelBuilder.Entity<Document>()
-            .Property(d => d.Status)
             .HasConversion<string>();
 
         modelBuilder.Entity<Document>()

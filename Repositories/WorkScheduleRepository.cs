@@ -84,6 +84,22 @@ namespace MenuGoBE.Repositories
                 .OrderBy(ws => ws.Shift.StartTime)
                 .ToListAsync();
         }
+        public async Task<List<WorkSchedule>> GetOpenSchedulesAsync()
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => ws.CheckInAt != null && ws.CheckOutAt == null)
+                .ToListAsync();
+        }
 
+        public async Task<List<WorkSchedule>> GetPendingSchedulesByAccountIdsAsync(List<long> accountIds)
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => accountIds.Contains(ws.AccountId)
+                          && ws.CheckInAt == null
+                          && (ws.Status.ToUpper() == "APPROVED" || ws.Status.ToUpper() == "PENDING" || ws.Status.ToUpper() == "SCHEDULED"))
+                .ToListAsync();
+        }
     }
 }

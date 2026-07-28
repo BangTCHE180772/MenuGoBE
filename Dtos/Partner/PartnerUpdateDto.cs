@@ -1,13 +1,9 @@
 using System.ComponentModel.DataAnnotations;
-using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Dtos.Partner
 {
     public class PartnerUpdateDto
     {
-        [Required]
-        public PartnerType Type { get; set; }
-
         [Required]
         [MaxLength(255)]
         public string Name { get; set; } = string.Empty;

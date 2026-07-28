@@ -38,5 +38,17 @@ namespace MenuGoBE.Interface.Repository
             List<InventoryLedger> ledgersToUpdate,
             List<BInventory> updatedBInvs,
             List<CashFlow> cashFlowsToSoftDelete);
+
+        /// <summary>
+        /// Lấy danh sách UnitConversion theo danh sách Id.
+        /// </summary>
+        Task<List<UnitConversion>> GetUnitConversionsByIdsAsync(List<long> ids);
+
+        /// <summary>
+        /// Trả về InventoryLedger loại Check (Phiếu kiểm kho) mới nhất (theo BusinessDate)
+        /// cho từng BInventoryId trong danh sách. Dùng để kiểm tra Business Date Lock.
+        /// Include navigation Document để lấy Code cho error message.
+        /// </summary>
+        Task<List<InventoryLedger>> GetLatestCheckLedgersForBInventoriesAsync(List<long> binvIds);
     }
 }

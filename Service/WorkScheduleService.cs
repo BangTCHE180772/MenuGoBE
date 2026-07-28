@@ -56,21 +56,25 @@ namespace MenuGoBE.Service
             {
                 throw new ArgumentException($"Shift with ID {dto.ShiftId} does not exist.");
             }
-            var validAccounts = await _accountRepo.GetValidAccountIdsAsync(new List<long> { dto.AccountId });
-            if (validAccounts.Count == 0)
+            var account = await _accountRepo.GetByIdAsync(dto.AccountId);
+            if (account == null)
             {
-                throw new ArgumentException($"Account with ID {dto.AccountId} does not exist.");
+                throw new ArgumentException($"Tài khoản với ID {dto.AccountId} không tồn tại.");
+            }
+            if (account.Contracts == null || !account.Contracts.Any(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "1")))
+            {
+                throw new ArgumentException($"Nhân viên '{account.Name}' (ID: {dto.AccountId}) chưa có hợp đồng làm việc còn hiệu lực tại chi nhánh này.");
             }
 
             if (await _repo.ExistsAsync(dto.AccountId, dto.ShiftId, dto.WorkDate))
             {
-                throw new ArgumentException($"Account with ID {dto.AccountId} is already assigned to shift {dto.ShiftId} on {dto.WorkDate}.");
+                throw new ArgumentException($"Nhân viên {account.Name} đã được phân công ca làm việc này vào ngày {dto.WorkDate:dd/MM/yyyy}.");
             }
 
             var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
             if (shift != null && await _repo.HasOverlappingScheduleAsync(dto.AccountId, dto.WorkDate, shift.StartTime, shift.EndTime))
             {
-                throw new ArgumentException($"Nhân viên này đã có ca làm việc trùng giờ trong ngày {dto.WorkDate:dd/MM/yyyy}.");
+                throw new ArgumentException($"Nhân viên {account.Name} đã có ca làm việc trùng giờ trong ngày {dto.WorkDate:dd/MM/yyyy}.");
             }
 
             var entity = _mapper.Map<WorkSchedule>(dto);
@@ -112,15 +116,24 @@ namespace MenuGoBE.Service
                 throw new ArgumentException($"Shift with ID {dto.ShiftId} does not exist.");
             }
 
-            var validAccountIds = await _accountRepo.GetValidAccountIdsAsync(dto.AccountIds);
-            if (validAccountIds.Count == 0)
+            var validAccountIdsWithContracts = new List<long>();
+            foreach (var accountId in dto.AccountIds)
             {
-                return new List<WorkScheduleViewDto>();
+                var acc = await _accountRepo.GetByIdAsync(accountId);
+                if (acc != null && acc.Contracts != null && acc.Contracts.Any(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "1")))
+                {
+                    validAccountIdsWithContracts.Add(accountId);
+                }
+            }
+
+            if (validAccountIdsWithContracts.Count == 0)
+            {
+                throw new ArgumentException("Không có nhân viên nào trong danh sách được chọn có hợp đồng còn hiệu lực tại chi nhánh này.");
             }
 
             var createdSchedules = new List<WorkSchedule>();
 
-            foreach (var accountId in validAccountIds)
+            foreach (var accountId in validAccountIdsWithContracts)
             {
                 foreach (var workDate in dto.WorkDates)
                 {
@@ -165,6 +178,12 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            var account = await _accountRepo.GetByIdAsync(dto.AccountId);
+            if (account == null || account.Contracts == null || !account.Contracts.Any(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "1")))
+            {
+                throw new ArgumentException($"Nhân viên này chưa có hợp đồng làm việc còn hiệu lực tại chi nhánh này.");
+            }
 
             _mapper.Map(dto, entity);
 
@@ -231,7 +250,7 @@ namespace MenuGoBE.Service
                     {
                         // Auto-split: Chốt ca hiện tại ở đúng giờ EndTime
                         var localEndTime = today.ToDateTime(currentWs.Shift.EndTime);
-                        var utcEndTime = localEndTime.AddHours(-7);
+                        var utcEndTime = DateTime.SpecifyKind(localEndTime.AddHours(-7), DateTimeKind.Utc);
                         
                         currentWs.CheckOutAt = utcEndTime;
                         var duration1 = currentWs.CheckOutAt.Value - currentWs.CheckInAt.Value;
@@ -241,7 +260,7 @@ namespace MenuGoBE.Service
                         
                         // Mở ca tiếp theo ở đúng giờ StartTime
                         var localStartTime = today.ToDateTime(nextWs.Shift.StartTime);
-                        var utcStartTime = localStartTime.AddHours(-7);
+                        var utcStartTime = DateTime.SpecifyKind(localStartTime.AddHours(-7), DateTimeKind.Utc);
                         
                         nextWs.CheckInAt = utcStartTime;
                         nextWs.Status = "Working";

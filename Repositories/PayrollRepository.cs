@@ -17,10 +17,11 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<Payroll>> GetAllAsync(long? branchId = null, int? month = null, int? year = null, long? accountId = null)
+        public async Task<List<Payroll>> GetAllAsync(long? branchId = null, int? month = null, int? year = null, long? accountId = null, List<long>? roleIds = null)
         {
             var query = _context.Payrolls
                 .Include(p => p.Account)
+                    .ThenInclude(a => a.Contracts)
                 .Include(p => p.Branch)
                 .Include(p => p.Contract)
                 .Include(p => p.SalaryDetails)
@@ -37,6 +38,12 @@ namespace MenuGoBE.Repositories
 
             if (accountId.HasValue && accountId.Value > 0)
                 query = query.Where(p => p.AccountId == accountId.Value);
+
+            if (roleIds != null && roleIds.Count > 0)
+            {
+                query = query.Where(p => (p.Contract != null && roleIds.Contains(p.Contract.RoleId))
+                                      || (p.Account != null && p.Account.Contracts.Any(c => roleIds.Contains(c.RoleId))));
+            }
 
             return await query.OrderByDescending(p => p.Year)
                               .ThenByDescending(p => p.Month)
@@ -73,7 +80,12 @@ namespace MenuGoBE.Repositories
 
         public async Task UpdateAsync(Payroll entity)
         {
-            _context.Payrolls.Update(entity);
+            var entry = _context.Entry(entity);
+            if (entry.State == EntityState.Detached)
+            {
+                _context.Payrolls.Attach(entity);
+                entry.State = EntityState.Modified;
+            }
             await SaveChangesAsync();
         }
 
