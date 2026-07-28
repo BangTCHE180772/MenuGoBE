@@ -38,8 +38,11 @@ namespace MenuGoBE.Service.Document
             if (branch.PostingLockDate.HasValue && dto.BusinessDate.Date <= branch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError);
 
-            // 2. Load partners & validate: đúng 1 Supplier, 0..n Transport/Other, cấm Customer
+            // 2. Load partners & validate: đúng 1 Supplier, 0..n Transport/Other, cấm Customer, không cho phép trùng lặp
             var partnerIds = dto.Partners.Select(p => p.PartnerId).Distinct().ToList();
+            if (partnerIds.Count != dto.Partners.Count)
+                throw new MenuGoException(ErrorCodes.DocumentDuplicatePartner);
+
             var partners   = await _repo.GetPartnersAsync(partnerIds);
 
             Partner? GetPartner(long id) => partners.FirstOrDefault(p => p.Id == id);

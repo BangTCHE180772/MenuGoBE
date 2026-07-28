@@ -17,11 +17,13 @@ namespace MenuGoBE.Dtos.Partner
 
         public long? AddressId { get; set; }
 
+        [Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
         [MaxLength(50)]
-        public string? Phone { get; set; }
+        public string Phone { get; set; } = string.Empty;
 
+        [Required(ErrorMessage = "Email là bắt buộc.")]
         [MaxLength(255)]
-        [EmailAddress]
-        public string? Email { get; set; }
+        [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
+        public string Email { get; set; } = string.Empty;
     }
 }
