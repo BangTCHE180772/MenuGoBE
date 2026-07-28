@@ -20,7 +20,12 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Order>> GetAllAsync()
         {
-            return await _context.Orders.ToListAsync();
+            return await _context.Orders
+                .Include(o => o.Table)
+                .Include(o => o.Payments)
+                .Include(o => o.ChildOrders)
+                    .ThenInclude(c => c.Table)
+                .ToListAsync();
         }
 
         public async Task<Order?> GetByIdAsync(long id)
