@@ -43,6 +43,9 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể kiểm kho sản phẩm [{binv.Product.Name}] do thuộc loại Processed.");
             }
 
+            // Stock Audit Lock Validation (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(binvIds, dto.BusinessDate);
+
             var now = DateTime.UtcNow;
             string code = $"AD{now:yyyyMMddHHmmss}{Guid.NewGuid().ToString().Substring(0, 4).ToUpper()}";
 
@@ -57,7 +60,7 @@ namespace MenuGoBE.Service.Document
                 Type = DocumentType.Check, // Type 5: Check
                 TransferStatus = DocumentTransferStatus.None,
                 TotalAmount = 0,
-                CreatedBy = createdBy,
+                CreatedBy = createdBy ?? dto.CreatedByAccountId,
                 CreatedAt = DateTime.UtcNow
             };
 

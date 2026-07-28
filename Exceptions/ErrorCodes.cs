@@ -399,6 +399,22 @@ public static class ErrorCodes
         "Số lượng hàng hóa phải từ 0,001 đến 1.000.000 đơn vị.",
         400
     );
+
+    public static readonly ErrorResult DocumentAmountPaidExceedsAmountDue = new(
+        2123,
+        "Số tiền đã trả không được vượt quá số tiền phải trả.",
+        400
+    );
+
+    /// <summary>
+    /// ERR_STOCK_AUDIT_LOCKED – BusinessDate của chứng từ phải lớn hơn (>)
+    /// BusinessDate của phiếu kiểm kho (Chốt sổ) mới nhất cho từng sản phẩm liên quan.
+    /// </summary>
+    public static readonly ErrorResult DocumentStockAuditLocked = new(
+        2124,
+        "Ngày chứng từ phải lớn hơn ngày phiếu kiểm kho chốt sổ gần nhất của tất cả sản phẩm liên quan.",
+        400
+    );
 }
 
 

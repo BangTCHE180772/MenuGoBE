@@ -99,8 +99,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateReturnDocumentAsync(dto, createdBy);
+                var result = await _service.CreateReturnDocumentAsync(dto, dto.CreatedByAccountId);
 
                 return Ok(new
                 {

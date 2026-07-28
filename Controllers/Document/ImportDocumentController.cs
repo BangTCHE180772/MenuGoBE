@@ -56,8 +56,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateImportDocumentAsync(dto, createdBy);
+                var result = await _service.CreateImportDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {

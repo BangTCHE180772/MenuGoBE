@@ -77,6 +77,9 @@ namespace MenuGoBE.Service.Document
                         $"Không thể nhập kho sản phẩm [{binv.Product.Name}] do thuộc loại Manufactured hoặc Processed.");
             }
 
+            // 3b. Stock Audit Lock Validation (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(binvIds, dto.BusinessDate);
+
             // 4. Load UnitConversions for details that specify one
             var ucIds = dto.Details
                 .Where(d => d.UnitConversionId.HasValue)
@@ -92,17 +95,33 @@ namespace MenuGoBE.Service.Document
                         $"UnitConversion Id={d.UnitConversionId} không tồn tại.");
             }
 
-            // 5. Tính tiền hàng: TotalLineAmount = Quantity * UnitPrice (per line)
-            decimal totalGoodsValue = dto.Details.Sum(d => d.Quantity * d.UnitPrice);
+            // 5. Tính tiền hàng thực tế từng dòng (giữ nguyên thập phân để tính giá trị kho và phân bổ)
+            var rawLineGoodsValues = dto.Details
+                .Select(d => d.Quantity * d.UnitPrice)
+                .ToList();
+            decimal rawTotalGoodsValue = rawLineGoodsValues.Sum();
 
-            // 6. Tính tổng AmountDue và validate ≤ 10 tỷ
-            decimal supplierAmountDue  = totalGoodsValue;                          // supplier AmountDue = tổng tiền hàng
-            decimal extraAmountsDue    = extraDtos.Sum(ep => ep.AmountDue!.Value);
+            // 6. Khoản phải trả NCC (supplierAmountDue) làm tròn thành số nguyên theo AwayFromZero
+            decimal supplierAmountDue   = Math.Round(rawTotalGoodsValue, 0, MidpointRounding.AwayFromZero);
+            decimal extraAmountsDue     = extraDtos.Sum(ep => Math.Round(ep.AmountDue!.Value, 0, MidpointRounding.AwayFromZero));
             decimal documentTotalAmount = supplierAmountDue + extraAmountsDue;
 
             if (documentTotalAmount > MaxTotalAmount)
                 throw new MenuGoException(ErrorCodes.DocumentTotalAmountExceedsLimit,
                     $"Tổng giá trị phiếu nhập ({documentTotalAmount:N0} ₫) vượt quá giới hạn 10 tỷ đồng.");
+
+            // Validate AmountPaid <= AmountDue cho từng đối tác
+            foreach (var partnerDto in dto.Partners)
+            {
+                var partner = GetPartner(partnerDto.PartnerId);
+                decimal due = partner?.Type == PartnerType.Supplier ? supplierAmountDue : Math.Round(partnerDto.AmountDue ?? 0m, 0, MidpointRounding.AwayFromZero);
+                decimal paid = Math.Round(partnerDto.AmountPaid, 0, MidpointRounding.AwayFromZero);
+                if (paid > due)
+                {
+                    throw new MenuGoException(ErrorCodes.DocumentAmountPaidExceedsAmountDue,
+                        $"Số tiền đã trả ({paid:N0} ₫) cho đối tác [{partner?.Name}] không được vượt quá số tiền phải trả ({due:N0} ₫).");
+                }
+            }
 
             // 7. Build Document entity
             var now = DateTime.UtcNow;
@@ -120,7 +139,7 @@ namespace MenuGoBE.Service.Document
                 Type           = DocumentType.Import,
                 TransferStatus = DocumentTransferStatus.None,
                 TotalAmount    = documentTotalAmount,
-                CreatedBy      = createdBy,
+                CreatedBy      = createdBy ?? dto.CreatedByAccountId,
                 CreatedAt      = now
             };
 
@@ -142,11 +161,11 @@ namespace MenuGoBE.Service.Document
                 runningState[binvId] = (pq, (pq * pav) + plo, pav, plo);
             }
 
-            // 8.5. Phân bổ chi phí phụ (extraAmountsDue từ Transporter/Other) theo tỷ lệ giá trị tiền hàng
+            // 8.5. Phân bổ chi phí phụ (extraAmountsDue từ Transporter/Other) theo tỷ lệ giá trị tiền hàng thực tế
             var allocatedExtraCosts = new decimal[dto.Details.Count];
             if (extraAmountsDue > 0 && dto.Details.Count > 0)
             {
-                if (totalGoodsValue > 0)
+                if (rawTotalGoodsValue > 0)
                 {
                     decimal runningAllocatedSum = 0m;
                     int maxValIndex = 0;
@@ -154,15 +173,14 @@ namespace MenuGoBE.Service.Document
 
                     for (int i = 0; i < dto.Details.Count; i++)
                     {
-                        var d = dto.Details[i];
-                        decimal lineGoodsValue = d.Quantity * d.UnitPrice;
-                        if (lineGoodsValue > maxVal)
+                        decimal rawLineValue = rawLineGoodsValues[i];
+                        if (rawLineValue > maxVal)
                         {
-                            maxVal = lineGoodsValue;
+                            maxVal = rawLineValue;
                             maxValIndex = i;
                         }
 
-                        decimal rawAllocated = extraAmountsDue * (lineGoodsValue / totalGoodsValue);
+                        decimal rawAllocated = extraAmountsDue * (rawLineValue / rawTotalGoodsValue);
                         decimal roundedAllocated = Math.Max(0m, Math.Round(rawAllocated, 0, MidpointRounding.AwayFromZero));
                         allocatedExtraCosts[i] = roundedAllocated;
                         runningAllocatedSum += roundedAllocated;
@@ -210,8 +228,8 @@ namespace MenuGoBE.Service.Document
                 decimal conversionPoint  = uc?.ConversionPoint ?? 1m;
                 decimal quantityDelta    = dtoDetail.Quantity * conversionPoint;          // Lưu ledger theo base unit
                 
-                // Giá trị hàng hóa gốc + Chi phí phụ phân bổ làm giá trị nhập kho
-                decimal goodsValue          = dtoDetail.Quantity * dtoDetail.UnitPrice;
+                // Giá trị hàng hóa nhập kho = Giá trị gốc (chưa làm tròn) + Chi phí phụ phân bổ
+                decimal goodsValue          = rawLineGoodsValues[i];
                 decimal inventoryValueDelta = goodsValue + allocatedExtraCost;
                 decimal unitCost            = quantityDelta > 0
                     ? inventoryValueDelta / quantityDelta
@@ -346,6 +364,7 @@ namespace MenuGoBE.Service.Document
                 cashFlows.Add(cf);
                 cashFlowPartnerIndexes.Add(i); // docPartners[i] corresponds to this cashFlow
 
+                // Dòng thanh toán chính
                 var cfd = new CashFlowDetail
                 {
                     Type          = CashFlowDetailType.Payment,
@@ -354,6 +373,26 @@ namespace MenuGoBE.Service.Document
                     Note          = $"Thanh toán cho phiếu nhập kho {code} – {GetPartner(partnerDto.PartnerId)?.Name}"
                 };
                 cashFlowDetails.Add(cfd);
+
+                // Dòng điều chỉnh làm tròn (Rounding) — chỉ cho Supplier (i == 0)
+                // RoundingValue = rawTotalGoodsValue - supplierAmountDue
+                // Import (Outflow): Dương → Thu nhập khác (+Lãi); Âm → Chi phí khác (-Lãi)
+                if (i == 0)
+                {
+                    decimal roundingValue = rawTotalGoodsValue - supplierAmountDue;
+                    if (roundingValue != 0m)
+                    {
+                        cashFlowDetails.Add(new CashFlowDetail
+                        {
+                            Type          = CashFlowDetailType.Rounding,
+                            PaymentMethod = PaymentMethod.Cash,
+                            Amount        = roundingValue,
+                            Note          = $"Điều chỉnh làm tròn phiếu nhập {code}: " +
+                                           $"Giá gốc {rawTotalGoodsValue:N} ₫ → Làm tròn {supplierAmountDue:N0} ₫ " +
+                                           $"(Chênh lệch {roundingValue:+#,##0.##;-#,##0.##} ₫)"
+                        });
+                    }
+                }
             }
 
             // 13. Execute in transaction
