@@ -73,7 +73,7 @@ namespace MenuGoBE.Service
                 endDate = DateTime.SpecifyKind(today.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
             }
 
-            var (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots, topDishes) =
+            var (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots, topDishes, leastDishes) =
                 await _repo.GetFinancialStatsAsync(startDate, endDate, branchId);
 
             DashboardOrderSummaryDto? orderSummary = null;
@@ -105,7 +105,8 @@ namespace MenuGoBE.Service
                 MonthlyStats = monthlyStats,
                 PaymentMethods = paymentMethods,
                 HourSlots = hourSlots,
-                TopDishes = topDishes
+                TopDishes = topDishes,
+                LeastDishes = leastDishes
             };
         }
     }
