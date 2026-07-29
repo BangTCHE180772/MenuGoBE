@@ -30,6 +30,8 @@ namespace MenuGoBE.Interface.Repository
         Task<DocumentEntity?> GetDocumentWithDetailsAsync(long documentId);
         Task<List<DocumentEntity>> GetDocumentsAsync(long? branchId = null, MenuGoBE.Models.Enums.DocumentType? type = null);
         Task<bool> HasReturnDocumentsAsync(long importDocumentId);
+        Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId);
+        Task<List<DocumentEntity>> GetReturnDocumentsByImportIdAsync(long importDocumentId);
         Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId);
         Task<List<InventoryLedger>> GetLedgersByDocumentIdAsync(long documentId);
         Task ExecuteDeleteTransactionAsync(

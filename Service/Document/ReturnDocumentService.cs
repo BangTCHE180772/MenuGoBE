@@ -261,7 +261,7 @@ namespace MenuGoBE.Service.Document
                 updatedBInvs.Add(binv);
             }
 
-            // ── 9. DocumentPartner: ghi nhận công nợ NCC (tổng tiền phải trả) ─
+            // ── 9. DocumentPartner: ghi nhận công nợ NCC (nguyên si tổng giá trị hoàn trả gốc chưa làm tròn) ─
             var supplierPartner = importDoc.DocumentPartners
                 .FirstOrDefault(dp => dp.Partner?.Type == PartnerType.Supplier)
                 ?? importDoc.DocumentPartners.FirstOrDefault();
@@ -273,17 +273,18 @@ namespace MenuGoBE.Service.Document
                 docPartners.Add(new DocumentPartner
                 {
                     PartnerId = supplierPartner.PartnerId,
-                    Cost      = totalRefundAmount,   // Tổng công nợ NCC phải hoàn trả
+                    Cost      = rawTotalRefund,      // Nguyên si tổng giá trị hoàn trả gốc (chưa làm tròn)
                     Note      = dto.Note ?? $"Hoàn tiền từ phiếu trả hàng nhập {code}",
                     CreatedAt = now
                 });
             }
 
-            // ── 10. CashFlow: chỉ tạo khi PaidAmount > 0 ─────────────────────
+            // ── 10. CashFlow: sinh 1 CashFlow duy nhất nếu có thanh toán (PaidAmount > 0) hoặc có tiền lẻ làm tròn (roundingValue != 0m) ──
             var cashFlows       = new List<CashFlow>();
             var cashFlowDetails = new List<CashFlowDetail>();
+            decimal roundingValue = rawTotalRefund - totalRefundAmount;
 
-            if (dto.PaidAmount > 0)
+            if (dto.PaidAmount > 0 || roundingValue != 0m)
             {
                 var cf = new CashFlow
                 {
@@ -297,21 +298,21 @@ namespace MenuGoBE.Service.Document
                 };
                 cashFlows.Add(cf);
 
-                // Dòng hoàn tiền chính (Refund)
-                var cfd = new CashFlowDetail
+                // Dòng hoàn tiền chính (Refund) nếu có thanh toán
+                if (dto.PaidAmount > 0)
                 {
-                    PartnerId     = supplierPartner?.PartnerId,
-                    Type          = CashFlowDetailType.Refund,     // Loại: hoàn tiền
-                    PaymentMethod = dto.PaymentMethod,
-                    Amount        = dto.PaidAmount,
-                    Note          = $"Thu tiền hoàn từ NCC – phiếu trả {code}"
-                };
-                cashFlowDetails.Add(cfd);
+                    var cfd = new CashFlowDetail
+                    {
+                        PartnerId     = supplierPartner?.PartnerId,
+                        Type          = CashFlowDetailType.Refund,     // Loại: hoàn tiền
+                        PaymentMethod = dto.PaymentMethod,
+                        Amount        = dto.PaidAmount,
+                        Note          = $"Thu tiền hoàn từ NCC – phiếu trả {code}"
+                    };
+                    cashFlowDetails.Add(cfd);
+                }
 
-                // Dòng điều chỉnh làm tròn (Rounding)
-                // RoundingValue = rawTotalRefund - totalRefundAmount (rounded)
-                // Return Import (Inflow): Dương → Chi phí khác (-Lãi); Âm → Thu nhập khác (+Lãi)
-                decimal roundingValue = rawTotalRefund - totalRefundAmount;
+                // Dòng điều chỉnh làm tròn (Rounding) nếu có chênh lệch tiền lẻ (kể cả khi chưa thu tiền)
                 if (roundingValue != 0m)
                 {
                     cashFlowDetails.Add(new CashFlowDetail

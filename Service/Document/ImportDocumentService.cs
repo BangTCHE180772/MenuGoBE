@@ -58,12 +58,16 @@ namespace MenuGoBE.Service.Document
             if (customerDtos.Any())
                 throw new MenuGoException(ErrorCodes.DocumentGuestNotAllowedInImport);
 
-            // Transport / Other phải khai rõ AmountDue
+            // Transport / Other phải khai rõ AmountDue và phải là số nguyên >= 0
             foreach (var ep in extraDtos)
             {
                 if (!ep.AmountDue.HasValue || ep.AmountDue.Value < 0)
                     throw new MenuGoException(ErrorCodes.DocumentAmountDueRequiredForNonSupplier,
                         $"Đối tác {GetPartner(ep.PartnerId)?.Name} (Transport/Other) phải khai báo AmountDue >= 0.");
+
+                if (ep.AmountDue.Value % 1m != 0)
+                    throw new MenuGoException(ErrorCodes.DocumentAmountDueRequiredForNonSupplier,
+                        $"Số tiền phải trả (AmountDue) cho đối tác {GetPartner(ep.PartnerId)?.Name} (Transport/Other) phải là số nguyên.");
             }
 
             // 3. Load BInventories (distinct IDs) & validate product types
@@ -313,80 +317,76 @@ namespace MenuGoBE.Service.Document
             var supplierDto = supplierDtos.First();
             var docPartners = new List<DocumentPartner>();
 
-            // Supplier: AmountDue = tổng tiền hàng (auto)
+            // Supplier: Cost = rawTotalGoodsValue (nguyên si nợ gốc chưa làm tròn)
             docPartners.Add(new DocumentPartner
             {
                 PartnerId  = supplierDto.PartnerId,
-                Cost       = supplierAmountDue,
+                Cost       = rawTotalGoodsValue,
                 Note       = supplierDto.Note,
                 CreatedAt  = now
             });
 
-            // Transport / Other: AmountDue do user khai
+            // Transport / Other: AmountDue do user khai (được đảm bảo là số nguyên)
             foreach (var ep in extraDtos)
             {
                 docPartners.Add(new DocumentPartner
                 {
                     PartnerId  = ep.PartnerId,
-                    Cost       = ep.AmountDue!.Value,
+                    Cost       = Math.Round(ep.AmountDue!.Value, 0, MidpointRounding.AwayFromZero),
                     Note       = ep.Note,
                     CreatedAt  = now
                 });
             }
 
-            // 12. Build CashFlows (PaymentVouchers) — chỉ sinh nếu AmountPaid > 0
+            // 12. Build CashFlows — Gom tất cả khoản thanh toán và phần dư lẻ làm tròn vào DUY NHẤT 1 phiếu chi CashFlow
             var allPartnerDtos = new List<ImportDocumentPartnerDto> { supplierDto }.Concat(extraDtos).ToList();
             var cashFlows        = new List<CashFlow>();
             var cashFlowDetails  = new List<CashFlowDetail>();
+            var cashFlowPartnerIndexes = new List<int>();
 
-            // Maintain a parallel index between docPartners ↔ (cashFlows, cashFlowDetails)
-            // so the repo can link DocumentPartnerId correctly.
-            // We mark the partner index for each cashFlow via a helper list.
-            var cashFlowPartnerIndexes = new List<int>(); // maps cashFlows[i] → docPartners[partnerIndex]
+            decimal totalPaid = allPartnerDtos.Sum(p => p.AmountPaid);
+            decimal roundingValue = rawTotalGoodsValue - supplierAmountDue;
 
-            string cfCodePrefix = $"CF-{code}-";
-            int cfIndex = 1;
-
-            for (int i = 0; i < allPartnerDtos.Count; i++)
+            // Tạo CashFlow nếu có chi tiền (totalPaid > 0) HOẶC có chênh lệch làm tròn Supplier (roundingValue != 0m)
+            if (totalPaid > 0 || roundingValue != 0m)
             {
-                var partnerDto = allPartnerDtos[i];
-                decimal amountPaid = partnerDto.AmountPaid;
-
-                if (amountPaid <= 0) continue; // Không sinh phiếu chi nếu chưa trả tiền
-
                 var cf = new CashFlow
                 {
                     BranchId     = dto.BranchId,
-                    Code         = $"{cfCodePrefix}{cfIndex++}",
+                    Code         = $"CF-{code}-1",
                     BusinessDate = exactSecondDate,
                     Direction    = CashFlowDirection.Outflow,
                     Status       = CashFlowStatus.Completed,
-                    TotalAmount  = amountPaid,
+                    TotalAmount  = totalPaid,
                     CreatedAt    = now
                 };
                 cashFlows.Add(cf);
-                cashFlowPartnerIndexes.Add(i); // docPartners[i] corresponds to this cashFlow
 
-                // Dòng thanh toán chính
-                var cfd = new CashFlowDetail
+                for (int i = 0; i < allPartnerDtos.Count; i++)
                 {
-                    Type          = CashFlowDetailType.Payment,
-                    PaymentMethod = PaymentMethod.Cash,
-                    Amount        = amountPaid,
-                    Note          = $"Thanh toán cho phiếu nhập kho {code} – {GetPartner(partnerDto.PartnerId)?.Name}"
-                };
-                cashFlowDetails.Add(cfd);
+                    var partnerDto = allPartnerDtos[i];
+                    decimal amountPaid = partnerDto.AmountPaid;
 
-                // Dòng điều chỉnh làm tròn (Rounding) — chỉ cho Supplier (i == 0)
-                // RoundingValue = rawTotalGoodsValue - supplierAmountDue
-                // Import (Outflow): Dương → Thu nhập khác (+Lãi); Âm → Chi phí khác (-Lãi)
-                if (i == 0)
-                {
-                    decimal roundingValue = rawTotalGoodsValue - supplierAmountDue;
-                    if (roundingValue != 0m)
+                    if (amountPaid > 0)
+                    {
+                        var cfd = new CashFlowDetail
+                        {
+                            PartnerId     = partnerDto.PartnerId,
+                            Type          = CashFlowDetailType.Payment,
+                            PaymentMethod = PaymentMethod.Cash,
+                            Amount        = amountPaid,
+                            Note          = $"Thanh toán cho phiếu nhập kho {code} – {GetPartner(partnerDto.PartnerId)?.Name}"
+                        };
+                        cashFlowDetails.Add(cfd);
+                        cashFlowPartnerIndexes.Add(i);
+                    }
+
+                    // Dòng điều chỉnh làm tròn (Rounding) — sinh cho Supplier (i == 0) nếu có phần dư lẻ (kể cả khi chưa thanh toán)
+                    if (i == 0 && roundingValue != 0m)
                     {
                         cashFlowDetails.Add(new CashFlowDetail
                         {
+                            PartnerId     = partnerDto.PartnerId,
                             Type          = CashFlowDetailType.Rounding,
                             PaymentMethod = PaymentMethod.Cash,
                             Amount        = roundingValue,
@@ -394,6 +394,7 @@ namespace MenuGoBE.Service.Document
                                            $"Giá gốc {rawTotalGoodsValue:N} ₫ → Làm tròn {supplierAmountDue:N0} ₫ " +
                                            $"(Chênh lệch {roundingValue:+#,##0.##;-#,##0.##} ₫)"
                         });
+                        cashFlowPartnerIndexes.Add(i);
                     }
                 }
             }
@@ -414,6 +415,35 @@ namespace MenuGoBE.Service.Document
         public async Task DeleteImportDocumentAsync(long documentId, long? deletedBy = null)
         {
             await DeleteDocumentAsync(documentId, deletedBy);
+        }
+
+        public async Task<DocumentResponseDto> GetImportReturnDetailsAsync(long importDocumentId)
+        {
+            var importDoc = await _repo.GetDocumentWithDetailsAsync(importDocumentId);
+            if (importDoc == null || importDoc.Type != DocumentType.Import || importDoc.IsDeleted)
+            {
+                throw new MenuGoException(ErrorCodes.DocumentNotFound);
+            }
+
+            var returnedDetails = await _repo.GetReturnedDetailsByImportIdAsync(importDocumentId);
+            var returnedQtyMap = returnedDetails
+                .GroupBy(d => d.BInventoryId)
+                .ToDictionary(g => g.Key, g => g.Sum(d => d.Quantity));
+
+            var returnDocs = await _repo.GetReturnDocumentsByImportIdAsync(importDocumentId);
+
+            var docDto = DocumentService.MapToDto(importDoc);
+
+            foreach (var detail in docDto.Details)
+            {
+                var alreadyReturned = returnedQtyMap.TryGetValue(detail.BInventoryId, out var qty) ? qty : 0m;
+                detail.AlreadyReturnedQuantity = alreadyReturned;
+                detail.MaxReturnQuantity = Math.Max(0m, detail.Quantity - alreadyReturned);
+            }
+
+            docDto.PreviousReturns = returnDocs.Select(DocumentService.MapToDto).ToList();
+
+            return docDto;
         }
     }
 }
