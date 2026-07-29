@@ -180,6 +180,19 @@ public class ReservationService : IReservationService
                 }
             }
 
+            var minutesToReservation = (dto.ReservationTime - DateTime.UtcNow).TotalMinutes;
+            if (minutesToReservation <= 60)
+            {
+                foreach (var tableId in dto.TableIds)
+                {
+                    var table = await _tableRepo.GetByIdAsync(tableId);
+                    if (table != null && (table.Status == "Occupied" || table.Status == "Serving"))
+                    {
+                        throw new InvalidOperationException($"Bàn {table.Name} đang có khách. Vui lòng chọn bàn khác hoặc dời thời gian đặt bàn.");
+                    }
+                }
+            }
+
             var fatherTableId = dto.TableIds.First();
             var fatherOrder = new Order
             {
