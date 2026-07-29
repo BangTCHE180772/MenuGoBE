@@ -64,7 +64,7 @@ public class CalculateNextShiftCutoffDelayTests
         var futureShift = new Shift
         {
             Id = 1,
-            StartTime = TimeOnly.FromDateTime(localNow.AddHours(-2)),
+            StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-10)),
             EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(20)) // 20 mins from now
         };
 
@@ -75,7 +75,7 @@ public class CalculateNextShiftCutoffDelayTests
             BranchId = 1,
             WorkDate = today,
             Shift = futureShift,
-            CheckInAt = DateTime.UtcNow.AddHours(-2),
+            CheckInAt = DateTime.UtcNow.AddMinutes(-10),
             Status = "Working"
         };
 
