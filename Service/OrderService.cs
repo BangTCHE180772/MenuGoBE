@@ -95,6 +95,11 @@ namespace MenuGoBE.Service
             if (fatherOrder == null) return false;
 
             if (dto.ChildOrderId == dto.FatherOrderId) return false;
+
+            if (childOrder.Status == "Reserved" || fatherOrder.Status == "Reserved")
+            {
+                throw new InvalidOperationException("Không thể gộp bàn đang chờ khách đặt trước. Vui lòng Xác nhận khách đến trước khi gộp.");
+            }
             while (fatherOrder.FatherId != null)
             {
                 fatherOrder = await _repo.GetByIdAsync(fatherOrder.FatherId.Value);
@@ -156,6 +161,12 @@ namespace MenuGoBE.Service
 
             var newTable = await _tableRepo.GetByIdAsync(newTableId);
             if (newTable == null || newTable.Status != "Empty") return false;
+
+            bool isProtected = await _reservationRepo.IsTableProtectedAsync(newTableId, 60);
+            if (isProtected)
+            {
+                throw new InvalidOperationException("Bàn mới đã được đặt trước trong thời gian tới. Vui lòng chọn bàn khác.");
+            }
 
             var oldTable = await _tableRepo.GetByIdAsync(order.TableId);
 

@@ -52,14 +52,18 @@ namespace MenuGoBE.Repositories
 
         public async Task<Order?> GetActiveOrderByTableIdAsync(long tableId)
         {
-            return await _context.Orders
+            var activeOrders = await _context.Orders
                 .Where(o => o.TableId == tableId && (o.Status == "Active" || o.Status == "Reserved"))
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
-                .OrderBy(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
+
+            return activeOrders
+                .OrderBy(o => o.Status == "Active" ? 0 : 1)
+                .ThenBy(o => o.CreatedAt)
+                .FirstOrDefault();
         }
 
         public async Task<Order?> GetActiveOrderByIdWithDetailsAsync(long orderId)

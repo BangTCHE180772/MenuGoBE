@@ -62,4 +62,21 @@ public class ReservationRepository : IReservationRepository
             .Include(r => r.Customer)
             .FirstOrDefaultAsync(r => r.OrderId == orderId);
     }
+
+    public async Task<bool> IsTableProtectedAsync(long tableId, int thresholdMinutes = 60)
+    {
+        var now = DateTime.UtcNow;
+        var thresholdTime = now.AddMinutes(thresholdMinutes);
+
+        var hasUpcoming = await _context.Reservations
+            .Where(r => r.Status == "Pending" || r.Status == "Confirmed")
+            .Where(r => r.ReservationTime >= now && r.ReservationTime <= thresholdTime)
+            .Where(r => r.OrderId.HasValue)
+            .AnyAsync(r => 
+                r.Order!.TableId == tableId || 
+                _context.Orders.Any(child => child.FatherId == r.OrderId && child.TableId == tableId)
+            );
+
+        return hasUpcoming;
+    }
 }
