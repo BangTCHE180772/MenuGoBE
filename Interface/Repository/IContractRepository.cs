@@ -16,5 +16,7 @@ namespace MenuGoBE.Interface.Repository
         Task SaveChangesAsync();
         Task<bool> HasActiveManagerAsync(long branchId, long excludeContractId = 0);
         Task<bool> IsManagerRoleAsync(long roleId);
+        Task<bool> HasActiveContractByAccountAsync(long accountId, long excludeContractId = 0);
+        Task UpdateExpiredContractsAsync();
     }
 }
