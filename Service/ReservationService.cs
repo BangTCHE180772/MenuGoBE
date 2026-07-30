@@ -82,6 +82,58 @@ public class ReservationService : IReservationService
         return dtos;
     }
 
+    public async Task<bool> UpdateAsync(long id, ReservationUpdateDto dto)
+    {
+        var reservation = await _reservationRepo.GetByIdAsync(id);
+        if (reservation == null) return false;
+
+        if (reservation.Status != "Pending" && reservation.Status != "Confirmed")
+        {
+            throw new InvalidOperationException("Chỉ có thể sửa đơn đặt bàn chưa đến hoặc đã xác nhận.");
+        }
+
+        if (reservation.ReservationTime != dto.ReservationTime)
+        {
+            if (reservation.OrderId.HasValue)
+            {
+                var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(reservation.OrderId.Value);
+                var tableIds = new List<long>();
+                var order = await _orderRepo.GetByIdAsync(reservation.OrderId.Value);
+                if (order != null) tableIds.Add(order.TableId);
+                tableIds.AddRange(childOrders.Select(c => c.TableId));
+
+                var startTime = dto.ReservationTime.AddMinutes(-89);
+                var endTime = dto.ReservationTime.AddMinutes(89);
+                var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
+
+                var isOverlap = overlappingReservations.Any(r => r.Id != reservation.Id && r.OrderId.HasValue && 
+                    (r.Order != null && tableIds.Contains(r.Order.TableId) || 
+                     _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value).Result.Any(c => tableIds.Contains(c.TableId))));
+
+                if (isOverlap)
+                {
+                    throw new InvalidOperationException("Bàn đã chọn không trống trong khung giờ mới.");
+                }
+            }
+        }
+
+        if (reservation.Customer != null)
+        {
+            reservation.Customer.Name = dto.CustomerName;
+            reservation.Customer.Phone = dto.CustomerPhone;
+        }
+
+        reservation.ReservationTime = dto.ReservationTime;
+        reservation.NumberOfGuests = dto.NumberOfGuests;
+        reservation.Note = dto.Note;
+
+        await _reservationRepo.UpdateAsync(reservation);
+        await _reservationRepo.SaveChangesAsync();
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+
+        return true;
+    }
+
     public async Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime)
     {
         var allTables = await _tableRepo.GetByBranchIdsAsync(new List<long> { branchId });
