@@ -7,4 +7,5 @@ public class ReservationUpdateDto
     public DateTime ReservationTime { get; set; }
     public int NumberOfGuests { get; set; }
     public string Note { get; set; } = string.Empty;
+    public bool ConfirmUpdateCustomer { get; set; } = false;
 }
