@@ -7,6 +7,7 @@ public interface IReservationService
 {
     Task<List<ReservationViewDto>> GetAllAsync();
     Task<ReservationViewDto> CreateAsync(ReservationCreateDto dto);
+    Task<bool> UpdateAsync(long id, ReservationUpdateDto dto);
     Task<bool> CheckInAsync(long id);
     Task<bool> CancelAsync(long id);
     Task<bool> ExtendAsync(long id, int minutes);

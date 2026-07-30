@@ -43,6 +43,21 @@ public class ReservationController : ControllerBase
         }
     }
 
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(long id, [FromBody] ReservationUpdateDto dto)
+    {
+        try
+        {
+            var result = await _service.UpdateAsync(id, dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy thông tin đặt bàn." });
+            return Ok(new { message = "Cập nhật thành công." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     [HttpPut("{id}/check-in")]
     public async Task<IActionResult> CheckIn(long id)
     {

@@ -221,6 +221,17 @@ namespace MenuGoBE.Service
             var order = await _repo.GetActiveOrderByTableIdAsync(tableId);
             if (order == null)
             {
+                if (table?.Status == "Reserved")
+                {
+                    var reservation = await _reservationRepo.GetUpcomingByTableIdAsync(tableId);
+                    if (reservation != null)
+                    {
+                        summary.ReservationId = reservation.Id;
+                        summary.CustomerName = reservation.Customer?.Name;
+                        summary.CustomerPhone = reservation.Customer?.Phone;
+                        summary.ReservationTime = reservation.ReservationTime;
+                    }
+                }
                 return summary;
             }
 
