@@ -84,6 +84,11 @@ public class ReservationService : IReservationService
 
     public async Task<bool> UpdateAsync(long id, ReservationUpdateDto dto)
     {
+        if (dto.ReservationTime < DateTime.UtcNow.AddMinutes(10))
+        {
+            throw new InvalidOperationException("Thời gian đặt bàn phải cách thời gian hiện tại ít nhất 10 phút.");
+        }
+
         var reservation = await _reservationRepo.GetByIdAsync(id);
         if (reservation == null) return false;
 
@@ -117,10 +122,34 @@ public class ReservationService : IReservationService
             }
         }
 
-        if (reservation.Customer != null)
+        var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
+        if (customer == null)
         {
-            reservation.Customer.Name = dto.CustomerName;
-            reservation.Customer.Phone = dto.CustomerPhone;
+            customer = new Customer
+            {
+                Name = dto.CustomerName,
+                Phone = dto.CustomerPhone,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _customerRepo.CreateAsync(customer);
+            reservation.Customer = customer;
+        }
+        else if (customer.Name != dto.CustomerName)
+        {
+            if (!dto.ConfirmUpdateCustomer)
+            {
+                throw new MenuGoBE.Exceptions.CustomerConflictException($"Số điện thoại {dto.CustomerPhone} đã đăng ký cho khách hàng: {customer.Name}. Bạn có muốn cập nhật lại tên không?", customer.Name);
+            }
+            else
+            {
+                customer.Name = dto.CustomerName;
+                await _customerRepo.UpdateAsync(customer);
+                reservation.Customer = customer;
+            }
+        }
+        else
+        {
+             reservation.Customer = customer;
         }
 
         reservation.ReservationTime = dto.ReservationTime;
@@ -186,8 +215,15 @@ public class ReservationService : IReservationService
         }
         else if (customer.Name != dto.CustomerName)
         {
-            customer.Name = dto.CustomerName;
-            await _customerRepo.UpdateAsync(customer);
+            if (!dto.ConfirmUpdateCustomer)
+            {
+                throw new MenuGoBE.Exceptions.CustomerConflictException($"Số điện thoại {dto.CustomerPhone} đã đăng ký cho khách hàng: {customer.Name}. Bạn có muốn cập nhật lại tên không?", customer.Name);
+            }
+            else
+            {
+                customer.Name = dto.CustomerName;
+                await _customerRepo.UpdateAsync(customer);
+            }
         }
 
         var reservation = new Reservation
@@ -363,6 +399,7 @@ public class ReservationService : IReservationService
                 }
 
                 fatherOrder.Status = "Active";
+                fatherOrder.CustomerId = reservation.CustomerId;
                 await _orderRepo.UpdateAsync(fatherOrder);
 
                 if (fatherTable != null)
