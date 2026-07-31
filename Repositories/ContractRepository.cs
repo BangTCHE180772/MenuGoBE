@@ -68,6 +68,17 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
+        public async Task<List<Contract>> GetByAccountIdAsync(long accountId)
+        {
+            await UpdateExpiredContractsAsync();
+            return await _context.Contracts
+                .Include(c => c.Account)
+                .Include(c => c.Role)
+                .Include(c => c.Branch)
+                .Where(c => c.AccountId == accountId)
+                .ToListAsync();
+        }
+
         public async Task CreateAsync(Contract entity)
         {
             await _context.Contracts.AddAsync(entity);

@@ -10,6 +10,7 @@ namespace MenuGoBE.Interface.Repository
         Task<List<Contract>> GetByBranchIdsAsync(List<long> branchIds);
         Task<List<Contract>> GetContractsByRolesAsync(List<long> roleIds, long? branchId = null, List<long>? branchIds = null);
         Task<Contract?> GetByIdAsync(long id);
+        Task<List<Contract>> GetByAccountIdAsync(long accountId);
         Task CreateAsync(Contract entity);
         Task UpdateAsync(Contract entity);
         Task DeleteAsync(long id);
