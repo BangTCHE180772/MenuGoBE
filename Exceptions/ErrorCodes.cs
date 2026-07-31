@@ -415,6 +415,12 @@ public static class ErrorCodes
         "Ngày chứng từ phải lớn hơn ngày phiếu kiểm kho chốt sổ gần nhất của tất cả sản phẩm liên quan.",
         400
     );
+
+    public static readonly ErrorResult DocumentDuplicatePartner = new(
+        2125,
+        "Mỗi đối tác chỉ được xuất hiện một lần trong chứng từ.",
+        400
+    );
 }
 
 

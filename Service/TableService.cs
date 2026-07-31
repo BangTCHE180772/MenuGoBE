@@ -14,11 +14,13 @@ namespace MenuGoBE.Service
     {
         private readonly ITableRepository _repo;
         private readonly IMapper _mapper;
+        private readonly IReservationRepository _reservationRepo;
 
-        public TableService(ITableRepository repo, IMapper mapper)
+        public TableService(ITableRepository repo, IMapper mapper, IReservationRepository reservationRepo)
         {
             _repo = repo;
             _mapper = mapper;
+            _reservationRepo = reservationRepo;
         }
 
         public async Task<List<TableViewDto>> GetAllAsync()
@@ -55,6 +57,15 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            if (dto.Status == "Occupied" || dto.Status == "Serving")
+            {
+                bool isProtected = await _reservationRepo.IsTableProtectedAsync(dto.Id, 60);
+                if (isProtected)
+                {
+                    throw new InvalidOperationException("Bàn này đã được đặt trước trong thời gian tới. Không thể phục vụ khách vãng lai.");
+                }
+            }
 
             _mapper.Map(dto, entity);
 

@@ -11,4 +11,6 @@ public interface IReservationRepository
     Task SaveChangesAsync();
     Task<List<Reservation>> GetOverlappingReservationsAsync(DateTime startTime, DateTime endTime);
     Task<Reservation?> GetByOrderIdAsync(long orderId);
+    Task<Reservation?> GetUpcomingByTableIdAsync(long tableId);
+    Task<bool> IsTableProtectedAsync(long tableId, int thresholdMinutes = 60);
 }
