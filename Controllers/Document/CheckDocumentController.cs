@@ -37,6 +37,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("check")]
         public async Task<IActionResult> GetCheckDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Check);
@@ -56,8 +61,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateCheckDocumentAsync(dto, createdBy);
+                var result = await _service.CreateCheckDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {

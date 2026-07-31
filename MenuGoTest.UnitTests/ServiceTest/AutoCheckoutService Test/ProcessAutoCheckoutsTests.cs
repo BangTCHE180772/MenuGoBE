@@ -56,7 +56,7 @@ public class ProcessAutoCheckoutsTests
             BranchId = 1,
             WorkDate = today,
             Shift = pastShift,
-            CheckInAt = DateTime.UtcNow.AddHours(-5),
+            CheckInAt = DateTime.UtcNow.AddMinutes(-50),
             Status = "Working"
         };
 
@@ -93,7 +93,7 @@ public class ProcessAutoCheckoutsTests
         var currentShift = new Shift
         {
             Id = 1,
-            StartTime = TimeOnly.FromDateTime(localNow.AddHours(-4)),
+            StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-30)),
             EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(-5)) // Just ended
         };
 
@@ -101,7 +101,7 @@ public class ProcessAutoCheckoutsTests
         {
             Id = 2,
             StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-5)), // Starts right at current shift end
-            EndTime = TimeOnly.FromDateTime(localNow.AddHours(4))
+            EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(30))
         };
 
         var currentSchedule = new WorkSchedule
@@ -111,7 +111,7 @@ public class ProcessAutoCheckoutsTests
             BranchId = 1,
             WorkDate = today,
             Shift = currentShift,
-            CheckInAt = DateTime.UtcNow.AddHours(-4),
+            CheckInAt = DateTime.UtcNow.AddMinutes(-30),
             Status = "Working"
         };
 

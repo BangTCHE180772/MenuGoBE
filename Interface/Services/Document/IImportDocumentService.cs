@@ -8,5 +8,6 @@ namespace MenuGoBE.Interface.Services.Document
     {
         Task<DocumentEntity> CreateImportDocumentAsync(ImportDocumentCreateDto dto, long? createdBy = null);
         Task DeleteImportDocumentAsync(long documentId, long? deletedBy = null);
+        Task<DocumentResponseDto> GetImportReturnDetailsAsync(long importDocumentId);
     }
 }

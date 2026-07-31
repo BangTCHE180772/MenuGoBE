@@ -22,11 +22,14 @@ namespace MenuGoBE.Validator.Contract
                 .MaximumLength(100).WithMessage("Loại hợp đồng không được vượt quá 100 ký tự.");
 
             RuleFor(x => x.StartDate)
-                .NotEmpty().WithMessage("Ngày bắt đầu không được để trống.");
+                .NotEmpty().WithMessage("Ngày bắt đầu không được để trống.")
+                .GreaterThanOrEqualTo(DateOnly.FromDateTime(DateTime.Today))
+                .WithMessage("Ngày bắt đầu phải từ ngày hôm nay trở đi.");
 
             RuleFor(x => x.EndDate)
+                .NotNull().WithMessage("Ngày kết thúc không được để trống.")
+                .NotEmpty().WithMessage("Ngày kết thúc không được để trống.")
                 .GreaterThanOrEqualTo(x => x.StartDate)
-                .When(x => x.EndDate.HasValue)
                 .WithMessage("Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.");
 
             RuleFor(x => x.Status)

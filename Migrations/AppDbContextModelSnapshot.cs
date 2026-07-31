@@ -323,6 +323,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("DocumentPartnerId")
                         .HasColumnType("bigint");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Note")
                         .HasColumnType("text");
 

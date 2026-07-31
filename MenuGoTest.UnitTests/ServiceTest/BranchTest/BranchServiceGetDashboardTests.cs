@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using MenuGoBE.Dtos.Dashboard;
 using MenuGoBE.Interface.Repository;
@@ -26,12 +27,17 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
             decimal expectedRevenue = 1000m;
             decimal expectedExpenses = 400m;
             decimal expectedProfit = 600m;
+            int completedBills = 5;
+            int totalItemsSold = 10;
+            decimal avgOrderValue = 200m;
+            var paymentMethods = new List<DashboardPaymentMethodDto>();
+            var hourSlots = new List<DashboardHourSlotDto>();
 
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots, new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             // Act
-            var result = await _service.GetDashboardStatsAsync("default", null, null, null);
+            var result = await _service.GetDashboardStatsAsync("thisMonth", null, null, null);
 
             // Assert
             Assert.NotNull(result);
@@ -45,102 +51,88 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_For7daysRange()
         {
-            decimal expectedRevenue = 1000m;
-            decimal expectedExpenses = 400m;
-            decimal expectedProfit = 600m;
-
+            // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((500m, 200m, 300m, 5, 10, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("7days", null, null, null);
 
             Assert.NotNull(result);
-            Assert.Equal((double)expectedRevenue, result.Revenue);
-            Assert.Equal((double)expectedExpenses, result.Expenses);
-            Assert.Equal((double)expectedProfit, result.Profit);
+            Assert.Equal(500.0, result.Revenue);
         }
 
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForThisMonthRange()
         {
-            decimal expectedRevenue = 1000m;
-            decimal expectedExpenses = 400m;
-            decimal expectedProfit = 600m;
-
+            // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((800m, 300m, 500m, 8, 16, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("thisMonth", null, null, null);
 
             Assert.NotNull(result);
-            Assert.Equal((double)expectedRevenue, result.Revenue);
+            Assert.Equal(800.0, result.Revenue);
         }
 
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForLastMonthRange()
         {
-            decimal expectedRevenue = 1000m;
-            decimal expectedExpenses = 400m;
-            decimal expectedProfit = 600m;
-
+            // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((1200m, 600m, 600m, 12, 24, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("lastMonth", null, null, null);
 
             Assert.NotNull(result);
-            Assert.Equal((double)expectedRevenue, result.Revenue);
+            Assert.Equal(1200.0, result.Revenue);
         }
 
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForThisYearRange()
         {
-            decimal expectedRevenue = 1000m;
-            decimal expectedExpenses = 400m;
-            decimal expectedProfit = 600m;
-
+            // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((2000m, 900m, 1100m, 20, 40, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("thisYear", null, null, null);
 
             Assert.NotNull(result);
-            Assert.Equal((double)expectedRevenue, result.Revenue);
+            Assert.Equal(2000.0, result.Revenue);
         }
 
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForLastYearRange()
         {
-            decimal expectedRevenue = 1000m;
-            decimal expectedExpenses = 400m;
-            decimal expectedProfit = 600m;
-
+            // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((3000m, 1500m, 1500m, 30, 60, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("lastYear", null, null, null);
 
             Assert.NotNull(result);
-            Assert.Equal((double)expectedRevenue, result.Revenue);
+            Assert.Equal(3000.0, result.Revenue);
         }
 
         [Fact]
         public async Task GetDashboardStatsAsync_ShouldReturnFinancialStats_ForCustomRange()
         {
-            decimal expectedRevenue = 1000m;
-            decimal expectedExpenses = 400m;
-            decimal expectedProfit = 600m;
 
-            var startDateStr = DateTime.UtcNow.AddDays(-10).ToString("yyyy-MM-dd");
-            var endDateStr = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            var startDateStr = "2026-07-01";
+            var endDateStr = "2026-07-15";
 
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, 10, 50, 100m));
+                .ReturnsAsync((150m, 50m, 100m, 3, 6, 50m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("custom", startDateStr, endDateStr, null);
 
             Assert.NotNull(result);
-            Assert.Equal((double)expectedRevenue, result.Revenue);
+            Assert.Equal(150.0, result.Revenue);
+
+            _repoMock.Verify(r => r.GetFinancialStatsAsync(
+                It.Is<DateTime>(dt => dt.Year == 2026 && dt.Month == 7 && dt.Day == 1),
+                It.Is<DateTime>(dt => dt.Year == 2026 && dt.Month == 7 && dt.Day == 15),
+                null), 
+                Times.Once);
         }
     }
 }
