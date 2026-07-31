@@ -31,5 +31,10 @@ namespace MenuGoBE.Repositories
         {
             await _context.SaveChangesAsync();
         }
+
+        public async Task CreateAsync(BInventory entity)
+        {
+            await _context.BInventories.AddAsync(entity);
+        }
     }
 }
