@@ -9,6 +9,7 @@ public enum DocumentType
     Check = 5,            // Kiểm kho
     Production = 6,       // Sản xuất (Manufactured / Production)
     ReceiveTransfer = 7,  // Nhận chuyển kho (Chi nhánh nhận)
-    TransferReceive = 7   // Alias cho ReceiveTransfer
+    TransferReceive = 7,  // Alias cho ReceiveTransfer
+    Sales = 8             // Bán hàng (Phiếu xuất bán hàng)
 }
 
