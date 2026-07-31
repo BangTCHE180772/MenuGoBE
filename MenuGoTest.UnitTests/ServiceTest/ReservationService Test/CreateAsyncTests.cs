@@ -49,7 +49,8 @@ public class CreateAsyncTests : ReservationServiceTestBase
         {
             CustomerName = "New Name", CustomerPhone = "0987654321",
             ReservationTime = DateTime.UtcNow.AddHours(2),
-            NumberOfGuests = 2
+            NumberOfGuests = 2,
+            ConfirmUpdateCustomer = true // Required since names differ
         };
 
         _customerRepoMock.Setup(r => r.GetByPhoneAsync("0987654321")).ReturnsAsync(existing);
@@ -74,7 +75,7 @@ public class CreateAsyncTests : ReservationServiceTestBase
             TableIds = new List<long> { 1 }
         };
 
-        _customerRepoMock.Setup(r => r.GetByPhoneAsync("0987654321")).ReturnsAsync(new Customer { Id = 1 });
+        _customerRepoMock.Setup(r => r.GetByPhoneAsync("0987654321")).ReturnsAsync(new Customer { Id = 1, Name = "Test" }); // Name must match to skip conflict
 
         // Bàn 1 đã bị đặt trong khoảng thời gian trùng
         var overlapping = new List<Reservation>
@@ -107,7 +108,7 @@ public class CreateAsyncTests : ReservationServiceTestBase
             }
         };
 
-        _customerRepoMock.Setup(r => r.GetByPhoneAsync("0987654321")).ReturnsAsync(new Customer { Id = 1 });
+        _customerRepoMock.Setup(r => r.GetByPhoneAsync("0987654321")).ReturnsAsync(new Customer { Id = 1, Name = "Test" }); // Name must match to skip conflict
         _reservationRepoMock.Setup(r => r.GetOverlappingReservationsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(new List<Reservation>());
         _orderRepoMock.Setup(r => r.CreateAsync(It.IsAny<Order>())).Returns(Task.CompletedTask);
         _orderRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
