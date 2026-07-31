@@ -18,7 +18,7 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<(decimal Revenue, decimal Expenses, decimal Profit, int CompletedBills, int TotalItemsSold, decimal AvgOrderValue)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
+        public async Task<(decimal Revenue, decimal Expenses, decimal Profit, int CompletedBills, int TotalItemsSold, decimal AvgOrderValue, List<DashboardPaymentMethodDto> PaymentMethods, List<DashboardHourSlotDto> HourSlots, List<DashboardDishDto> TopDishes, List<DashboardDishDto> LeastDishes)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
         {
             var paymentsQuery = _context.Payments
                 .Where(p => p.Status == "Success" && p.CreatedAt >= startDate && p.CreatedAt <= endDate);
@@ -47,15 +47,94 @@ namespace MenuGoBE.Repositories
 
             var expenses = await expensesQuery.SumAsync(cf => cf.TotalAmount);
 
-            if (expenses == 0 && revenue > 0)
-            {
-                expenses = Math.Round(revenue * 0.64m);
-            }
-
             var profit = revenue - expenses;
             var avgOrderValue = completedBills > 0 ? revenue / completedBills : 0m;
 
-            return (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue);
+            // Group Payment Methods
+            var paymentMethods = paidPayments
+                .GroupBy(p => p.Method)
+                .Select(g => new DashboardPaymentMethodDto
+                {
+                    Name = g.Key == "Cash" ? "Tiền mặt" : (g.Key == "PayOS" ? "Chuyển khoản / QR" : g.Key),
+                    Value = (double)g.Sum(p => p.Amount)
+                })
+                .ToList();
+
+            // Group Hour Slots
+            var morningSum = 0m;
+            var noonSum = 0m;
+            var afternoonSum = 0m;
+            var eveningSum = 0m;
+
+            foreach (var p in paidPayments)
+            {
+                var localHour = p.CreatedAt.AddHours(7).Hour;
+                if (localHour >= 6 && localHour < 11)
+                    morningSum += p.Amount;
+                else if (localHour >= 11 && localHour < 14)
+                    noonSum += p.Amount;
+                else if (localHour >= 14 && localHour < 18)
+                    afternoonSum += p.Amount;
+                else
+                    eveningSum += p.Amount;
+            }
+
+            var hourSlots = new List<DashboardHourSlotDto>
+            {
+                new() { Slot = "Sáng (6-11h)", Value = (double)morningSum },
+                new() { Slot = "Trưa (11-14h)", Value = (double)noonSum },
+                new() { Slot = "Chiều (14-18h)", Value = (double)afternoonSum },
+                new() { Slot = "Tối (18-22h)", Value = (double)eveningSum }
+            };
+
+            // Get ChainId if branchId is provided
+            long? chainId = null;
+            if (branchId.HasValue)
+            {
+                var branch = await _context.Branches.FindAsync(branchId.Value);
+                if (branch != null)
+                {
+                    chainId = branch.ChainId;
+                }
+            }
+
+            var productsQuery = _context.Products.AsQueryable();
+            List<string> allProducts;
+            if (chainId.HasValue && chainId.Value > 0)
+            {
+                var chainProducts = await productsQuery.Where(p => p.ChainId == chainId.Value).Select(p => p.Name).Distinct().ToListAsync();
+                allProducts = chainProducts.Any() ? chainProducts : await productsQuery.Select(p => p.Name).Distinct().ToListAsync();
+            }
+            else
+            {
+                allProducts = await productsQuery.Select(p => p.Name).Distinct().ToListAsync();
+            }
+
+            // Group Top/Least Dishes from paid orders
+            var realSales = await _context.OrderDetails
+                .Where(od => paidOrderIds.Contains(od.OrderId))
+                .GroupBy(od => od.Product.Name)
+                .Select(g => new
+                {
+                    Name = g.Key,
+                    Quantity = g.Sum(od => od.Quantity)
+                })
+                .ToDictionaryAsync(x => x.Name, x => x.Quantity);
+
+            // Union with product names from real sales to guarantee no sold dish is lost
+            var salesProductNames = realSales.Keys.ToList();
+            var fullProductList = allProducts.Union(salesProductNames).Distinct().ToList();
+
+            var allDishesWithQty = fullProductList.Select(name => new DashboardDishDto
+            {
+                Name = name,
+                Quantity = realSales.TryGetValue(name, out var qty) ? qty : 0
+            }).ToList();
+
+            var topDishes = allDishesWithQty.OrderByDescending(d => d.Quantity).Take(10).ToList();
+            var leastDishes = allDishesWithQty.OrderBy(d => d.Quantity).Take(10).ToList();
+
+            return (revenue, expenses, profit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots, topDishes, leastDishes);
         }
 
         public async Task<(DashboardOrderSummaryDto OrderSummary, List<DashboardAlertDto> Alerts, List<DashboardCashFlowDto> CashFlowList)> GetTodayDetailStatsAsync(long? branchId)
@@ -248,12 +327,7 @@ namespace MenuGoBE.Repositories
             {
                 var dayRevenue = paymentsGrouped.FirstOrDefault(g => g.Date == date)?.Revenue ?? 0m;
                 var dayExpenses = expensesGrouped.FirstOrDefault(g => g.Date == date)?.Expenses ?? 0m;
-                
-                // Fallback demo formula if expense is 0 but has revenue
-                if (dayExpenses == 0 && dayRevenue > 0)
-                {
-                    dayExpenses = Math.Round(dayRevenue * 0.64m);
-                }
+
 
                 result.Add(new DashboardChartPointDto
                 {
@@ -308,10 +382,7 @@ namespace MenuGoBE.Repositories
                 var mRevenue = paymentsGrouped.FirstOrDefault(g => g.Month == m)?.Revenue ?? 0m;
                 var mExpenses = expensesGrouped.FirstOrDefault(g => g.Month == m)?.Expenses ?? 0m;
 
-                if (mExpenses == 0 && mRevenue > 0)
-                {
-                    mExpenses = Math.Round(mRevenue * 0.64m);
-                }
+
 
                 result.Add(new DashboardMonthlyPointDto
                 {
@@ -323,6 +394,71 @@ namespace MenuGoBE.Repositories
             }
 
             return result;
+        }
+
+        public async Task<List<DashboardCashFlowDto>> GetCashFlowListAsync(DateTime startDate, DateTime endDate, long? branchId)
+        {
+            var paymentsQuery = _context.Payments
+                .Where(p => p.Status == "Success" && p.CreatedAt >= startDate && p.CreatedAt <= endDate);
+
+            if (branchId.HasValue)
+            {
+                paymentsQuery = paymentsQuery.Where(p => p.Order.Table.Area.BranchId == branchId.Value);
+            }
+
+            var payments = await paymentsQuery.ToListAsync();
+
+            var expensesQuery = _context.CashFlows
+                .Where(cf => !cf.IsDeleted && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate);
+
+            if (branchId.HasValue)
+            {
+                expensesQuery = expensesQuery.Where(cf => cf.BranchId == branchId.Value);
+            }
+
+            var expenses = await expensesQuery.ToListAsync();
+
+            var cashFlowList = new List<DashboardCashFlowDto>();
+
+            foreach (var p in payments)
+            {
+                cashFlowList.Add(new DashboardCashFlowDto
+                {
+                    Id = p.Id,
+                    Time = p.CreatedAt.AddHours(7).ToString("yyyy-MM-dd HH:mm"),
+                    Type = "in",
+                    Category = "Thanh toán hóa đơn",
+                    Amount = (double)p.Amount
+                });
+            }
+
+            foreach (var cf in expenses)
+            {
+                var directionStr = (int)cf.Direction == 1 ? "in" : "out";
+                var categoryStr = "Thu khác";
+                if ((int)cf.Direction == 2)
+                {
+                    if (cf.Code.StartsWith("PAYROLL", StringComparison.OrdinalIgnoreCase))
+                        categoryStr = "Trả lương";
+                    else if (cf.Code.StartsWith("IMPORT", StringComparison.OrdinalIgnoreCase))
+                        categoryStr = "Nhập hàng";
+                    else if (cf.Code.StartsWith("UTILITY", StringComparison.OrdinalIgnoreCase))
+                        categoryStr = "Điện nước";
+                    else
+                        categoryStr = "Chi phí khác";
+                }
+
+                cashFlowList.Add(new DashboardCashFlowDto
+                {
+                    Id = cf.Id + 1000000,
+                    Time = cf.CreatedAt.AddHours(7).ToString("yyyy-MM-dd HH:mm"),
+                    Type = directionStr,
+                    Category = categoryStr,
+                    Amount = (int)cf.Direction == 2 ? -(double)cf.TotalAmount : (double)cf.TotalAmount
+                });
+            }
+
+            return cashFlowList.OrderByDescending(cf => cf.Time).ToList();
         }
     }
 }

@@ -52,6 +52,9 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Không thể chuyển kho sản phẩm [{binv.Product.Name}] do thuộc loại Processed.");
             }
 
+            // Stock Audit Lock Validation – Chi nhánh gửi (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(fromBinvIds, dto.BusinessDate);
+
             // Load UnitConversions nếu có
             var ucIds = dto.Details
                 .Where(d => d.UnitConversionId.HasValue)
@@ -75,7 +78,7 @@ namespace MenuGoBE.Service.Document
                 Type = DocumentType.Transfer,
                 TransferStatus = DocumentTransferStatus.Pending, // Chờ nhận
                 TotalAmount = 0,
-                CreatedBy = createdBy,
+                CreatedBy = createdBy ?? dto.CreatedByAccountId,
                 CreatedAt = now
             };
 
@@ -242,7 +245,7 @@ namespace MenuGoBE.Service.Document
                 Type = DocumentType.ReceiveTransfer, // Type 7: Nhận chuyển kho
                 TransferStatus = DocumentTransferStatus.Pending, // Chờ chi nhánh nhận bấm nhận
                 TotalAmount = totalTransferValue,
-                CreatedBy = createdBy,
+                CreatedBy = createdBy ?? dto.CreatedByAccountId,
                 CreatedAt = now
             };
 
@@ -313,6 +316,9 @@ namespace MenuGoBE.Service.Document
             if (toBranch.PostingLockDate.HasValue && exactReceiveDate.Date <= toBranch.PostingLockDate.Value.Date)
                 throw new MenuGoException(ErrorCodes.DocumentPostingLockDateError, "Ngày nhận hàng nằm trước hoặc bằng ngày khóa sổ của chi nhánh nhận.");
 
+            // Stock Audit Lock Validation – Chi nhánh nhận (ERR_STOCK_AUDIT_LOCKED)
+            await ValidateStockAuditLockAsync(toBinvIds, exactReceiveDate);
+
             // Load UnitConversions
             var ucIds = dto.Details
                 .Where(d => d.ToBInventoryId > 0)
@@ -334,7 +340,7 @@ namespace MenuGoBE.Service.Document
                     TransferStatus = DocumentTransferStatus.Received,
                     TotalAmount = parentTransferDoc.TotalAmount,
                     ParentDocumentId = parentTransferDoc.Id,
-                    CreatedBy = createdBy,
+                    CreatedBy = createdBy ?? dto.CreatedByAccountId,
                     CreatedAt = now
                 };
             }
@@ -537,6 +543,10 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentTransferFromBranchPostingLockError,
                         $"Không thể xóa phiếu do chi nhánh gửi [{fromBranch.Name}] đã khóa sổ tại ngày gửi hàng ({parentDoc.BusinessDate:dd/MM/yyyy}).");
                 }
+
+                // Stock Audit Lock Validation – chi nhánh gửi khi xóa (ERR_STOCK_AUDIT_LOCKED)
+                var parentFromBinvIds = parentDoc.DocumentDetails.Select(d => d.BInventoryId).Distinct().ToList();
+                await ValidateStockAuditLockAsync(parentFromBinvIds, parentDoc.BusinessDate);
             }
 
             // Nếu xóa phiếu chuyển gốc, xóa cả phiếu chờ nhận con

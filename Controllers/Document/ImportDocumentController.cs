@@ -37,6 +37,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("import")]
         public async Task<IActionResult> GetImportDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Import);
@@ -56,8 +61,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateImportDocumentAsync(dto, createdBy);
+                var result = await _service.CreateImportDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -88,6 +92,24 @@ namespace MenuGoBE.Controllers.Document
             catch (Exception ex)
             {
                 return BadRequest(new { message = "Đã xảy ra lỗi khi xóa phiếu nhập kho.", error = ex.Message });
+            }
+        }
+
+        [HttpGet("import/{id}/return-details")]
+        public async Task<IActionResult> GetImportReturnDetails(long id)
+        {
+            try
+            {
+                var result = await _service.GetImportReturnDetailsAsync(id);
+                return Ok(result);
+            }
+            catch (Exceptions.MenuGoException ex)
+            {
+                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy chi tiết trả hàng nhập.", error = ex.Message });
             }
         }
     }

@@ -47,6 +47,11 @@ namespace MenuGoBE.Service
 
         public async Task<ContractViewDto> CreateAsync(ContractCreateDto dto)
         {
+            if (await _repo.HasActiveContractByAccountAsync(dto.AccountId))
+            {
+                throw new Exception("Tài khoản này hiện đã có hợp đồng đang có hiệu lực. Không thể tạo thêm hợp đồng mới khi hợp đồng cũ còn hiệu lực.");
+            }
+
             if (dto.Status == "Active" && await _repo.IsManagerRoleAsync(dto.RoleId))
             {
                 if (await _repo.HasActiveManagerAsync(dto.BranchId))
@@ -68,6 +73,11 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            if (dto.Status == "Active" && await _repo.HasActiveContractByAccountAsync(dto.AccountId, dto.Id))
+            {
+                throw new Exception("Tài khoản này hiện đã có hợp đồng khác đang có hiệu lực. Không thể kích hoạt hợp đồng này.");
+            }
 
             if (dto.Status == "Active" && await _repo.IsManagerRoleAsync(dto.RoleId))
             {

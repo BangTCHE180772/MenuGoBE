@@ -24,7 +24,7 @@ namespace MenuGoBE.Interface.Repository.Document
             List<int> cashFlowPartnerIndexes);
 
         new Task<bool> HasReturnDocumentsAsync(long importDocumentId);
-        Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId);
+        new Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId);
     }
 }
 

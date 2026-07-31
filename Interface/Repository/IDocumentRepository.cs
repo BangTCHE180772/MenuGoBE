@@ -30,6 +30,8 @@ namespace MenuGoBE.Interface.Repository
         Task<DocumentEntity?> GetDocumentWithDetailsAsync(long documentId);
         Task<List<DocumentEntity>> GetDocumentsAsync(long? branchId = null, MenuGoBE.Models.Enums.DocumentType? type = null);
         Task<bool> HasReturnDocumentsAsync(long importDocumentId);
+        Task<List<DocumentDetail>> GetReturnedDetailsByImportIdAsync(long importDocumentId);
+        Task<List<DocumentEntity>> GetReturnDocumentsByImportIdAsync(long importDocumentId);
         Task<List<CashFlow>> GetCashFlowsByDocumentIdAsync(long documentId);
         Task<List<InventoryLedger>> GetLedgersByDocumentIdAsync(long documentId);
         Task ExecuteDeleteTransactionAsync(
@@ -43,5 +45,12 @@ namespace MenuGoBE.Interface.Repository
         /// Lấy danh sách UnitConversion theo danh sách Id.
         /// </summary>
         Task<List<UnitConversion>> GetUnitConversionsByIdsAsync(List<long> ids);
+
+        /// <summary>
+        /// Trả về InventoryLedger loại Check (Phiếu kiểm kho) mới nhất (theo BusinessDate)
+        /// cho từng BInventoryId trong danh sách. Dùng để kiểm tra Business Date Lock.
+        /// Include navigation Document để lấy Code cho error message.
+        /// </summary>
+        Task<List<InventoryLedger>> GetLatestCheckLedgersForBInventoriesAsync(List<long> binvIds);
     }
 }
