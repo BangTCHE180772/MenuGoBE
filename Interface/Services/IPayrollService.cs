@@ -10,6 +10,7 @@ namespace MenuGoBE.Interface.Services
     {
         Task<List<PayrollViewDto>> GetAllAsync(long? branchId = null, int? month = null, int? year = null, long? accountId = null, List<long>? roleIds = null);
         Task<PayrollViewDto?> GetByIdAsync(long id);
+        Task<List<PayrollViewDto>> GetByAccountIdAsync(long accountId, int? month = null, int? year = null);
         Task<PayrollViewDto> CreateAsync(PayrollCreateDto dto);
         Task<bool> UpdateAsync(PayrollUpdateDto dto);
         Task<bool> DeleteAsync(long id);
