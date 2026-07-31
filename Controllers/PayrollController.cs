@@ -81,6 +81,18 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("my-payroll")]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMyPayroll([FromQuery] int? month, [FromQuery] int? year)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var result = await _payrollService.GetByAccountIdAsync(currentUserId.Value, month, year);
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(long id)
         {
@@ -88,13 +100,19 @@ namespace MenuGoBE.Controllers
             if (!currentUserId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
-            if (!isAdmin && !isManager)
-                return StatusCode(403, new { message = "Bạn không có quyền xem bảng lương." });
-
             var result = await _payrollService.GetByIdAsync(id);
             if (result == null)
                 return NotFound(new { message = $"Không tìm thấy bảng lương có ID {id}" });
+
+            // Allow employee to view their own payroll details
+            if (result.AccountId == currentUserId.Value)
+            {
+                return Ok(result);
+            }
+
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền xem bảng lương." });
 
             var acc = await _accountService.GetByIdAsync(result.AccountId);
             if (acc == null)
