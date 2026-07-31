@@ -146,6 +146,11 @@ builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailS
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
 
+// SignalR
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IDictionary<string, string>>(opts => new Dictionary<string, string>());
+builder.Services.AddSingleton<IDictionary<string, long>>(opts => new Dictionary<string, long>());
+builder.Services.AddHostedService<InventorySyncWorker>();
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();

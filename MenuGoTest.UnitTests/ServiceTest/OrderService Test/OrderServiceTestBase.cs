@@ -24,6 +24,7 @@ public abstract class OrderServiceTestBase
     protected readonly Mock<IAreaRepository> _areaRepoMock;
     protected readonly Mock<MenuGoBE.Interface.Services.IRedisInventoryService> _redisInventoryServiceMock;
     protected readonly Mock<IBInventoryRepository> _bInventoryRepoMock;
+    protected readonly Mock<IDocumentRepository> _documentRepoMock;
     protected readonly IMapper _mapper;
     protected readonly OrderService _service;
 
@@ -39,6 +40,7 @@ public abstract class OrderServiceTestBase
         _areaRepoMock = new Mock<IAreaRepository>();
         _redisInventoryServiceMock = new Mock<MenuGoBE.Interface.Services.IRedisInventoryService>();
         _bInventoryRepoMock = new Mock<IBInventoryRepository>();
+        _documentRepoMock = new Mock<IDocumentRepository>();
         var config = new MapperConfiguration(cfg =>
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
@@ -48,6 +50,7 @@ public abstract class OrderServiceTestBase
             _customerRepoMock.Object, _paymentRepoMock.Object,
             _voucherRepoMock.Object, _reservationRepoMock.Object,
             _productRepoMock.Object, _areaRepoMock.Object,
-            _redisInventoryServiceMock.Object, _bInventoryRepoMock.Object);
+            _redisInventoryServiceMock.Object, _bInventoryRepoMock.Object,
+            _documentRepoMock.Object);
     }
 }
