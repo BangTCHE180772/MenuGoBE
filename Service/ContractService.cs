@@ -45,6 +45,12 @@ namespace MenuGoBE.Service
             return _mapper.Map<ContractViewDto>(data);
         }
 
+        public async Task<List<ContractViewDto>> GetByAccountIdAsync(long accountId)
+        {
+            var data = await _repo.GetByAccountIdAsync(accountId);
+            return _mapper.Map<List<ContractViewDto>>(data);
+        }
+
         public async Task<ContractViewDto> CreateAsync(ContractCreateDto dto)
         {
             if (await _repo.HasActiveContractByAccountAsync(dto.AccountId))
