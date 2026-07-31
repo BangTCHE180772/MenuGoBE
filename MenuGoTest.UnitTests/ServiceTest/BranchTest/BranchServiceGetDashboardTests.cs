@@ -34,7 +34,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
             var hourSlots = new List<DashboardHourSlotDto>();
 
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots));
+                .ReturnsAsync((expectedRevenue, expectedExpenses, expectedProfit, completedBills, totalItemsSold, avgOrderValue, paymentMethods, hourSlots, new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             // Act
             var result = await _service.GetDashboardStatsAsync("thisMonth", null, null, null);
@@ -53,7 +53,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         {
             // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((500m, 200m, 300m, 5, 10, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>()));
+                .ReturnsAsync((500m, 200m, 300m, 5, 10, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("7days", null, null, null);
 
@@ -66,7 +66,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         {
             // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((800m, 300m, 500m, 8, 16, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>()));
+                .ReturnsAsync((800m, 300m, 500m, 8, 16, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("thisMonth", null, null, null);
 
@@ -79,7 +79,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         {
             // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((1200m, 600m, 600m, 12, 24, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>()));
+                .ReturnsAsync((1200m, 600m, 600m, 12, 24, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("lastMonth", null, null, null);
 
@@ -92,7 +92,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         {
             // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((2000m, 900m, 1100m, 20, 40, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>()));
+                .ReturnsAsync((2000m, 900m, 1100m, 20, 40, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("thisYear", null, null, null);
 
@@ -105,7 +105,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
         {
             // Arrange
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((3000m, 1500m, 1500m, 30, 60, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>()));
+                .ReturnsAsync((3000m, 1500m, 1500m, 30, 60, 100m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("lastYear", null, null, null);
 
@@ -121,7 +121,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
             var endDateStr = "2026-07-15";
 
             _repoMock.Setup(r => r.GetFinancialStatsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>(), It.IsAny<long?>()))
-                .ReturnsAsync((150m, 50m, 100m, 3, 6, 50m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>()));
+                .ReturnsAsync((150m, 50m, 100m, 3, 6, 50m, new List<DashboardPaymentMethodDto>(), new List<DashboardHourSlotDto>(), new List<DashboardDishDto>(), new List<DashboardDishDto>()));
 
             var result = await _service.GetDashboardStatsAsync("custom", startDateStr, endDateStr, null);
 

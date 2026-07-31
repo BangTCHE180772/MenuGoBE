@@ -82,6 +82,87 @@ public class ReservationService : IReservationService
         return dtos;
     }
 
+    public async Task<bool> UpdateAsync(long id, ReservationUpdateDto dto)
+    {
+        if (dto.ReservationTime < DateTime.UtcNow.AddMinutes(10))
+        {
+            throw new InvalidOperationException("Thời gian đặt bàn phải cách thời gian hiện tại ít nhất 10 phút.");
+        }
+
+        var reservation = await _reservationRepo.GetByIdAsync(id);
+        if (reservation == null) return false;
+
+        if (reservation.Status != "Pending" && reservation.Status != "Confirmed")
+        {
+            throw new InvalidOperationException("Chỉ có thể sửa đơn đặt bàn chưa đến hoặc đã xác nhận.");
+        }
+
+        if (reservation.ReservationTime != dto.ReservationTime)
+        {
+            if (reservation.OrderId.HasValue)
+            {
+                var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(reservation.OrderId.Value);
+                var tableIds = new List<long>();
+                var order = await _orderRepo.GetByIdAsync(reservation.OrderId.Value);
+                if (order != null) tableIds.Add(order.TableId);
+                tableIds.AddRange(childOrders.Select(c => c.TableId));
+
+                var startTime = dto.ReservationTime.AddMinutes(-89);
+                var endTime = dto.ReservationTime.AddMinutes(89);
+                var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
+
+                var isOverlap = overlappingReservations.Any(r => r.Id != reservation.Id && r.OrderId.HasValue && 
+                    (r.Order != null && tableIds.Contains(r.Order.TableId) || 
+                     _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value).Result.Any(c => tableIds.Contains(c.TableId))));
+
+                if (isOverlap)
+                {
+                    throw new InvalidOperationException("Bàn đã chọn không trống trong khung giờ mới.");
+                }
+            }
+        }
+
+        var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
+        if (customer == null)
+        {
+            customer = new Customer
+            {
+                Name = dto.CustomerName,
+                Phone = dto.CustomerPhone,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _customerRepo.CreateAsync(customer);
+            reservation.Customer = customer;
+        }
+        else if (customer.Name != dto.CustomerName)
+        {
+            if (!dto.ConfirmUpdateCustomer)
+            {
+                throw new MenuGoBE.Exceptions.CustomerConflictException($"Số điện thoại {dto.CustomerPhone} đã đăng ký cho khách hàng: {customer.Name}. Bạn có muốn cập nhật lại tên không?", customer.Name);
+            }
+            else
+            {
+                customer.Name = dto.CustomerName;
+                await _customerRepo.UpdateAsync(customer);
+                reservation.Customer = customer;
+            }
+        }
+        else
+        {
+             reservation.Customer = customer;
+        }
+
+        reservation.ReservationTime = dto.ReservationTime;
+        reservation.NumberOfGuests = dto.NumberOfGuests;
+        reservation.Note = dto.Note;
+
+        await _reservationRepo.UpdateAsync(reservation);
+        await _reservationRepo.SaveChangesAsync();
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+
+        return true;
+    }
+
     public async Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime)
     {
         var allTables = await _tableRepo.GetByBranchIdsAsync(new List<long> { branchId });
@@ -134,8 +215,15 @@ public class ReservationService : IReservationService
         }
         else if (customer.Name != dto.CustomerName)
         {
-            customer.Name = dto.CustomerName;
-            await _customerRepo.UpdateAsync(customer);
+            if (!dto.ConfirmUpdateCustomer)
+            {
+                throw new MenuGoBE.Exceptions.CustomerConflictException($"Số điện thoại {dto.CustomerPhone} đã đăng ký cho khách hàng: {customer.Name}. Bạn có muốn cập nhật lại tên không?", customer.Name);
+            }
+            else
+            {
+                customer.Name = dto.CustomerName;
+                await _customerRepo.UpdateAsync(customer);
+            }
         }
 
         var reservation = new Reservation
@@ -177,6 +265,19 @@ public class ReservationService : IReservationService
                 if (bookedTableIds.Contains(tableId))
                 {
                     throw new InvalidOperationException("Bàn đã được đặt trong khoảng thời gian này.");
+                }
+            }
+
+            var minutesToReservation = (dto.ReservationTime - DateTime.UtcNow).TotalMinutes;
+            if (minutesToReservation <= 60)
+            {
+                foreach (var tableId in dto.TableIds)
+                {
+                    var table = await _tableRepo.GetByIdAsync(tableId);
+                    if (table != null && (table.Status == "Occupied" || table.Status == "Serving"))
+                    {
+                        throw new InvalidOperationException($"Bàn {table.Name} đang có khách. Vui lòng chọn bàn khác hoặc dời thời gian đặt bàn.");
+                    }
                 }
             }
 
@@ -298,6 +399,7 @@ public class ReservationService : IReservationService
                 }
 
                 fatherOrder.Status = "Active";
+                fatherOrder.CustomerId = reservation.CustomerId;
                 await _orderRepo.UpdateAsync(fatherOrder);
 
                 if (fatherTable != null)

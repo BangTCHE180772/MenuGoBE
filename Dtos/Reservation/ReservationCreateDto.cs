@@ -11,4 +11,6 @@ public class ReservationCreateDto
     public List<long> TableIds { get; set; } = new List<long>();
 
     public List<PreOrderItemDto> PreOrderItems { get; set; } = new List<PreOrderItemDto>();
+
+    public bool ConfirmUpdateCustomer { get; set; } = false;
 }

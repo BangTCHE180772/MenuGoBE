@@ -187,6 +187,9 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(51,3)");
 
+                    b.Property<decimal>("ReservedQuantity")
+                        .HasColumnType("decimal(51,3)");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
@@ -319,6 +322,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<long?>("DocumentPartnerId")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Note")
                         .HasColumnType("text");

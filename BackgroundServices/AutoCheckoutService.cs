@@ -25,19 +25,10 @@ namespace MenuGoBE.Service
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                TimeSpan delay = TimeSpan.FromMinutes(30);
-
                 try
                 {
-                    // 1. Dọn dẹp tự động check-out cho các ca đã hết hạn
+                    // Dọn dẹp tự động check-out cho các ca đã hết hạn
                     await ProcessAutoCheckoutsAsync();
-
-                    // 2. Tính toán thời gian ngủ cho tới mốc hết ca tiếp theo, nhưng tối đa là 30 phút
-                    var nextCutoffDelay = await CalculateNextShiftCutoffDelayAsync();
-                    if (nextCutoffDelay < delay)
-                    {
-                        delay = nextCutoffDelay;
-                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -48,8 +39,7 @@ namespace MenuGoBE.Service
                     _logger.LogError(ex, "Error occurred during AutoCheckoutService execution.");
                 }
 
-                _logger.LogInformation($"AutoCheckoutService sleeping for {delay.TotalMinutes:F1} minutes until next shift cutoff.");
-                await Task.Delay(delay, stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
             }
         }
 
@@ -84,18 +74,18 @@ namespace MenuGoBE.Service
                     shiftEndLocal = shiftEndLocal.AddDays(1);
                 }
                 
-                // Đúng giờ EndTime -> kiểm tra xem có ca nối tiếp để transition không
-                if (shiftEndLocal <= localNow)
+                // Tìm ca nối tiếp (nếu có)
+                var nextSchedule = pendingSchedules.FirstOrDefault(s => 
                 {
-                    // Tìm ca nối tiếp
-                    var nextSchedule = pendingSchedules.FirstOrDefault(s => 
-                    {
-                        if (s.AccountId != ws.AccountId || s.BranchId != ws.BranchId) return false;
-                        var nextStartLocal = s.WorkDate.ToDateTime(s.Shift.StartTime);
-                        return Math.Abs((nextStartLocal - shiftEndLocal).TotalMinutes) <= 30;
-                    });
-                    
-                    if (nextSchedule != null)
+                    if (s.AccountId != ws.AccountId || s.BranchId != ws.BranchId) return false;
+                    var nextStartLocal = s.WorkDate.ToDateTime(s.Shift.StartTime);
+                    return Math.Abs((nextStartLocal - shiftEndLocal).TotalMinutes) <= 30;
+                });
+
+                if (nextSchedule != null)
+                {
+                    // Tình huống A: Có ca nối tiếp -> Transition NGAY LẬP TỨC khi hết ca
+                    if (shiftEndLocal <= localNow)
                     {
                         var checkOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Convert local EndTime to UTC
                         ws.CheckOutAt = checkOutTimeUtc;
@@ -118,21 +108,25 @@ namespace MenuGoBE.Service
                         _logger.LogInformation($"Auto-Transition: Checked-in AccountId: {nextSchedule.AccountId}, ScheduleId: {nextSchedule.Id} at {nextShiftStartUtc}");
                         
                         hasChanges = true;
-                        continue; // Đã check-out thành công qua Auto-Transition, sang ca tiếp theo
                     }
-
-                    // Nếu không có ca nối tiếp -> Ép check-out NGAY LẬP TỨC
-                    var forcedCheckOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
-                    ws.CheckOutAt = forcedCheckOutTimeUtc;
-                    ws.Status = "Completed";
-                    if (ws.CheckInAt.HasValue)
+                }
+                else
+                {
+                    // Tình huống B: KHÔNG có ca nối tiếp (tan làm) -> Chờ 2 tiếng mới ép check-out (Grace period)
+                    if (shiftEndLocal.AddHours(2) <= localNow)
                     {
-                        ws.ActualHours = (decimal)Math.Max(0, (forcedCheckOutTimeUtc - ws.CheckInAt.Value).TotalHours);
+                        var forcedCheckOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
+                        ws.CheckOutAt = forcedCheckOutTimeUtc;
+                        ws.Status = "Completed";
+                        if (ws.CheckInAt.HasValue)
+                        {
+                            ws.ActualHours = (decimal)Math.Max(0, (forcedCheckOutTimeUtc - ws.CheckInAt.Value).TotalHours);
+                        }
+                        
+                        await _repo.UpdateAsync(ws);
+                        _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
+                        hasChanges = true;
                     }
-                    
-                    await _repo.UpdateAsync(ws);
-                    _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
-                    hasChanges = true;
                 }
             }
 
@@ -148,42 +142,5 @@ namespace MenuGoBE.Service
             }
         }
 
-        private async Task<TimeSpan> CalculateNextShiftCutoffDelayAsync()
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var _repo = scope.ServiceProvider.GetRequiredService<IWorkScheduleRepository>();
-
-            var localNow = DateTime.UtcNow.AddHours(7);
-
-            var openSchedules = await _repo.GetOpenSchedulesAsync();
-
-            if (openSchedules.Any())
-            {
-                // Tính danh sách các mốc giờ kết thúc thực tế của các ca đang làm (chỉ lấy EndTime)
-                var futureCutoffs = openSchedules
-                    .Select(ws => 
-                    {
-                        var endLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
-                        if (ws.Shift.EndTime < ws.Shift.StartTime)
-                        {
-                            endLocal = endLocal.AddDays(1);
-                        }
-                        return endLocal;
-                    })
-                    .Where(cutoff => cutoff > localNow)
-                    .OrderBy(cutoff => cutoff)
-                    .ToList();
-
-                if (futureCutoffs.Any())
-                {
-                    var nextCutoff = futureCutoffs.First();
-                    var delay = nextCutoff - localNow;
-                    return delay < TimeSpan.FromSeconds(10) ? TimeSpan.FromSeconds(10) : delay;
-                }
-            }
-
-            // Nếu không có ca nào, hoặc không có mốc tương lai nào, trả về mức delay mặc định
-            return TimeSpan.FromMinutes(30);
-        }
     }
 }
