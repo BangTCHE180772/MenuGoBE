@@ -55,6 +55,12 @@ public class ReservationMonitorService : BackgroundService
                         expired.Status = "Cancelled";
                         db.Reservations.Update(expired);
 
+                        if (expired.Order != null)
+                        {
+                            expired.Order.Status = "Cancelled";
+                            db.Orders.Update(expired.Order);
+                        }
+
                         var table = expired.Order!.Table;
                         if (table != null && table.Status == "Reserved")
                         {
@@ -68,6 +74,9 @@ public class ReservationMonitorService : BackgroundService
                         
                         foreach(var child in childOrders)
                         {
+                            child.Status = "Cancelled";
+                            db.Orders.Update(child);
+
                             if(child.Table != null && child.Table.Status == "Reserved")
                             {
                                 child.Table.Status = "Empty";
