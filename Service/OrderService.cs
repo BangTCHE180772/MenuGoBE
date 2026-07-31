@@ -73,6 +73,12 @@ namespace MenuGoBE.Service
         {
             if (dto.TableId > 0)
             {
+                var table = await _tableRepo.GetByIdAsync(dto.TableId);
+                if (table != null && table.Status == "Internal")
+                {
+                    throw new Exception("Không thể tạo hóa đơn mới trên bàn hệ thống nội bộ.");
+                }
+
                 var existingActiveOrder = await _repo.GetActiveOrderByTableIdAsync(dto.TableId);
                 if (existingActiveOrder != null)
                 {

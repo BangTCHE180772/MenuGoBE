@@ -26,19 +26,21 @@ namespace MenuGoBE.Service
         public async Task<List<TableViewDto>> GetAllAsync()
         {
             var data = await _repo.GetAllAsync();
-            return _mapper.Map<List<TableViewDto>>(data);
+            var filtered = data.Where(t => t.Status != "Internal").ToList();
+            return _mapper.Map<List<TableViewDto>>(filtered);
         }
 
         public async Task<List<TableViewDto>> GetByBranchIdsAsync(List<long> branchIds)
         {
             var data = await _repo.GetByBranchIdsAsync(branchIds);
-            return _mapper.Map<List<TableViewDto>>(data);
+            var filtered = data.Where(t => t.Status != "Internal").ToList();
+            return _mapper.Map<List<TableViewDto>>(filtered);
         }
 
         public async Task<TableViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
-            if (data == null) return null;
+            if (data == null || data.Status == "Internal") return null;
 
             return _mapper.Map<TableViewDto>(data);
         }
@@ -56,7 +58,7 @@ namespace MenuGoBE.Service
         public async Task<bool> UpdateAsync(TableUpdateDto dto)
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
-            if (entity == null) return false;
+            if (entity == null || entity.Status == "Internal") return false;
 
             if (dto.Status == "Occupied" || dto.Status == "Serving")
             {
@@ -78,7 +80,7 @@ namespace MenuGoBE.Service
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
-            if (entity == null) return false;
+            if (entity == null || entity.Status == "Internal") return false;
 
             await _repo.DeleteAsync(id);
             await _repo.SaveChangesAsync();
