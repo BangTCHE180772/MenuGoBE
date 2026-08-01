@@ -50,16 +50,20 @@ namespace MenuGoBE.Service
 
         public async Task<AreaViewDto> CreateAsync(AreaCreateDto dto)
         {
-            var allAreas = await _repo.GetByBranchIdAsync(dto.BranchId);
-            var existingDeleted = allAreas.FirstOrDefault(a => a.Name.ToLower() == dto.Name.ToLower() && a.Status == "Deleted");
+            var existing = await _repo.GetByNameAndBranchAsync(dto.Name, dto.BranchId);
             
-            if (existingDeleted != null)
+            if (existing != null)
             {
-                _mapper.Map(dto, existingDeleted);
-                existingDeleted.Status = "Active";
-                await _repo.UpdateAsync(existingDeleted);
+                if (existing.Status != "Deleted")
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Đã tồn tại khu vực với tên này trong chi nhánh.", 400));
+                }
+
+                _mapper.Map(dto, existing);
+                existing.Status = "Active";
+                await _repo.UpdateAsync(existing);
                 await _repo.SaveChangesAsync();
-                return _mapper.Map<AreaViewDto>(existingDeleted);
+                return _mapper.Map<AreaViewDto>(existing);
             }
 
             var entity = _mapper.Map<Area>(dto);
@@ -99,18 +103,18 @@ namespace MenuGoBE.Service
                 {
                     if (activeOrder.Status == "Active" || activeOrder.Status == "Serving" || activeOrder.Status == "Occupied")
                     {
-                        throw new Exception($"Không thể xóa khu vực này vì bàn '{table.Name}' đang có hóa đơn chưa thanh toán (Mã HĐ: {activeOrder.Id}).");
+                        throw new MenuGoException(new ErrorResult(400, $"Không thể xóa khu vực này vì bàn '{table.Name}' đang có hóa đơn chưa thanh toán (Mã HĐ: {activeOrder.Id}).", 400));
                     }
                     if (activeOrder.Status == "Reserved")
                     {
-                        throw new Exception($"Không thể xóa khu vực này vì bàn '{table.Name}' đang được đặt trước (Mã HĐ: {activeOrder.Id}).");
+                        throw new MenuGoException(new ErrorResult(400, $"Không thể xóa khu vực này vì bàn '{table.Name}' đang được đặt trước (Mã HĐ: {activeOrder.Id}).", 400));
                     }
                 }
 
                 bool isProtected = await _reservationRepo.IsTableProtectedAsync(table.Id, 60);
                 if (isProtected)
                 {
-                    throw new Exception($"Không thể xóa khu vực này vì bàn '{table.Name}' đã được đặt trước trong thời gian tới.");
+                    throw new MenuGoException(new ErrorResult(400, $"Không thể xóa khu vực này vì bàn '{table.Name}' đã được đặt trước trong thời gian tới.", 400));
                 }
             }
 

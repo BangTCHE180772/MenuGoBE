@@ -41,6 +41,12 @@ namespace MenuGoBE.Repositories
             return entity;
         }
 
+        public async Task<Table?> GetByNameAndAreaAsync(string name, long areaId)
+        {
+            return await _context.Tables
+                .FirstOrDefaultAsync(t => t.AreaId == areaId && t.Name.ToLower() == name.ToLower());
+        }
+
         public async Task CreateAsync(Table entity)
         {
             await _context.Tables.AddAsync(entity);
