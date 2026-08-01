@@ -102,6 +102,8 @@ builder.Services.AddScoped<IProductionDocumentRepository, ProductionDocumentRepo
 builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
+builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
+builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 
 // Service
 builder.Services.AddScoped<IRedisInventoryService, RedisInventoryService>();
@@ -121,6 +123,15 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
+builder.Services.AddScoped<IPartnerService, PartnerService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services.AddScoped<IPhotoService, PhotoService>();
+builder.Services.AddScoped<IEmailService,EmailService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IKitchenService, KitchenService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();

@@ -8,5 +8,6 @@ namespace MenuGoBE.Interface.Repository
         Task<BInventory?> GetByProductAndBranchAsync(long productId, long branchId);
         Task UpdateAsync(BInventory entity);
         Task SaveChangesAsync();
+        Task CreateAsync(BInventory entity);
     }
 }
