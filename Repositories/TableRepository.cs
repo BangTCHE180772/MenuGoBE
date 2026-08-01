@@ -22,6 +22,7 @@ namespace MenuGoBE.Repositories
         {
             return await _context.Tables
                 .Include(t => t.Area)
+                .Where(t => t.Status != "Deleted")
                 .ToListAsync();
         }
 
@@ -29,13 +30,15 @@ namespace MenuGoBE.Repositories
         {
             return await _context.Tables
                 .Include(t => t.Area)
-                .Where(t => t.Area != null && branchIds.Contains(t.Area.BranchId))
+                .Where(t => t.Area != null && branchIds.Contains(t.Area.BranchId) && t.Status != "Deleted")
                 .ToListAsync();
         }
 
         public async Task<Table?> GetByIdAsync(long id)
         {
-            return await _context.Tables.FindAsync(id);
+            var entity = await _context.Tables.FindAsync(id);
+            if (entity != null && entity.Status == "Deleted") return null;
+            return entity;
         }
 
         public async Task CreateAsync(Table entity)

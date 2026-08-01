@@ -4,6 +4,8 @@ using MenuGoBE.Dtos.Table;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using MenuGoBE.Exceptions;
+using System;
 
 namespace MenuGoBE.Service
 {
@@ -12,25 +14,29 @@ namespace MenuGoBE.Service
         private readonly IAreaRepository _repo;
         private readonly ITableRepository _tableRepo;
         private readonly IMapper _mapper;
+        private readonly IOrderRepository _orderRepo;
+        private readonly IReservationRepository _reservationRepo;
 
-        public AreaService(IAreaRepository repo, ITableRepository tableRepo, IMapper mapper)
+        public AreaService(IAreaRepository repo, ITableRepository tableRepo, IMapper mapper, IOrderRepository orderRepo, IReservationRepository reservationRepo)
         {
             _repo = repo;
             _tableRepo = tableRepo;
             _mapper = mapper;
+            _orderRepo = orderRepo;
+            _reservationRepo = reservationRepo;
         }
 
         public async Task<List<AreaViewDto>> GetAllAsync()
         {
             var data = await _repo.GetAllAsync();
-            var filtered = data.Where(a => a.Status != "Internal").ToList();
+            var filtered = data.Where(a => a.Status != "Internal" && a.Status != "Deleted").ToList();
             return _mapper.Map<List<AreaViewDto>>(filtered);
         }
 
         public async Task<AreaViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
-            if (data == null || data.Status == "Internal") return null;
+            if (data == null || data.Status == "Internal" || data.Status == "Deleted") return null;
 
             return _mapper.Map<AreaViewDto>(data);
         }
@@ -38,13 +44,26 @@ namespace MenuGoBE.Service
         public async Task<List<AreaViewDto>> GetByBranchIdAsync(long branchId)
         {
             var data = await _repo.GetByBranchIdAsync(branchId);
-            var filtered = data.Where(a => a.Status != "Internal").ToList();
+            var filtered = data.Where(a => a.Status != "Internal" && a.Status != "Deleted").ToList();
             return _mapper.Map<List<AreaViewDto>>(filtered);
         }
 
         public async Task<AreaViewDto> CreateAsync(AreaCreateDto dto)
         {
+            var allAreas = await _repo.GetByBranchIdAsync(dto.BranchId);
+            var existingDeleted = allAreas.FirstOrDefault(a => a.Name.ToLower() == dto.Name.ToLower() && a.Status == "Deleted");
+            
+            if (existingDeleted != null)
+            {
+                _mapper.Map(dto, existingDeleted);
+                existingDeleted.Status = "Active";
+                await _repo.UpdateAsync(existingDeleted);
+                await _repo.SaveChangesAsync();
+                return _mapper.Map<AreaViewDto>(existingDeleted);
+            }
+
             var entity = _mapper.Map<Area>(dto);
+            if (string.IsNullOrEmpty(entity.Status)) entity.Status = "Active";
 
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -55,7 +74,7 @@ namespace MenuGoBE.Service
         public async Task<bool> UpdateAsync(AreaUpdateDto dto)
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
-            if (entity == null || entity.Status == "Internal") return false;
+            if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
 
             _mapper.Map(dto, entity);
 
@@ -68,10 +87,42 @@ namespace MenuGoBE.Service
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
-            if (entity == null || entity.Status == "Internal") return false;
+            if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
 
-            await _repo.DeleteAsync(id);
-            await _repo.SaveChangesAsync();
+            var allTables = await _tableRepo.GetAllAsync();
+            var areaTables = allTables.Where(t => t.AreaId == id && t.Status != "Deleted" && t.Status != "Internal").ToList();
+
+            foreach (var table in areaTables)
+            {
+                var activeOrder = await _orderRepo.GetActiveOrderByTableIdAsync(table.Id);
+                if (activeOrder != null)
+                {
+                    if (activeOrder.Status == "Active" || activeOrder.Status == "Serving" || activeOrder.Status == "Occupied")
+                    {
+                        throw new Exception($"Không thể xóa khu vực này vì bàn '{table.Name}' đang có hóa đơn chưa thanh toán (Mã HĐ: {activeOrder.Id}).");
+                    }
+                    if (activeOrder.Status == "Reserved")
+                    {
+                        throw new Exception($"Không thể xóa khu vực này vì bàn '{table.Name}' đang được đặt trước (Mã HĐ: {activeOrder.Id}).");
+                    }
+                }
+
+                bool isProtected = await _reservationRepo.IsTableProtectedAsync(table.Id, 60);
+                if (isProtected)
+                {
+                    throw new Exception($"Không thể xóa khu vực này vì bàn '{table.Name}' đã được đặt trước trong thời gian tới.");
+                }
+            }
+
+            foreach (var table in areaTables)
+            {
+                table.Status = "Deleted";
+                await _tableRepo.UpdateAsync(table);
+            }
+
+            entity.Status = "Deleted";
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync(); 
 
             return true;
         }
@@ -79,7 +130,7 @@ namespace MenuGoBE.Service
         public async Task<List<TableViewDto>> GetTablesByAreaIdAsync(long areaId)
         {
             var tables = await _tableRepo.GetAllAsync();
-            var filtered = tables.Where(t => t.AreaId == areaId && t.Status != "Internal").ToList();
+            var filtered = tables.Where(t => t.AreaId == areaId && t.Status != "Internal" && t.Status != "Deleted").ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
     }

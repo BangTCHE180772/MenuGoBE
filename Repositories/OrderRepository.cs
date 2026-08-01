@@ -80,7 +80,7 @@ namespace MenuGoBE.Repositories
         public async Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync()
         {
             return await _context.Orders
-                .Where(o => o.Status == "Active")
+                .Where(o => o.Status == "Active" || o.Status == "Internal")
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                         .ThenInclude(p => p.Image)
