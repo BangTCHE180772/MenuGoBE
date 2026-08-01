@@ -50,16 +50,20 @@ namespace MenuGoBE.Service
 
         public async Task<TableViewDto> CreateAsync(TableCreateDto dto)
         {
-            var allTables = await _repo.GetAllAsync();
-            var existingDeleted = allTables.FirstOrDefault(t => t.AreaId == dto.AreaId && t.Name.ToLower() == dto.Name.ToLower() && t.Status == "Deleted");
+            var existing = await _repo.GetByNameAndAreaAsync(dto.Name, dto.AreaId);
             
-            if (existingDeleted != null)
+            if (existing != null)
             {
-                _mapper.Map(dto, existingDeleted);
-                existingDeleted.Status = "Empty"; 
-                await _repo.UpdateAsync(existingDeleted);
+                if (existing.Status != "Deleted")
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Đã tồn tại bàn với tên này trong khu vực.", 400));
+                }
+
+                _mapper.Map(dto, existing);
+                existing.Status = "Empty"; 
+                await _repo.UpdateAsync(existing);
                 await _repo.SaveChangesAsync();
-                return _mapper.Map<TableViewDto>(existingDeleted);
+                return _mapper.Map<TableViewDto>(existing);
             }
 
             var entity = _mapper.Map<Table>(dto);
@@ -103,18 +107,18 @@ namespace MenuGoBE.Service
             {
                 if (activeOrder.Status == "Active" || activeOrder.Status == "Serving" || activeOrder.Status == "Occupied")
                 {
-                    throw new Exception($"Không thể xóa bàn vì đang có hóa đơn chưa thanh toán (Mã HĐ: {activeOrder.Id}).");
+                    throw new MenuGoException(new ErrorResult(400, $"Không thể xóa bàn vì đang có hóa đơn chưa thanh toán (Mã HĐ: {activeOrder.Id}).", 400));
                 }
                 if (activeOrder.Status == "Reserved")
                 {
-                    throw new Exception($"Không thể xóa bàn vì bàn đang được đặt trước (Mã HĐ: {activeOrder.Id}).");
+                    throw new MenuGoException(new ErrorResult(400, $"Không thể xóa bàn vì bàn đang được đặt trước (Mã HĐ: {activeOrder.Id}).", 400));
                 }
             }
 
             bool isProtected = await _reservationRepo.IsTableProtectedAsync(id, 60);
             if (isProtected)
             {
-                throw new Exception("Không thể xóa bàn vì bàn đã được đặt trước trong thời gian tới.");
+                throw new MenuGoException(new ErrorResult(400, "Không thể xóa bàn vì bàn đã được đặt trước trong thời gian tới.", 400));
             }
 
             entity.Status = "Deleted";

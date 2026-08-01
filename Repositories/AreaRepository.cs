@@ -33,6 +33,12 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<Area?> GetByNameAndBranchAsync(string name, long branchId)
+        {
+            return await _context.Areas
+                .FirstOrDefaultAsync(a => a.BranchId == branchId && a.Name.ToLower() == name.ToLower());
+        }
+
         public async Task CreateAsync(Area entity)
         {
             await _context.Areas.AddAsync(entity);
