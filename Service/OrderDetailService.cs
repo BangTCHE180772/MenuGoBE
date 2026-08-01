@@ -14,8 +14,9 @@ namespace MenuGoBE.Service
         private readonly IMapper _mapper;
         private readonly IRedisInventoryService _redisInventoryService;
         private readonly ITableRepository _tableRepo;
-        private readonly IProductRepository _productRepo;
         private readonly IAreaRepository _areaRepo;
+        private readonly IProductRepository _productRepo;
+        private readonly IKitchenService _kitchenService;
 
         public OrderDetailService(
             IOrderDetailRepository detailRepo, 
@@ -24,7 +25,8 @@ namespace MenuGoBE.Service
             IRedisInventoryService redisInventoryService,
             ITableRepository tableRepo,
             IProductRepository productRepo,
-            IAreaRepository areaRepo)
+            IAreaRepository areaRepo,
+            IKitchenService kitchenService)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
@@ -33,6 +35,7 @@ namespace MenuGoBE.Service
             _tableRepo = tableRepo;
             _productRepo = productRepo;
             _areaRepo = areaRepo;
+            _kitchenService = kitchenService;
         }
 
         public async Task<List<OrderDetailViewDto>> GetByOrderIdAsync(long orderId)
@@ -56,9 +59,18 @@ namespace MenuGoBE.Service
                 throw new KeyNotFoundException($"Không tìm thấy Order với Id = {dto.OrderId}");
 
             var entity = _mapper.Map<OrderDetail>(dto);
+            var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+            
             if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
             {
-                entity.CookingStatus = "Waiting";
+                if (productType == "Regular" || productType == "Manufactured")
+                {
+                    entity.CookingStatus = "Ready";
+                }
+                else
+                {
+                    entity.CookingStatus = "Waiting";
+                }
             }
 
             await _detailRepo.CreateAsync(entity);
@@ -68,7 +80,6 @@ namespace MenuGoBE.Service
 
             if (entity.Status == "Confirmed")
             {
-                var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
                 if (productType == "Regular" || productType == "Manufactured")
                 {
                     var table = await _tableRepo.GetByIdAsync(order.TableId);
@@ -214,6 +225,11 @@ namespace MenuGoBE.Service
             if (result)
             {
                 await _detailRepo.SaveChangesAsync();
+                
+                if (cookingStatus == "Ready")
+                {
+                    await _kitchenService.HandleInternalRestockCompletionAsync(orderDetailId);
+                }
             }
             return result;
         }

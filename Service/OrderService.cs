@@ -73,6 +73,12 @@ namespace MenuGoBE.Service
         {
             if (dto.TableId > 0)
             {
+                var table = await _tableRepo.GetByIdAsync(dto.TableId);
+                if (table != null && table.Status == "Internal")
+                {
+                    throw new Exception("Không thể tạo hóa đơn mới trên bàn hệ thống nội bộ.");
+                }
+
                 var existingActiveOrder = await _repo.GetActiveOrderByTableIdAsync(dto.TableId);
                 if (existingActiveOrder != null)
                 {
@@ -588,6 +594,8 @@ namespace MenuGoBE.Service
                         Type = MenuGoBE.Models.Enums.PartnerType.Customer,
                         Name = partnerName,
                         Phone = searchPhone,
+                        Email = string.Empty,
+                        CreatedBy = order.CreatedBy ?? 1,
                         CreatedAt = DateTime.UtcNow
                     };
                     targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
