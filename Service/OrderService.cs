@@ -594,6 +594,8 @@ namespace MenuGoBE.Service
                         Type = MenuGoBE.Models.Enums.PartnerType.Customer,
                         Name = partnerName,
                         Phone = searchPhone,
+                        Email = string.Empty,
+                        CreatedBy = order.CreatedBy ?? 1,
                         CreatedAt = DateTime.UtcNow
                     };
                     targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
