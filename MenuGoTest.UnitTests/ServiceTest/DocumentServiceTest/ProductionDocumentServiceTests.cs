@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using AutoMapper;
 using MenuGoBE.Interface.Repository.Document;
+using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Service.Document;
@@ -14,13 +16,16 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
     public class ProductionDocumentServiceTests
     {
         private readonly Mock<IDocumentRepository> _mockRepo;
+        private readonly IMapper _mapper;
         private readonly DocumentService _service;
 
         public ProductionDocumentServiceTests()
         {
             _mockRepo = new Mock<IDocumentRepository>();
             _mockRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(true);
-            _service = new DocumentService(_mockRepo.Object);
+            var config = new MapperConfiguration(cfg => cfg.AddProfile<AutoMapperProfiles>(), Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+            _mapper = config.CreateMapper();
+            _service = new DocumentService(_mockRepo.Object, _mapper);
         }
 
         private Document CreateValidProductionDocument()
