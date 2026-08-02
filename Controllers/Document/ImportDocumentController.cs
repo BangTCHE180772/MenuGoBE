@@ -30,6 +30,7 @@ namespace MenuGoBE.Controllers.Document
         /// Lấy danh sách phiếu Nhập kho thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
         [HttpGet]
+        [HttpGet("/api/document/import")]
         public async Task<IActionResult> GetImportList([FromQuery] long branchId)
         {
             if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
@@ -69,6 +70,7 @@ namespace MenuGoBE.Controllers.Document
         /// Tạo mới phiếu Nhập kho ở trạng thái Pending (Lưu tạm) sử dụng ImportDocumentCreateDto.
         /// </summary>
         [HttpPost("pending")]
+        [HttpPost("/api/document/import/pending")]
         public async Task<IActionResult> CreateImportPending([FromBody] ImportDocumentCreateDto dto)
         {
             if (dto == null)
@@ -110,6 +112,7 @@ namespace MenuGoBE.Controllers.Document
         /// Tạo và Chốt trực tiếp phiếu Nhập kho sang Completed (Lưu thẳng / Post) sử dụng ImportDocumentCreateDto.
         /// </summary>
         [HttpPost("completed")]
+        [HttpPost("/api/document/import/completed")]
         public async Task<IActionResult> CreateImportCompleted([FromBody] ImportDocumentCreateDto dto)
         {
             if (dto == null)
@@ -151,6 +154,7 @@ namespace MenuGoBE.Controllers.Document
         /// Cập nhật phiếu Nhập kho đang ở trạng thái Pending sử dụng ImportDocumentUpdateDto.
         /// </summary>
         [HttpPut("pending/{id:long}")]
+        [HttpPut("/api/document/import/pending/{id:long}")]
         public async Task<IActionResult> UpdateImportPending(long id, [FromBody] ImportDocumentUpdateDto dto)
         {
             if (dto == null)
@@ -200,6 +204,7 @@ namespace MenuGoBE.Controllers.Document
         /// Chốt phiếu Nhập kho Pending -> Completed (Đóng băng Snapshot, Ghi sổ kho & CashFlow).
         /// </summary>
         [HttpPost("{id:long}/complete")]
+        [HttpPost("/api/document/import/{id:long}/complete")]
         public async Task<IActionResult> CompleteImport(long id)
         {
             if (!ValidateUserToken(out long userId, out var errorResult))
@@ -218,6 +223,7 @@ namespace MenuGoBE.Controllers.Document
         /// Xóa mềm phiếu Nhập kho Pending -> Chuyển sang Canceled.
         /// </summary>
         [HttpDelete("{id:long}/soft-delete")]
+        [HttpDelete("/api/document/import/{id:long}/soft-delete")]
         public async Task<IActionResult> SoftDeleteImportPending(long id, [FromQuery] string deleteNote)
         {
             if (!ValidateUserToken(out long userId, out var errorResult))

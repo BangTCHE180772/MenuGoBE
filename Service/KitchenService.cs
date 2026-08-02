@@ -1,5 +1,6 @@
 using MenuGoBE.Dtos.Kitchen;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using MenuGoBE.Hubs;
@@ -170,7 +171,9 @@ public class KitchenService : IKitchenService
                 CreatedAt = DateTime.UtcNow
             };
             docDetails.Add(docDetail);
+        }
 
+#if FALSE
             var ledger = new InventoryLedger
             {
                 QuantityDelta = -totalQtyNeeded,
@@ -180,7 +183,6 @@ public class KitchenService : IKitchenService
                 CreatedAt = DateTime.UtcNow
             };
             ledgersToCreate.Add(ledger);
-        }
 
         var productInventory = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
         if (productInventory == null)
@@ -232,6 +234,7 @@ public class KitchenService : IKitchenService
 
         await _documentRepo.ExecuteDocumentTransactionAsync(
             document, docDetails, new List<DocumentPartner>(), updatedBInvs, ledgersToCreate, new List<InventoryLedger>(), new List<CashFlow>(), new List<CashFlowDetail>());
+#endif
 
         detail.CookingStatus = "Served";
         await _orderDetailRepo.UpdateAsync(detail);
