@@ -37,6 +37,29 @@ public class ReservationController : ControllerBase
             var result = await _service.CreateAsync(dto);
             return Ok(result);
         }
+        catch (MenuGoBE.Exceptions.CustomerConflictException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(long id, [FromBody] ReservationUpdateDto dto)
+    {
+        try
+        {
+            var result = await _service.UpdateAsync(id, dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy thông tin đặt bàn." });
+            return Ok(new { message = "Cập nhật thành công." });
+        }
+        catch (MenuGoBE.Exceptions.CustomerConflictException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });

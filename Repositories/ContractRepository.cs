@@ -18,6 +18,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Contract>> GetAllAsync()
         {
+            await UpdateExpiredContractsAsync();
             return await _context.Contracts
                 .Include(c => c.Account)
                 .Include(c => c.Role)
@@ -27,6 +28,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Contract>> GetByBranchIdsAsync(List<long> branchIds)
         {
+            await UpdateExpiredContractsAsync();
             return await _context.Contracts
                 .Include(c => c.Account)
                 .Include(c => c.Role)
@@ -37,6 +39,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Contract>> GetContractsByRolesAsync(List<long> roleIds, long? branchId = null, List<long>? branchIds = null)
         {
+            await UpdateExpiredContractsAsync();
             var query = _context.Contracts
                 .Include(c => c.Account)
                 .Include(c => c.Role)
@@ -57,11 +60,23 @@ namespace MenuGoBE.Repositories
 
         public async Task<Contract?> GetByIdAsync(long id)
         {
+            await UpdateExpiredContractsAsync();
             return await _context.Contracts
                 .Include(c => c.Account)
                 .Include(c => c.Role)
                 .Include(c => c.Branch)
                 .FirstOrDefaultAsync(c => c.Id == id);
+        }
+
+        public async Task<List<Contract>> GetByAccountIdAsync(long accountId)
+        {
+            await UpdateExpiredContractsAsync();
+            return await _context.Contracts
+                .Include(c => c.Account)
+                .Include(c => c.Role)
+                .Include(c => c.Branch)
+                .Where(c => c.AccountId == accountId)
+                .ToListAsync();
         }
 
         public async Task CreateAsync(Contract entity)
@@ -91,6 +106,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<bool> HasActiveManagerAsync(long branchId, long excludeContractId = 0)
         {
+            await UpdateExpiredContractsAsync();
             return await _context.Contracts
                 .Include(c => c.Role)
                 .AnyAsync(c => c.BranchId == branchId 
@@ -103,6 +119,32 @@ namespace MenuGoBE.Repositories
         {
             var role = await _context.Roles.FindAsync(roleId);
             return role != null && role.Name == "Manager";
+        }
+
+        public async Task<bool> HasActiveContractByAccountAsync(long accountId, long excludeContractId = 0)
+        {
+            await UpdateExpiredContractsAsync();
+            return await _context.Contracts
+                .AnyAsync(c => c.AccountId == accountId
+                            && c.Status == "Active"
+                            && c.Id != excludeContractId);
+        }
+
+        public async Task UpdateExpiredContractsAsync()
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var expiredContracts = await _context.Contracts
+                .Where(c => c.Status == "Active" && c.EndDate.HasValue && c.EndDate.Value < today)
+                .ToListAsync();
+
+            if (expiredContracts.Count > 0)
+            {
+                foreach (var contract in expiredContracts)
+                {
+                    contract.Status = "Expired";
+                }
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

@@ -28,8 +28,9 @@ namespace MenuGoBE.Validator.Contract
                 .NotEmpty().WithMessage("Ngày bắt đầu không được để trống.");
 
             RuleFor(x => x.EndDate)
+                .NotNull().WithMessage("Ngày kết thúc không được để trống.")
+                .NotEmpty().WithMessage("Ngày kết thúc không được để trống.")
                 .GreaterThanOrEqualTo(x => x.StartDate)
-                .When(x => x.EndDate.HasValue)
                 .WithMessage("Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.");
 
             RuleFor(x => x.Status)

@@ -187,6 +187,9 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(51,3)");
 
+                    b.Property<decimal>("ReservedQuantity")
+                        .HasColumnType("decimal(51,3)");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
