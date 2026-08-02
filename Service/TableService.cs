@@ -68,6 +68,7 @@ namespace MenuGoBE.Service
 
                 _mapper.Map(dto, existing);
                 existing.Status = "Empty"; 
+                existing.IsActive = true;
                 await _repo.UpdateAsync(existing);
                 await _repo.SaveChangesAsync();
                 return _mapper.Map<TableViewDto>(existing);
