@@ -81,38 +81,55 @@ namespace MenuGoBE.Controllers
         }
 
         /// <summary>
-        /// Create a new product
+        /// Create a new product (general)
         /// </summary>
         [HttpPost]
-        [HttpPost("/api/ProcessedProduct")]
-        [HttpPost("/api/ManufacturedProduct")]
-        [HttpPost("/api/RegularProduct")]
-        [HttpPost("/api/IngredientProduct")]
-        [HttpPost("/api/ToolProduct")]
         public async Task<IActionResult> Create([FromBody] ProductCreateDto dto)
         {
-            var path = HttpContext.Request.Path.Value?.ToLower() ?? "";
-            ProductType? overrideType = null;
-            if (path.Contains("processedproduct")) overrideType = ProductType.Processed;
-            else if (path.Contains("manufacturedproduct")) overrideType = ProductType.Manufactured;
-            else if (path.Contains("regularproduct")) overrideType = ProductType.Regular;
-            else if (path.Contains("ingredientproduct")) overrideType = ProductType.Ingredient;
-            else if (path.Contains("toolproduct")) overrideType = ProductType.Tool;
+            var result = await _service.CreateAsync(dto);
+            return Ok(result);
+        }
 
-            var result = await _service.CreateAsync(dto, overrideType);
+        [HttpPost("/api/ProcessedProduct")]
+        public async Task<IActionResult> CreateProcessed([FromBody] ProcessedProductCreateDto dto)
+        {
+            var result = await _service.CreateProcessedAsync(dto);
+            return Ok(result);
+        }
+
+        [HttpPost("/api/ManufacturedProduct")]
+        public async Task<IActionResult> CreateManufactured([FromBody] ManufacturedProductCreateDto dto)
+        {
+            var result = await _service.CreateManufacturedAsync(dto);
+            return Ok(result);
+        }
+
+        [HttpPost("/api/RegularProduct")]
+        public async Task<IActionResult> CreateRegular([FromBody] RegularProductCreateDto dto)
+        {
+            var result = await _service.CreateRegularAsync(dto);
+            return Ok(result);
+        }
+
+        [HttpPost("/api/IngredientProduct")]
+        public async Task<IActionResult> CreateIngredient([FromBody] IngredientProductCreateDto dto)
+        {
+            var result = await _service.CreateIngredientAsync(dto);
+            return Ok(result);
+        }
+
+        [HttpPost("/api/ToolProduct")]
+        public async Task<IActionResult> CreateTool([FromBody] ToolProductCreateDto dto)
+        {
+            var result = await _service.CreateToolAsync(dto);
             return Ok(result);
         }
 
         /// <summary>
-        /// Update an existing product
+        /// Update an existing product (general)
         /// </summary>
         [HttpPut]
         [HttpPut("{id:long}")]
-        [HttpPut("/api/ProcessedProduct")]
-        [HttpPut("/api/ManufacturedProduct")]
-        [HttpPut("/api/RegularProduct")]
-        [HttpPut("/api/IngredientProduct")]
-        [HttpPut("/api/ToolProduct")]
         public async Task<IActionResult> Update([FromBody] ProductUpdateDto dto, long? id = null)
         {
             if (id.HasValue && id.Value > 0)
@@ -120,18 +137,60 @@ namespace MenuGoBE.Controllers
                 dto.Id = id.Value;
             }
 
-            var path = HttpContext.Request.Path.Value?.ToLower() ?? "";
-            ProductType? overrideType = null;
-            if (path.Contains("processedproduct")) overrideType = ProductType.Processed;
-            else if (path.Contains("manufacturedproduct")) overrideType = ProductType.Manufactured;
-            else if (path.Contains("regularproduct")) overrideType = ProductType.Regular;
-            else if (path.Contains("ingredientproduct")) overrideType = ProductType.Ingredient;
-            else if (path.Contains("toolproduct")) overrideType = ProductType.Tool;
-
-            var result = await _service.UpdateAsync(dto, overrideType);
+            var result = await _service.UpdateAsync(dto);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy sản phẩm để cập nhật." });
 
+            return Ok(new { message = "Cập nhật sản phẩm thành công." });
+        }
+
+        [HttpPut("/api/ProcessedProduct")]
+        [HttpPut("/api/ProcessedProduct/{id:long}")]
+        public async Task<IActionResult> UpdateProcessed([FromBody] ProcessedProductUpdateDto dto, long? id = null)
+        {
+            if (id.HasValue && id.Value > 0) dto.Id = id.Value;
+            var result = await _service.UpdateProcessedAsync(dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy sản phẩm để cập nhật." });
+            return Ok(new { message = "Cập nhật sản phẩm thành công." });
+        }
+
+        [HttpPut("/api/ManufacturedProduct")]
+        [HttpPut("/api/ManufacturedProduct/{id:long}")]
+        public async Task<IActionResult> UpdateManufactured([FromBody] ManufacturedProductUpdateDto dto, long? id = null)
+        {
+            if (id.HasValue && id.Value > 0) dto.Id = id.Value;
+            var result = await _service.UpdateManufacturedAsync(dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy sản phẩm để cập nhật." });
+            return Ok(new { message = "Cập nhật sản phẩm thành công." });
+        }
+
+        [HttpPut("/api/RegularProduct")]
+        [HttpPut("/api/RegularProduct/{id:long}")]
+        public async Task<IActionResult> UpdateRegular([FromBody] RegularProductUpdateDto dto, long? id = null)
+        {
+            if (id.HasValue && id.Value > 0) dto.Id = id.Value;
+            var result = await _service.UpdateRegularAsync(dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy sản phẩm để cập nhật." });
+            return Ok(new { message = "Cập nhật sản phẩm thành công." });
+        }
+
+        [HttpPut("/api/IngredientProduct")]
+        [HttpPut("/api/IngredientProduct/{id:long}")]
+        public async Task<IActionResult> UpdateIngredient([FromBody] IngredientProductUpdateDto dto, long? id = null)
+        {
+            if (id.HasValue && id.Value > 0) dto.Id = id.Value;
+            var result = await _service.UpdateIngredientAsync(dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy sản phẩm để cập nhật." });
+            return Ok(new { message = "Cập nhật sản phẩm thành công." });
+        }
+
+        [HttpPut("/api/ToolProduct")]
+        [HttpPut("/api/ToolProduct/{id:long}")]
+        public async Task<IActionResult> UpdateTool([FromBody] ToolProductUpdateDto dto, long? id = null)
+        {
+            if (id.HasValue && id.Value > 0) dto.Id = id.Value;
+            var result = await _service.UpdateToolAsync(dto);
+            if (!result) return NotFound(new { message = "Không tìm thấy sản phẩm để cập nhật." });
             return Ok(new { message = "Cập nhật sản phẩm thành công." });
         }
 

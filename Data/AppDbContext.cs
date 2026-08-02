@@ -66,9 +66,7 @@ public class AppDbContext : DbContext
     public DbSet<Document> Documents { get; set; } = null!;
     public DbSet<DocumentDetail> DocumentDetails { get; set; } = null!;
     public DbSet<Partner> Partners { get; set; } = null!;
-    public DbSet<DocumentPartner> DocumentPartners { get; set; } = null!;
     public DbSet<CashFlow> CashFlows { get; set; } = null!;
-    public DbSet<CashFlowDetail> CashFlowDetails { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -156,11 +154,29 @@ public class AppDbContext : DbContext
             .Property(d => d.PostingSequence)
             .ValueGeneratedOnAdd();
 
-        // Document: CreatedBy / DeletedBy → Accounts (multiple FK to same table)
+        // Document: CreatedBy / PostedBy / DeletedBy → Accounts (multiple FK to same table)
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.Branch)
+            .WithMany(b => b.Documents)
+            .HasForeignKey(d => d.BranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.ToBranch)
+            .WithMany()
+            .HasForeignKey(d => d.ToBranchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<Document>()
             .HasOne(d => d.Creator)
             .WithMany(a => a.CreatedDocuments)
             .HasForeignKey(d => d.CreatedBy)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.Poster)
+            .WithMany()
+            .HasForeignKey(d => d.PostedBy)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Document>()
@@ -208,8 +224,30 @@ public class AppDbContext : DbContext
             .Property(il => il.DocumentType)
             .HasConversion<string>();
 
+        // Document: 1-to-many with Partner
+        modelBuilder.Entity<Document>()
+            .HasOne(d => d.Partner)
+            .WithMany(p => p.Documents)
+            .HasForeignKey(d => d.PartnerId);
+
+        // Document: 1-to-many with CashFlow
+        modelBuilder.Entity<Document>()
+            .HasMany(d => d.CashFlows)
+            .WithOne(cf => cf.Document)
+            .HasForeignKey(cf => cf.DocumentId);
+
+        // CashFlow: 1-to-many with Partner
+        modelBuilder.Entity<CashFlow>()
+            .HasOne(cf => cf.Partner)
+            .WithMany(p => p.CashFlows)
+            .HasForeignKey(cf => cf.PartnerId);
+
         modelBuilder.Entity<Document>()
             .Property(d => d.Type)
+            .HasConversion<string>();
+
+        modelBuilder.Entity<Document>()
+            .Property(d => d.Status)
             .HasConversion<string>();
 
         modelBuilder.Entity<Document>()
@@ -228,12 +266,12 @@ public class AppDbContext : DbContext
             .Property(cf => cf.Status)
             .HasConversion<string>();
 
-        modelBuilder.Entity<CashFlowDetail>()
-            .Property(cfd => cfd.Type)
+        modelBuilder.Entity<CashFlow>()
+            .Property(cf => cf.Type)
             .HasConversion<string>();
 
-        modelBuilder.Entity<CashFlowDetail>()
-            .Property(cfd => cfd.PaymentMethod)
+        modelBuilder.Entity<CashFlow>()
+            .Property(cf => cf.PaymentMethod)
             .HasConversion<string>();
 
         // ── 10. Payroll Module ───────────────────────────────────────────────
