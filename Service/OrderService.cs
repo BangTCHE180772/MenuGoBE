@@ -75,7 +75,7 @@ namespace MenuGoBE.Service
             if (dto.TableId > 0)
             {
                 var table = await _tableRepo.GetByIdAsync(dto.TableId);
-                if (table != null && table.Status == "Internal")
+                if (table != null && (table.Status == "Internal" || table.Status == "Deleted"))
                 {
                     throw new Exception("Không thể tạo hóa đơn mới trên bàn hệ thống nội bộ.");
                 }
