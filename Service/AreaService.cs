@@ -50,6 +50,13 @@ namespace MenuGoBE.Service
 
         public async Task<AreaViewDto> CreateAsync(AreaCreateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                throw new MenuGoException(new ErrorResult(400, "Tên khu vực không được để trống.", 400));
+            }
+
+            dto.Name = dto.Name.Trim();
+
             var existing = await _repo.GetByNameAndBranchAsync(dto.Name, dto.BranchId);
             
             if (existing != null)
@@ -77,8 +84,24 @@ namespace MenuGoBE.Service
 
         public async Task<bool> UpdateAsync(AreaUpdateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                throw new MenuGoException(new ErrorResult(400, "Tên khu vực không được để trống.", 400));
+            }
+
+            dto.Name = dto.Name.Trim();
+
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
+
+            if (dto.Name.ToLower() != entity.Name.ToLower())
+            {
+                var existing = await _repo.GetByNameAndBranchAsync(dto.Name, entity.BranchId);
+                if (existing != null && existing.Status != "Deleted")
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Đã tồn tại khu vực với tên này trong chi nhánh.", 400));
+                }
+            }
 
             _mapper.Map(dto, entity);
 

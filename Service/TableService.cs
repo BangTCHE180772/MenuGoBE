@@ -50,6 +50,13 @@ namespace MenuGoBE.Service
 
         public async Task<TableViewDto> CreateAsync(TableCreateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                throw new MenuGoException(new ErrorResult(400, "Tên bàn không được để trống.", 400));
+            }
+
+            dto.Name = dto.Name.Trim();
+
             var existing = await _repo.GetByNameAndAreaAsync(dto.Name, dto.AreaId);
             
             if (existing != null)
@@ -77,15 +84,31 @@ namespace MenuGoBE.Service
 
         public async Task<bool> UpdateAsync(TableUpdateDto dto)
         {
+            if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                throw new MenuGoException(new ErrorResult(400, "Tên bàn không được để trống.", 400));
+            }
+
+            dto.Name = dto.Name.Trim();
+
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
+
+            if (dto.Name.ToLower() != entity.Name.ToLower())
+            {
+                var existing = await _repo.GetByNameAndAreaAsync(dto.Name, entity.AreaId);
+                if (existing != null && existing.Status != "Deleted")
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Đã tồn tại bàn với tên này trong khu vực.", 400));
+                }
+            }
 
             if (dto.Status == "Occupied" || dto.Status == "Serving")
             {
                 bool isProtected = await _reservationRepo.IsTableProtectedAsync(dto.Id, 60);
                 if (isProtected)
                 {
-                    throw new InvalidOperationException("Bàn này đã được đặt trước trong thời gian tới. Không thể phục vụ khách vãng lai.");
+                    throw new MenuGoException(new ErrorResult(400, "Bàn này đã được đặt trước trong thời gian tới. Không thể phục vụ khách vãng lai.", 400));
                 }
             }
 
