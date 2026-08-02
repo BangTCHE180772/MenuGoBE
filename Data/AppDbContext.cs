@@ -230,6 +230,13 @@ public class AppDbContext : DbContext
             .WithMany(p => p.Documents)
             .HasForeignKey(d => d.PartnerId);
 
+        // Document: 1-to-many with DocumentDetail (Cascade Delete for child details)
+        modelBuilder.Entity<Document>()
+            .HasMany(d => d.DocumentDetails)
+            .WithOne(dd => dd.Document)
+            .HasForeignKey(dd => dd.DocumentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // Document: 1-to-many with CashFlow
         modelBuilder.Entity<Document>()
             .HasMany(d => d.CashFlows)

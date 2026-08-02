@@ -171,7 +171,24 @@ namespace MenuGoBE.Service.Document
             existing.TotalAmount = updatedDocument.TotalAmount;
             existing.AmountDue = updatedDocument.AmountDue;
             existing.AmountPaid = updatedDocument.AmountPaid;
-            existing.DocumentDetails = updatedDocument.DocumentDetails;
+
+            if (updatedDocument.DocumentDetails != null && !ReferenceEquals(existing.DocumentDetails, updatedDocument.DocumentDetails))
+            {
+                if (existing.DocumentDetails != null && existing.DocumentDetails.Any())
+                {
+                    _repo.RemoveDetails(existing.DocumentDetails.ToList());
+                    existing.DocumentDetails.Clear();
+                }
+                else if (existing.DocumentDetails == null)
+                {
+                    existing.DocumentDetails = new List<Models.DocumentDetail>();
+                }
+
+                foreach (var detail in updatedDocument.DocumentDetails)
+                {
+                    existing.DocumentDetails.Add(detail);
+                }
+            }
 
             _repo.Update(existing);
             await _repo.SaveChangesAsync();
@@ -452,27 +469,38 @@ namespace MenuGoBE.Service.Document
                 decimal avg_old = binventory.Avg;
                 decimal leftover_old = binventory.LeftOver;
 
-                // 2. Xác định tổng giá b1 (Giá trị kho cũ + Leftover cũ + Giá trị nhập mới)
+                // 2. Xác định đơn giá nhập theo đơn vị kho cơ sở
+                decimal unit_cost_import = (detail.ConversionRate > 0) ? (detail.UnitPrice / detail.ConversionRate) : detail.UnitPrice;
                 decimal val_import = detail.Quantity * detail.UnitPrice;
-                decimal b1 = (q_old * avg_old) + leftover_old + val_import;
-
-                // 3. Xác định tổng số lượng b2 (Số lượng tồn cũ + Số lượng nhập mới)
                 decimal q_import = detail.BaseQuantity;
-                decimal b2 = q_old + q_import;
 
-                // 4. avg = b1 / b2 làm tròn 6 chữ số thập phân
-                decimal avg = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+                decimal avg;
+                decimal leftover;
+                decimal b2;
 
-                // 5. c1 = avg * b2
-                decimal c1 = avg * b2;
-
-                // 6. leftover = b1 - c1
-                decimal leftover = b1 - c1;
+                if (q_old <= 0)
+                {
+                    // Tồn kho trước khi nhập <= 0 (về 0 hoặc âm):
+                    // Giá vốn (Avg) được làm mới hoàn toàn dựa trên đơn giá lô nhập mới này, triệt tiêu LeftOver cũ.
+                    avg = Math.Round(unit_cost_import, 6);
+                    leftover = 0m;
+                    b2 = q_import;
+                    binventory.Quantity = b2;
+                }
+                else
+                {
+                    // Tồn kho trước khi nhập > 0: Áp dụng công thức tính giá vốn bình quân gia quyền (Weighted Average Cost)
+                    decimal b1 = (q_old * avg_old) + leftover_old + val_import;
+                    b2 = q_old + q_import;
+                    avg = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+                    decimal c1 = avg * b2;
+                    leftover = b1 - c1;
+                    binventory.Quantity = b2;
+                }
 
                 // 7. Cập nhật lại BInventory
                 binventory.Avg = avg;
                 binventory.LeftOver = leftover;
-                binventory.Quantity = b2;
 
                 // Snapshot Avg Cost vào chi tiết chứng từ
                 detail.SnapshotAvgCost = avg;
@@ -492,9 +520,9 @@ namespace MenuGoBE.Service.Document
                     QuantityDelta = q_import,
                     InventoryValueDelta = val_import,
                     RunningQuantity = b2,
-                    RunningInventoryValue = c1,
+                    RunningInventoryValue = b2 == 0 ? 0m : (b2 * avg + leftover),
                     RunningAverageCost = avg,
-                    UnitCost = (detail.ConversionRate > 0) ? (detail.UnitPrice / detail.ConversionRate) : detail.UnitPrice,
+                    UnitCost = unit_cost_import,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -730,9 +758,20 @@ namespace MenuGoBE.Service.Document
             if (existing.DocumentDetails != null && existing.DocumentDetails.Any())
             {
                 _repo.RemoveDetails(existing.DocumentDetails.ToList());
+                existing.DocumentDetails.Clear();
+            }
+            else if (existing.DocumentDetails == null)
+            {
+                existing.DocumentDetails = new List<Models.DocumentDetail>();
             }
 
-            existing.DocumentDetails = updatedDocument.DocumentDetails;
+            if (updatedDocument.DocumentDetails != null)
+            {
+                foreach (var detail in updatedDocument.DocumentDetails)
+                {
+                    existing.DocumentDetails.Add(detail);
+                }
+            }
             ClearPendingSnapshots(existing);
 
             if (!string.IsNullOrWhiteSpace(updatedDocument.Code) && updatedDocument.Code != existing.Code)
@@ -2199,13 +2238,20 @@ namespace MenuGoBE.Service.Document
                 #endregion
 
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                decimal avgCost = binventory.Avg > 0 
+                    ? binventory.Avg 
+                    : (detail.UnitPrice > 0 && detail.ConversionRate > 0 
+                        ? detail.UnitPrice / detail.ConversionRate 
+                        : 0m);
+                detail.SnapshotAvgCost = avgCost;
+                detail.UnitPrice = avgCost * detail.ConversionRate;
             }
             #endregion
 
             // Xuất hủy không liên kết tới Supplier (PartnerId = null)
             document.PartnerId = null;
 
-            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
+            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.BaseQuantity * d.SnapshotAvgCost);
             if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_AMOUNT)
             {
                 throw new ArgumentException($"Tổng giá trị phiếu xuất hủy ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
@@ -2260,6 +2306,20 @@ namespace MenuGoBE.Service.Document
                     throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
                 }
 
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion != null && unitConversion.ConversionPoint > 0)
+                    {
+                        detail.ConversionRate = unitConversion.ConversionPoint;
+                    }
+                }
+                if (detail.ConversionRate <= 0) detail.ConversionRate = 1;
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                detail.SnapshotAvgCost = binventory.Avg;
+                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
+
                 decimal q_export = detail.BaseQuantity;
                 if (q_export > binventory.Quantity)
                 {
@@ -2272,7 +2332,6 @@ namespace MenuGoBE.Service.Document
 
                 // Trừ tồn kho
                 binventory.Quantity -= q_export;
-                detail.SnapshotAvgCost = binventory.Avg;
 
                 if (binventory.Quantity == 0)
                 {
@@ -2308,6 +2367,8 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddInventoryLedgerAsync(ledger);
             }
+
+            document.TotalAmount = document.DocumentDetails.Sum(d => d.BaseQuantity * d.SnapshotAvgCost);
         }
         #endregion
 
@@ -2829,6 +2890,11 @@ namespace MenuGoBE.Service.Document
                     throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép kiểm kho. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
                 }
 
+                if (detail.Quantity == 0 && detail.ActualQuantity.HasValue && detail.ActualQuantity.Value > 0)
+                {
+                    detail.Quantity = detail.ActualQuantity.Value;
+                }
+
                 if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
                 {
                     throw new ArgumentException($"Số lượng kiểm thực tế của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Số lượng phải nằm trong khoảng từ 0 đến 100 tỷ.");
@@ -2859,11 +2925,13 @@ namespace MenuGoBE.Service.Document
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
                 detail.SystemQuantity = binventory.Quantity;
                 detail.ActualQuantity = detail.BaseQuantity;
+                detail.SnapshotAvgCost = binventory.Avg;
+                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
             }
             #endregion
 
             document.PartnerId = null;
-            document.TotalAmount = 0;
+            document.TotalAmount = document.DocumentDetails.Sum(d => (d.BaseQuantity - (d.SystemQuantity ?? 0m)) * d.SnapshotAvgCost);
             document.AmountPaid = 0;
             document.AmountDue = 0;
         }
@@ -2912,8 +2980,29 @@ namespace MenuGoBE.Service.Document
                     throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
                 }
 
-                decimal actual_q = detail.ActualQuantity ?? detail.BaseQuantity;
-                decimal system_q = detail.SystemQuantity ?? binventory.Quantity;
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion != null && unitConversion.ConversionPoint > 0)
+                    {
+                        detail.ConversionRate = unitConversion.ConversionPoint;
+                    }
+                }
+                if (detail.ConversionRate <= 0) detail.ConversionRate = 1;
+
+                if (detail.Quantity == 0 && detail.ActualQuantity.HasValue && detail.ActualQuantity.Value > 0 && detail.ActualQuantity.Value != (detail.Quantity * detail.ConversionRate))
+                {
+                    detail.Quantity = detail.ActualQuantity.Value;
+                }
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                detail.ActualQuantity = detail.BaseQuantity;
+                detail.SystemQuantity = detail.SystemQuantity ?? binventory.Quantity;
+                detail.SnapshotAvgCost = binventory.Avg;
+                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
+
+                decimal actual_q = detail.BaseQuantity;
+                decimal system_q = detail.SystemQuantity.Value;
                 decimal q_delta = actual_q - system_q;
 
                 decimal leftover_old = binventory.LeftOver;
@@ -2931,8 +3020,6 @@ namespace MenuGoBE.Service.Document
                     binventory.Quantity = actual_q;
                     val_delta = q_delta * binventory.Avg;
                 }
-
-                detail.SnapshotAvgCost = binventory.Avg;
 
                 var ledger = new InventoryLedger
                 {
@@ -2956,6 +3043,8 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddInventoryLedgerAsync(ledger);
             }
+
+            document.TotalAmount = document.DocumentDetails.Sum(d => (d.BaseQuantity - (d.SystemQuantity ?? 0m)) * d.SnapshotAvgCost);
         }
         #endregion
 

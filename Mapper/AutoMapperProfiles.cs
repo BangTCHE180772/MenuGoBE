@@ -245,7 +245,15 @@ namespace MenuGoBE.Mapper
             CreateMap<Models.Document, DocumentListResponseDto>()
                 .ForMember(dest => dest.CurrentCreatedByName, opt => opt.MapFrom(src => src.Creator != null ? src.Creator.Name : null))
                 .ForMember(dest => dest.CurrentPartnerName, opt => opt.MapFrom(src => src.Partner != null ? src.Partner.Name : null))
-                .ForMember(dest => dest.TotalQuantity, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity) : 0));
+                .ForMember(dest => dest.TotalQuantity, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity) : 0))
+                .ForMember(dest => dest.TotalAmount, opt => opt.MapFrom(src => src.TotalAmount > 0
+                    ? src.TotalAmount
+                    : (src.DocumentDetails != null
+                        ? src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity * (dt.UnitPrice > 0
+                            ? dt.UnitPrice
+                            : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
+                        ))
+                        : 0m)));
         }
     }
 }
