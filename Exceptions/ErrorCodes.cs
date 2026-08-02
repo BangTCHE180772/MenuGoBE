@@ -303,6 +303,12 @@ public static class ErrorCodes
         "Tài khoản quản lý không có thông tin chi nhánh liên kết hợp lệ.",
         404
     );
+
+    public static readonly ErrorResult BranchAlreadyDeleted = new(
+        2020,
+        "Chi nhánh đã ngừng kinh doanh (đã xóa), không thể thay đổi hoặc cập nhật.",
+        400
+    );
     
     public static readonly ErrorResult DocumentBranchNotFound = new(
         2101,
