@@ -43,7 +43,12 @@ namespace MenuGoBE.Mapper
                 CurrentPartnerName = document.Partner?.Name,
 
                 TotalQuantity = validDetails.Sum(dt => dt.Quantity),
-                TotalAmount = document.TotalAmount,
+                TotalAmount = document.TotalAmount > 0
+                    ? document.TotalAmount
+                    : validDetails.Sum(dt => dt.Quantity * (dt.UnitPrice > 0
+                        ? dt.UnitPrice
+                        : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
+                    )),
                 AmountPaid = document.AmountPaid,
                 AmountDue = document.AmountDue,
                 Note = document.Note

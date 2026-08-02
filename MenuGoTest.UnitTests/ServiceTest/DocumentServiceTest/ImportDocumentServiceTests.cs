@@ -297,6 +297,31 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
+        public async Task CompleteImportAsync_ZeroPriorInventory_RefreshesAverageCostToNewImportBatch()
+        {
+            var doc = CreateValidImportDocument();
+            // Quantity = 10, UnitPrice = 50000 -> UnitCost = 50000
+            doc.DocumentDetails.First().Quantity = 10;
+            doc.DocumentDetails.First().UnitPrice = 50000;
+            
+            // Prior inventory is 0, old Avg was 100000, old LeftOver was 0.5
+            var bInv = CreateValidBInventory(qty: 0, avg: 100000, leftOver: 0.5m);
+            var unitConv = new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 };
+
+            _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(unitConv);
+            _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);
+
+            var result = await _service.CompleteImportAsync(1, 1);
+
+            Assert.Equal(DocumentStatus.Completed, result.Status);
+            Assert.Equal(50000m, bInv.Avg); // Avg refreshed to 50,000 (new import unit cost)
+            Assert.Equal(0m, bInv.LeftOver); // LeftOver reset to 0
+            Assert.Equal(10m, bInv.Quantity); // Quantity = 10
+        }
+
+        [Fact]
         public async Task CreateImportCompletedAsync_ValidDocument_DirectPostsSuccessfully()
         {
             var doc = CreateValidImportDocument();
