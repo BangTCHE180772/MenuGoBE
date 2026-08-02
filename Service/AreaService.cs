@@ -23,13 +23,14 @@ namespace MenuGoBE.Service
         public async Task<List<AreaViewDto>> GetAllAsync()
         {
             var data = await _repo.GetAllAsync();
-            return _mapper.Map<List<AreaViewDto>>(data);
+            var filtered = data.Where(a => a.Status != "Internal").ToList();
+            return _mapper.Map<List<AreaViewDto>>(filtered);
         }
 
         public async Task<AreaViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
-            if (data == null) return null;
+            if (data == null || data.Status == "Internal") return null;
 
             return _mapper.Map<AreaViewDto>(data);
         }
@@ -37,7 +38,8 @@ namespace MenuGoBE.Service
         public async Task<List<AreaViewDto>> GetByBranchIdAsync(long branchId)
         {
             var data = await _repo.GetByBranchIdAsync(branchId);
-            return _mapper.Map<List<AreaViewDto>>(data);
+            var filtered = data.Where(a => a.Status != "Internal").ToList();
+            return _mapper.Map<List<AreaViewDto>>(filtered);
         }
 
         public async Task<AreaViewDto> CreateAsync(AreaCreateDto dto)
@@ -53,7 +55,7 @@ namespace MenuGoBE.Service
         public async Task<bool> UpdateAsync(AreaUpdateDto dto)
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
-            if (entity == null) return false;
+            if (entity == null || entity.Status == "Internal") return false;
 
             _mapper.Map(dto, entity);
 
@@ -66,7 +68,7 @@ namespace MenuGoBE.Service
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
-            if (entity == null) return false;
+            if (entity == null || entity.Status == "Internal") return false;
 
             await _repo.DeleteAsync(id);
             await _repo.SaveChangesAsync();
@@ -77,7 +79,7 @@ namespace MenuGoBE.Service
         public async Task<List<TableViewDto>> GetTablesByAreaIdAsync(long areaId)
         {
             var tables = await _tableRepo.GetAllAsync();
-            var filtered = tables.Where(t => t.AreaId == areaId).ToList();
+            var filtered = tables.Where(t => t.AreaId == areaId && t.Status != "Internal").ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
     }

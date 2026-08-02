@@ -18,11 +18,17 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.OData.ModelBuilder;
 using MenuGoBE.Models;
 using MenuGoBE.Helpers;
+using MenuGoBE.Interface.Repository.Document;
+using MenuGoBE.Repositories.Document;
+using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Service.Document;
+using MenuGoBE.BackgroundServices;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using PayOS;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +53,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var configuration = builder.Configuration.GetConnectionString("Redis");
+    return ConnectionMultiplexer.Connect(configuration ?? "localhost:6379");
+});
 builder.Services.AddAutoMapper(cfg => { }, typeof(AutoMapperProfiles));
 
 builder.Services.AddFluentValidationAutoValidation();
@@ -88,8 +100,12 @@ builder.Services.AddScoped<ISalaryDetailRepository, SalaryDetailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
 builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
+builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
+builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
+builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 
 // Service
+builder.Services.AddScoped<IRedisInventoryService, RedisInventoryService>();
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
 builder.Services.AddScoped<ITableService, TableService>();
@@ -106,6 +122,15 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
+builder.Services.AddScoped<IPartnerService, PartnerService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services.AddScoped<IPhotoService, PhotoService>();
+builder.Services.AddScoped<IEmailService,EmailService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IKitchenService, KitchenService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
@@ -125,6 +150,11 @@ builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailS
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
 
+// SignalR
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IDictionary<string, string>>(opts => new Dictionary<string, string>());
+builder.Services.AddSingleton<IDictionary<string, long>>(opts => new Dictionary<string, long>());
+builder.Services.AddHostedService<InventorySyncWorker>();
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();

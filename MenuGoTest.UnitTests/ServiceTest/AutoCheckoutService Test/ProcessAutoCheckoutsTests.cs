@@ -36,7 +36,7 @@ public class ProcessAutoCheckoutsTests
     }
 
     [Fact]
-    public async Task ForcedCheckout_When30MinutesPastEndTime_NoNextShift()
+    public async Task ForcedCheckout_When120MinutesPastEndTime_NoNextShift()
     {
         // Arrange
         var localNow = DateTime.UtcNow.AddHours(7);
@@ -45,8 +45,8 @@ public class ProcessAutoCheckoutsTests
         var pastShift = new Shift
         {
             Id = 1,
-            StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-50)),
-            EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(-40)) // Over 30 mins ago
+            StartTime = TimeOnly.FromDateTime(localNow.AddHours(-5)),
+            EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(-130)) // Over 2 hours ago
         };
 
         var openSchedule = new WorkSchedule

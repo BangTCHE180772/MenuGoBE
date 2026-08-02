@@ -39,6 +39,12 @@ namespace MenuGoBE.Service
             return payroll == null ? null : _mapper.Map<PayrollViewDto>(payroll);
         }
 
+        public async Task<List<PayrollViewDto>> GetByAccountIdAsync(long accountId, int? month = null, int? year = null)
+        {
+            var payrolls = await _payrollRepo.GetByAccountIdAsync(accountId, month, year);
+            return _mapper.Map<List<PayrollViewDto>>(payrolls);
+        }
+
         public async Task<PayrollViewDto> CreateAsync(PayrollCreateDto dto)
         {
             var existing = await _payrollRepo.GetByAccountMonthYearAsync(dto.AccountId, dto.Month, dto.Year);

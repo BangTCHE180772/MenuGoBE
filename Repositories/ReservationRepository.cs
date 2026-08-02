@@ -28,7 +28,9 @@ public class ReservationRepository : IReservationRepository
 
     public async Task<Reservation?> GetByIdAsync(long id)
     {
-        return await _context.Reservations.FindAsync(id);
+        return await _context.Reservations
+            .Include(r => r.Customer)
+            .FirstOrDefaultAsync(r => r.Id == id);
     }
 
     public async Task CreateAsync(Reservation entity)
@@ -61,5 +63,34 @@ public class ReservationRepository : IReservationRepository
         return await _context.Reservations
             .Include(r => r.Customer)
             .FirstOrDefaultAsync(r => r.OrderId == orderId);
+    }
+
+    public async Task<Reservation?> GetUpcomingByTableIdAsync(long tableId)
+    {
+        var now = DateTime.UtcNow;
+        return await _context.Reservations
+            .Include(r => r.Customer)
+            .Include(r => r.Order)
+            .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.ReservationTime >= now && r.OrderId.HasValue)
+            .Where(r => r.Order!.TableId == tableId || _context.Orders.Any(child => child.FatherId == r.OrderId && child.TableId == tableId))
+            .OrderBy(r => r.ReservationTime)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<bool> IsTableProtectedAsync(long tableId, int thresholdMinutes = 60)
+    {
+        var now = DateTime.UtcNow;
+        var thresholdTime = now.AddMinutes(thresholdMinutes);
+
+        var hasUpcoming = await _context.Reservations
+            .Where(r => r.Status == "Pending" || r.Status == "Confirmed")
+            .Where(r => r.ReservationTime >= now && r.ReservationTime <= thresholdTime)
+            .Where(r => r.OrderId.HasValue)
+            .AnyAsync(r => 
+                r.Order!.TableId == tableId || 
+                _context.Orders.Any(child => child.FatherId == r.OrderId && child.TableId == tableId)
+            );
+
+        return hasUpcoming;
     }
 }
