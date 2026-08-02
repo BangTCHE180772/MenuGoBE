@@ -1,116 +1,233 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using MenuGoBE.Dtos.Document;
-using MenuGoBE.Interface.Services;
-using MenuGoBE.Interface.Services.Document;
-using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
+using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Controllers.Document
 {
+    /// <summary>
+    /// Controller chuyên biệt quản lý nghiệp vụ Chứng từ Nhập kho (Import Document).
+    /// Chuẩn hóa sử dụng DTO yêu cầu (ImportDocumentCreateDto, ImportDocumentUpdateDto) và DTO phản hồi (DocumentResponseDto).
+    /// </summary>
     [ApiController]
-    [Route("api/document")]
-    public class ImportDocumentController : ControllerBase
+    [Route("api/[controller]")]
+    public class ImportDocumentController : BaseApiController
     {
-        private readonly IImportDocumentService _service;
         private readonly IDocumentService _documentService;
 
-        public ImportDocumentController(IImportDocumentService service, IDocumentService documentService)
+        public ImportDocumentController(IDocumentService documentService)
         {
-            _service = service;
             _documentService = documentService;
         }
 
-        private long? GetUserId()
+        #region GET api/importdocument (Lấy danh sách phiếu nhập kho DTO)
+        /// <summary>
+        /// Lấy danh sách phiếu Nhập kho thuộc chi nhánh (Trả về List DTO gọn nhẹ).
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetImportList([FromQuery] long branchId)
         {
-            var userIdStr = User.Identity?.IsAuthenticated == true
-                ? User.FindFirst("AccountId")?.Value
-                : null;
-            return !string.IsNullOrEmpty(userIdStr) && long.TryParse(userIdStr, out var parsedId) && parsedId > 0
-                ? parsedId
-                : null;
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var result = await _documentService.GetDocumentListDtosAsync(branchId, DocumentType.Import);
+            return Ok(result);
         }
+        #endregion
 
-        // ==========================================
-        // 1. IMPORT DOCUMENT (Nhập hàng - Type 1)
-        // ==========================================
-        [HttpGet("import")]
-        public async Task<IActionResult> GetImportDocuments([FromQuery] long? branchId)
+        #region GET api/importdocument/{id} (Lấy chi tiết phiếu nhập kho DTO)
+        /// <summary>
+        /// Lấy chi tiết thông tin 1 phiếu Nhập kho theo ID (Trả về DocumentResponseDto).
+        /// </summary>
+        [HttpGet("{id:long}")]
+        public async Task<IActionResult> GetImportById(long id)
         {
-            if (!branchId.HasValue || branchId.Value <= 0)
+            if (!ValidateUserToken(out _, out var errorResult))
             {
-                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+                return errorResult!;
             }
 
-            try
+            var result = await _documentService.GetDocumentByIdDtoAsync(id);
+            if (result == null || result.Type != DocumentType.Import)
             {
-                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Import);
-                return Ok(result);
+                return NotFound(new { message = $"Không tìm thấy phiếu Nhập kho với ID: {id}" });
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu nhập kho.", error = ex.Message });
-            }
+
+            return Ok(result);
         }
+        #endregion
 
-        [HttpPost("import")]
-        public async Task<IActionResult> CreateImport([FromBody] ImportDocumentCreateDto dto)
+        #region POST api/importdocument/pending (Tạo phiếu nhập nháp theo DTO)
+        /// <summary>
+        /// Tạo mới phiếu Nhập kho ở trạng thái Pending (Lưu tạm) sử dụng ImportDocumentCreateDto.
+        /// </summary>
+        [HttpPost("pending")]
+        public async Task<IActionResult> CreateImportPending([FromBody] ImportDocumentCreateDto dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            try
+            if (dto == null)
             {
-                var result = await _service.CreateImportDocumentAsync(dto, dto.CreatedByAccountId);
-                
-                return Ok(new
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
+
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var document = new Models.Document
+            {
+                BranchId = dto.BranchId,
+                PartnerId = dto.PartnerId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                AmountPaid = dto.AmountPaid,
+                Type = DocumentType.Import,
+                DocumentDetails = (dto.Details ?? new List<ImportDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
-                    message = "Tạo phiếu nhập kho thành công.",
-                    documentId = result.Id,
-                    code = result.Code
-                });
-            }
-            catch (Exceptions.MenuGoException ex)
-            {
-                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi tạo phiếu nhập kho.", error = ex.Message });
-            }
-        }
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Note = d.Note
+                }).ToList()
+            };
 
-        [HttpDelete("import/{id}")]
-        public async Task<IActionResult> DeleteImport(long id)
-        {
-            try
-            {
-                var deletedBy = GetUserId();
-                await _service.DeleteImportDocumentAsync(id, deletedBy);
-                return Ok(new { message = "Xóa phiếu nhập kho thành công." });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi xóa phiếu nhập kho.", error = ex.Message });
-            }
+            var createdDoc = await _documentService.CreateImportPendingAsync(document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(createdDoc.Id);
+            return Ok(responseDto ?? (object)createdDoc);
         }
+        #endregion
 
-        [HttpGet("import/{id}/return-details")]
-        public async Task<IActionResult> GetImportReturnDetails(long id)
+        #region POST api/importdocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        /// <summary>
+        /// Tạo và Chốt trực tiếp phiếu Nhập kho sang Completed (Lưu thẳng / Post) sử dụng ImportDocumentCreateDto.
+        /// </summary>
+        [HttpPost("completed")]
+        public async Task<IActionResult> CreateImportCompleted([FromBody] ImportDocumentCreateDto dto)
         {
-            try
+            if (dto == null)
             {
-                var result = await _service.GetImportReturnDetailsAsync(id);
-                return Ok(result);
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
             }
-            catch (Exceptions.MenuGoException ex)
+
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
             {
-                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+                return errorResult!;
             }
-            catch (Exception ex)
+
+            var document = new Models.Document
             {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy chi tiết trả hàng nhập.", error = ex.Message });
-            }
+                BranchId = dto.BranchId,
+                PartnerId = dto.PartnerId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                AmountPaid = dto.AmountPaid,
+                Type = DocumentType.Import,
+                DocumentDetails = (dto.Details ?? new List<ImportDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
+                {
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Note = d.Note
+                }).ToList()
+            };
+
+            var createdDoc = await _documentService.CreateImportCompletedAsync(document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(createdDoc.Id);
+            return Ok(responseDto ?? (object)createdDoc);
         }
+        #endregion
+
+        #region PUT api/importdocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        /// <summary>
+        /// Cập nhật phiếu Nhập kho đang ở trạng thái Pending sử dụng ImportDocumentUpdateDto.
+        /// </summary>
+        [HttpPut("pending/{id:long}")]
+        public async Task<IActionResult> UpdateImportPending(long id, [FromBody] ImportDocumentUpdateDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
+
+            var existingDoc = await _documentService.GetDocumentByIdDtoAsync(id);
+            if (existingDoc == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy phiếu Nhập kho với ID: {id}" });
+            }
+
+            if (!ValidateUserAndBranchToken(existingDoc.BranchId, out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var document = new Models.Document
+            {
+                Id = id,
+                BranchId = existingDoc.BranchId,
+                PartnerId = dto.PartnerId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                AmountPaid = dto.AmountPaid,
+                Type = DocumentType.Import,
+                DocumentDetails = (dto.Details ?? new List<ImportDocumentDetailUpdateDto>()).Select(d => new Models.DocumentDetail
+                {
+                    Id = d.Id ?? 0,
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Note = d.Note
+                }).ToList()
+            };
+
+            var updatedDoc = await _documentService.UpdateImportPendingAsync(id, document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(updatedDoc.Id);
+            return Ok(responseDto ?? (object)updatedDoc);
+        }
+        #endregion
+
+        #region POST api/importdocument/{id}/complete (Chốt phiếu nháp)
+        /// <summary>
+        /// Chốt phiếu Nhập kho Pending -> Completed (Đóng băng Snapshot, Ghi sổ kho & CashFlow).
+        /// </summary>
+        [HttpPost("{id:long}/complete")]
+        public async Task<IActionResult> CompleteImport(long id)
+        {
+            if (!ValidateUserToken(out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var completedDoc = await _documentService.CompleteImportAsync(id, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(completedDoc.Id);
+            return Ok(responseDto ?? (object)completedDoc);
+        }
+        #endregion
+
+        #region DELETE api/importdocument/{id}/soft-delete (Hủy phiếu nháp)
+        /// <summary>
+        /// Xóa mềm phiếu Nhập kho Pending -> Chuyển sang Canceled.
+        /// </summary>
+        [HttpDelete("{id:long}/soft-delete")]
+        public async Task<IActionResult> SoftDeleteImportPending(long id, [FromQuery] string deleteNote)
+        {
+            if (!ValidateUserToken(out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var result = await _documentService.SoftDeleteImportPendingAsync(id, userId, deleteNote);
+            return Ok(new { success = result, message = "Đã hủy phiếu nhập nháp thành công." });
+        }
+        #endregion
     }
 }

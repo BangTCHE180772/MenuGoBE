@@ -78,7 +78,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult SellPriceRequired = new(
         1017,
-        "Giá bán phải lớn hơn 0 khi sản phẩm có thể bán (IsSellable là true).",
+        "Giá bán phải lớn hơn 0 đối với sản phẩm loại Processed, Manufactured và Regular.",
         400
     );
 
@@ -144,7 +144,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult ProcessedUnitConversionsNotAllowed = new(
         1028,
-        "Sản phẩm loại processed và manufactured chỉ được cấu hình duy nhất 1 đơn vị cơ sở (base unit), không được thêm các đơn vị chuyển đổi khác.",
+        "Sản phẩm loại Processed không được phép cấu hình đơn vị quy đổi.",
         400
     );
 
@@ -187,6 +187,42 @@ public static class ErrorCodes
     public static readonly ErrorResult IngredientOrRegularRequired = new(
         1035,
         "Cần có ít nhất một sản phẩm loại Hàng thường hoặc Nguyên liệu để tạo công thức món.",
+        400
+    );
+
+    public static readonly ErrorResult SellPriceNotAllowedForIngredientOrTool = new(
+        1036,
+        "Sản phẩm loại Nguyên liệu và Dụng cụ không được phép có giá bán.",
+        400
+    );
+
+    public static readonly ErrorResult IngredientOrToolIsSellableNotAllowed = new(
+        1037,
+        "Sản phẩm loại Nguyên liệu và Dụng cụ không được phép đặt thuộc tính có thể bán.",
+        400
+    );
+
+    public static readonly ErrorResult IngredientOrToolMenuNotAllowed = new(
+        1038,
+        "Sản phẩm loại Nguyên liệu và Dụng cụ không được phép thuộc về bất kỳ thực đơn nào.",
+        400
+    );
+
+    public static readonly ErrorResult SellPriceExceedsLimit = new(
+        1039,
+        "Giá bán không được vượt quá 10 tỷ đồng.",
+        400
+    );
+
+    public static readonly ErrorResult CategoryRequired = new(
+        1040,
+        "Sản phẩm bắt buộc phải thuộc về một nhóm sản phẩm (GroupId).",
+        400
+    );
+
+    public static readonly ErrorResult DuplicateRecipeIngredient = new(
+        1041,
+        "Thành phần trong công thức không được trùng lặp.",
         400
     );
 
@@ -419,6 +455,36 @@ public static class ErrorCodes
     public static readonly ErrorResult DocumentDuplicatePartner = new(
         2125,
         "Mỗi đối tác chỉ được xuất hiện một lần trong chứng từ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentBusinessDateInFutureError = new(
+        2126,
+        "Ngày chứng từ không được lớn hơn thời gian hiện tại.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentCannotUpdateAlreadyCompleted = new(
+        2127,
+        "Chỉ có thể cập nhật phiếu ở trạng thái Chờ (Pending).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentOtherCostMustBeInteger = new(
+        2128,
+        "Chi phí khác phải là số nguyên lớn hơn hoặc bằng 0.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentOtherCostNoteRequired = new(
+        2129,
+        "Khi có chi phí khác, ghi chú không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentOtherCostExceedsLimit = new(
+        2130,
+        "Chi phí khác không được vượt quá 10 tỷ đồng.",
         400
     );
 }

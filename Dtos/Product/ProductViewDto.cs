@@ -6,7 +6,8 @@ namespace MenuGoBE.Dtos.Product
     public class ProductViewDto
     {
         public long Id { get; set; }
-        public long? GroupId { get; set; }
+        public long GroupId { get; set; }
+        public string? GroupName { get; set; }
         public long? ImageId { get; set; }
         public string? ImageUrl { get; set; }
         public long ChainId { get; set; }
@@ -23,6 +24,9 @@ namespace MenuGoBE.Dtos.Product
         public decimal MaxStorage { get; set; }
         public decimal SellPrice { get; set; }
         public DateTime CreatedAt { get; set; }
+
+        public List<long>? MenuIds { get; set; }
+        public List<ProductMenuInfoViewDto>? Menus { get; set; }
         public List<ProductUnitConversionViewDto>? UnitConversions { get; set; }
         public List<ProductRecipeDetailedViewDto>? RecipeItems { get; set; }
     }

@@ -1,0 +1,3312 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using AutoMapper;
+using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Repository.Document;
+using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Mapper;
+using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
+
+namespace MenuGoBE.Service.Document
+{
+    /// <summary>
+    /// Service triển khai logic nghiệp vụ riêng biệt cho 9 loại chứng từ, tuân thủ nghiêm ngặt quy tắc vòng đời trạng thái.
+    /// </summary>
+    public class DocumentService : IDocumentService
+    {
+        #region Khai báo Repository & Constructor
+
+        #region Repository & Mapper Dependency
+        /// <summary>
+        /// Instance DocumentRepository thao tác với DB.
+        /// </summary>
+        private readonly IDocumentRepository _repo;
+        private readonly IMapper _mapper;
+        #endregion
+
+        #region Constructor
+        /// <summary>
+        /// Khởi tạo DocumentService với IDocumentRepository và IMapper.
+        /// </summary>
+        /// <param name="repo">Repository chứng từ</param>
+        /// <param name="mapper">AutoMapper instance</param>
+        public DocumentService(IDocumentRepository repo, IMapper mapper)
+        {
+            _repo = repo;
+            _mapper = mapper;
+        }
+        #endregion
+
+        #endregion
+
+        #region Quy tắc Kiểm tra & Khóa chứng từ chung (Common Validation Rules Implementation)
+
+        #region Hàm Kiểm tra bảo vệ phiếu đã khóa (Completed / Canceled Guard)
+        /// <summary>
+        /// Khóa tuyệt đối: Nếu chứng từ đã ở trạng thái Completed hoặc Canceled, nghiêm cấm mọi hành vi sửa/xóa.
+        /// </summary>
+        public void ValidateDocumentNotLocked(Models.Document document)
+        {
+            if (document.Status == DocumentStatus.Completed)
+            {
+                throw new InvalidOperationException($"Chứng từ {document.Code} đã CHỐT (Completed). Không được phép chỉnh sửa hoặc xóa.");
+            }
+
+            if (document.Status == DocumentStatus.Cancelled)
+            {
+                throw new InvalidOperationException($"Chứng từ {document.Code} đã bị HỦY (Canceled). Không được phép thao tác.");
+            }
+        }
+        #endregion
+
+        #region Hàm Kiểm tra phụ thuộc chứng từ gốc (Parent Document Validation)
+        /// <summary>
+        /// Kiểm tra ràng buộc phiếu Return phải gắn với Import, phiếu CustomerReturn phải gắn với Sale.
+        /// </summary>
+        public async Task ValidateParentDependencyRuleAsync(DocumentType type, long? parentDocumentId)
+        {
+            #region Ràng buộc Return -> Import
+            if (type == DocumentType.Return)
+            {
+                if (!parentDocumentId.HasValue)
+                {
+                    throw new ArgumentException("Phiếu Trả Hàng (Return) BẮT BUỘC phải trỏ tới chứng từ Nhập kho (Import) gốc.");
+                }
+
+                bool isValidParent = await _repo.ValidateParentDocumentAsync(parentDocumentId.Value, DocumentType.Import);
+                if (!isValidParent)
+                {
+                    throw new InvalidOperationException($"Chứng từ gốc ID {parentDocumentId.Value} không hợp lệ hoặc chưa ở trạng thái Completed.");
+                }
+            }
+            #endregion
+
+            #region Ràng buộc CustomerReturn -> Sale
+            if (type == DocumentType.CustomerReturn)
+            {
+                if (!parentDocumentId.HasValue)
+                {
+                    throw new ArgumentException("Phiếu Khách Trả Hàng (CustomerReturn) BẮT BUỘC phải trỏ tới chứng từ Xuất bán (Sale) gốc.");
+                }
+
+                bool isValidParent = await _repo.ValidateParentDocumentAsync(parentDocumentId.Value, DocumentType.Sale);
+                if (!isValidParent)
+                {
+                    throw new InvalidOperationException($"Chứng từ bán gốc ID {parentDocumentId.Value} không hợp lệ hoặc chưa ở trạng thái Completed.");
+                }
+            }
+            #endregion
+        }
+        #endregion
+
+        #region Lấy DTO phản hồi dùng chung (Generic GET Response DTOs Implementation)
+        /// <summary>
+        /// Lấy chi tiết chứng từ bất kỳ dưới dạng DocumentResponseDto (Phản hồi dùng chung).
+        /// </summary>
+        public async Task<DocumentResponseDto?> GetDocumentByIdDtoAsync(long id)
+        {
+            var document = await _repo.GetByIdAsync(id);
+            if (document == null) return null;
+
+            return _mapper.Map<DocumentResponseDto>(document);
+        }
+
+        /// <summary>
+        /// Lấy danh sách chứng từ dưới dạng DocumentListResponseDto (Phản hồi dùng chung dạng bảng).
+        /// </summary>
+        public async Task<IEnumerable<DocumentListResponseDto>> GetDocumentListDtosAsync(long branchId, DocumentType? type = null, DocumentStatus? status = null)
+        {
+            var documents = await _repo.GetDocumentsAsync(branchId, type, status);
+            return _mapper.Map<IEnumerable<DocumentListResponseDto>>(documents);
+        }
+        #endregion
+
+        #region Helper chung để tạo phiếu Pending
+        /// <summary>
+        /// Helper nội bộ thiết lập thuộc tính khởi tạo cho phiếu Pending.
+        /// </summary>
+        private async Task<Models.Document> CreatePendingBaseAsync(Models.Document document, DocumentType targetType, long userId)
+        {
+            document.Type = targetType;
+            document.Status = DocumentStatus.Pending;
+            document.CreatedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+
+            // Xóa rỗng các Snapshot khi ở trạng thái Pending
+            document.SnapshotBranchName = string.Empty;
+            document.SnapshotPartnerName = null;
+            document.SnapshotCreatedByName = null;
+            document.SnapshotCreatedByUsername = null;
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+        #endregion
+
+        #region Helper chung để cập nhật phiếu Pending
+        /// <summary>
+        /// Helper nội bộ cập nhật thông tin phiếu Pending.
+        /// </summary>
+        private async Task<Models.Document> UpdatePendingBaseAsync(long documentId, Models.Document updatedDocument, DocumentType expectedType)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != expectedType)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chỉnh sửa khi chứng từ ở trạng thái Pending.");
+            }
+
+            existing.Note = updatedDocument.Note;
+            existing.OrderDate = updatedDocument.OrderDate;
+            existing.TotalAmount = updatedDocument.TotalAmount;
+            existing.AmountDue = updatedDocument.AmountDue;
+            existing.AmountPaid = updatedDocument.AmountPaid;
+            existing.DocumentDetails = updatedDocument.DocumentDetails;
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+        #endregion
+
+        #region Helper chung để Chốt phiếu Completed
+        /// <summary>
+        /// Helper nội bộ chốt phiếu chuyển trạng thái Pending -> Completed.
+        /// </summary>
+        private async Task<Models.Document> CompleteBaseAsync(long documentId, DocumentType expectedType, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != expectedType)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            // TODO: Đổ bê tông Master Data Snapshots & Ghi Sổ kho InventoryLedger
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+        #endregion
+
+        #region Helper chung để Xóa mềm phiếu Pending
+        /// <summary>
+        /// Helper nội bộ thực hiện xóa mềm phiếu Pending (chuyển sang Canceled).
+        /// Đổ bê tông Master Data Snapshot tại thời điểm xóa mềm.
+        /// </summary>
+        private async Task<bool> SoftDeletePendingBaseAsync(long documentId, DocumentType expectedType, long userId, string deleteNote)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != expectedType)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            #region Quy tắc: DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(deleteNote) && deleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            _repo.SoftDeletePending(existing, userId, deleteNote);
+
+            // Quy tắc: Khi xóa 1 phiếu Pending -> Đổ bê tông lưu Snapshot Master Data
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: true);
+
+            return await _repo.SaveChangesAsync();
+        }
+        #endregion
+
+        #endregion
+
+        #region 1. Nghiệp vụ Chứng từ Nhập kho (Import)
+
+        #region Validation Nghiệp Vụ Phiếu Nhập Kho (Import Validation Rules)
+
+        #region Kiểm tra quy tắc chung cho Phiếu Nhập (Lưu tạm & Chốt)
+        /// <summary>
+        /// Kiểm tra các quy tắc bắt buộc chung (số học, chi tiết, comment, trùng lặp) cho phiếu nhập kho.
+        /// </summary>
+        private async Task ValidateImportBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ nhập kho không được để trống.");
+            }
+
+            #region Quy tắc: Comment/Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Tối thiểu phải có 1 DocumentDetail
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu nhập kho bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
+            }
+            #endregion
+
+            #region Quy tắc a5: Mỗi BInventoryId chỉ xuất hiện 1 lần (Không trùng lặp mặt hàng trong phiếu)
+            var duplicateBInventory = document.DocumentDetails
+                .GroupBy(d => d.BInventoryId)
+                .FirstOrDefault(g => g.Count() > 1);
+
+            if (duplicateBInventory != null)
+            {
+                throw new ArgumentException($"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu nhập. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
+            }
+            #endregion
+
+            #region Quy tắc a2, a4 & Loại sản phẩm hợp lệ: Kiểm tra số lượng (0.001 <= Quantity <= 10 tỷ), ProductType và UnitConversion
+            const decimal MIN_QTY = 0.001m;
+            const decimal MAX_QTY = 10_000_000_000m;
+            const decimal MAX_AMOUNT = 10_000_000_000m;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                #region Kiểm tra loại sản phẩm chỉ được phép nhập (Tool, Regular, Ingredient)
+                if (binventory.Product == null)
+                {
+                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                }
+
+                var productType = binventory.Product.Type;
+                if (productType != ProductType.Tool && productType != ProductType.Regular && productType != ProductType.Ingredient)
+                {
+                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' có loại (ProductType = {productType}) không được phép nhập kho. Chỉ cho phép các loại: Tool, Regular, Ingredient.");
+                }
+                #endregion
+
+                if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
+                {
+                    throw new ArgumentException($"Số lượng nhập của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
+                }
+
+                #region Kiểm tra đơn giá (UnitPrice không âm và không vượt quá 10 tỷ)
+                const decimal MAX_UNIT_PRICE = 10_000_000_000m;
+                if (detail.UnitPrice < 0 || detail.UnitPrice > MAX_UNIT_PRICE)
+                {
+                    throw new ArgumentException($"Đơn giá nhập của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice}) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
+                }
+                #endregion
+
+                #region Quy tắc a4: Đơn vị tính và kiểm tra thuộc tính sở hữu UnitConversion
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
+                    {
+                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                    }
+
+                    if (unitConversion.ConversionPoint <= 0)
+                    {
+                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                    }
+
+                    detail.ConversionRate = unitConversion.ConversionPoint;
+                }
+                else
+                {
+                    detail.ConversionRate = 1;
+                }
+                #endregion
+
+                // Bỏ qua BaseQuantity do client truyền vào -> Tự động tính toán số lượng kho cơ sở chuẩn:
+                // BaseQuantity = Quantity * (ConversionPoint nếu chọn, hoặc 1 nếu không)
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+            }
+            #endregion
+
+            #region Phân định rõ Tiền đã trả (AmountPaid) & Tiền phải trả (AmountDue) tính toán tại DB
+            // 1. Tự động tính lại TotalAmount = sum(Quantity * UnitPrice)
+            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
+            if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_AMOUNT)
+            {
+                throw new ArgumentException($"Tổng giá trị phiếu nhập kho ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
+            }
+            document.TotalAmount = calculatedTotalAmount;
+
+            // 2. Validate AmountPaid
+            if (document.AmountPaid < 0 || document.AmountPaid > document.TotalAmount)
+            {
+                throw new ArgumentException($"Số tiền đã trả (AmountPaid: {document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền chứng từ ({document.TotalAmount:N0} VNĐ).");
+            }
+
+            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = TotalAmount - AmountPaid
+            document.AmountDue = document.TotalAmount - document.AmountPaid;
+
+            // 4. Quy tắc: Nếu phát sinh tiền đã trả (AmountPaid > 0) -> Ngay cả phiếu Pending cũng BẮT BUỘC chỉ định Nhà cung cấp (PartnerId)
+            if (document.AmountPaid > 0 && (!document.PartnerId.HasValue || document.PartnerId.Value <= 0))
+            {
+                throw new ArgumentException("Khi phiếu nhập tạm phát sinh tiền đã trả (AmountPaid > 0), BẮT BUỘC phải chọn Nhà cung cấp (Supplier).");
+            }
+            #endregion
+        }
+        #endregion
+
+        #region Kiểm tra quy tắc bắt buộc khi Chốt kho (Completed)
+        /// <summary>
+        /// Kiểm tra điều kiện bắt buộc khi Chốt phiếu Nhập kho.
+        /// </summary>
+        private async Task ValidateImportCompletedRulesAsync(Models.Document document)
+        {
+            await ValidateImportBaseRulesAsync(document);
+
+            #region Quy tắc a3: Bắt buộc phải chọn Supplier (PartnerId) cho phiếu chốt
+            if (!document.PartnerId.HasValue || document.PartnerId.Value <= 0)
+            {
+                throw new ArgumentException("Khi chốt phiếu Nhập kho (Completed), BẮT BUỘC phải chọn Nhà cung cấp (Supplier).");
+            }
+            #endregion
+        }
+        #endregion
+
+        #region Phát sinh Mã Chứng Từ NH (Rule a6)
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Nhập kho dựa trên ID.
+        /// </summary>
+        private async Task GenerateOrValidateImportCodeAsync(Models.Document document)
+        {
+            #region Quy tắc a6: Nếu user tự nhập -> check trùng. Nếu trống -> gen code NH + Id 6 chữ số
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"NH{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"NH{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+            #endregion
+        }
+        #endregion
+
+        #endregion
+
+        #region Thuật toán Tính Giá Trung Bình (Avg Cost) & Ghi Sổ Kho (Inventory Ledger)
+
+        /// <summary>
+        /// Thực thi thuật toán tính giá vốn trung bình (Weighted Average Cost) cho từng mặt hàng khi chốt nhập kho:
+        /// b1 = (q_old * avg_old) + leftover_old + (q_import * unit_price)
+        /// b2 = q_old + q_import
+        /// avg = Math.Round(b1 / b2, 6)
+        /// c1 = avg * b2
+        /// leftover = b1 - c1
+        /// </summary>
+        private async Task ProcessWeightedAvgCostAndLedgerAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                // 1. Lấy tồn kho hiện tại (q_old), giá vốn hiện tại (avg_old) và leftover cũ (leftover_old)
+                decimal q_old = binventory.Quantity;
+                decimal avg_old = binventory.Avg;
+                decimal leftover_old = binventory.LeftOver;
+
+                // 2. Xác định tổng giá b1 (Giá trị kho cũ + Leftover cũ + Giá trị nhập mới)
+                decimal val_import = detail.Quantity * detail.UnitPrice;
+                decimal b1 = (q_old * avg_old) + leftover_old + val_import;
+
+                // 3. Xác định tổng số lượng b2 (Số lượng tồn cũ + Số lượng nhập mới)
+                decimal q_import = detail.BaseQuantity;
+                decimal b2 = q_old + q_import;
+
+                // 4. avg = b1 / b2 làm tròn 6 chữ số thập phân
+                decimal avg = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+
+                // 5. c1 = avg * b2
+                decimal c1 = avg * b2;
+
+                // 6. leftover = b1 - c1
+                decimal leftover = b1 - c1;
+
+                // 7. Cập nhật lại BInventory
+                binventory.Avg = avg;
+                binventory.LeftOver = leftover;
+                binventory.Quantity = b2;
+
+                // Snapshot Avg Cost vào chi tiết chứng từ
+                detail.SnapshotAvgCost = avg;
+
+                // 8. Tạo bản ghi Sổ kho InventoryLedger
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.Import,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
+                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    QuantityDelta = q_import,
+                    InventoryValueDelta = val_import,
+                    RunningQuantity = b2,
+                    RunningInventoryValue = c1,
+                    RunningAverageCost = avg,
+                    UnitCost = (detail.ConversionRate > 0) ? (detail.UnitPrice / detail.ConversionRate) : detail.UnitPrice,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledger);
+            }
+        }
+        #endregion
+
+        #region Xử lý Phát Sinh Phiếu CashFlow Khi Thanh Toán (Rule a7)
+
+        /// <summary>
+        /// Tạo phiếu chi CashFlow thanh toán cho Nhà cung cấp nếu AmountPaid > 0 khi chốt phiếu.
+        /// </summary>
+        private async Task CreateImportCashFlowAsync(Models.Document document)
+        {
+            #region Quy tắc a7: Nếu AmountPaid > 0 khi chốt phiếu -> Tạo CashFlow
+            if (document.AmountPaid > 0)
+            {
+                var cashFlow = new CashFlow
+                {
+                    BranchId = document.BranchId,
+                    DocumentId = document.Id,
+                    PartnerId = document.PartnerId,
+                    Code = $"CF_{document.Code}",
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = CashFlowDirection.Outflow, // Phiếu chi tiền trả NCC
+                    Type = CashFlowDetailType.Payment,
+                    PaymentMethod = PaymentMethod.Cash,
+                    Status = CashFlowStatus.Completed,
+                    TotalAmount = document.AmountPaid,
+                    Note = $"Thanh toán cho nhà cung cấp phiếu nhập kho {document.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddCashFlowAsync(cashFlow);
+            }
+            #endregion
+        }
+        #endregion
+
+        #region Quản lý Snapshot Master Data (Freeze & Clear Snapshots)
+        /// <summary>
+        /// Xóa rỗng tất cả các trường Snapshot khi chứng từ ở trạng thái Lưu tạm (Pending).
+        /// </summary>
+        private static void ClearPendingSnapshots(Models.Document document)
+        {
+            document.SnapshotBranchName = string.Empty;
+            document.SnapshotToBranchName = null;
+            document.SnapshotPartnerName = null;
+            document.SnapshotCreatedByName = null;
+            document.SnapshotCreatedByUsername = null;
+            document.SnapshotPostedByName = null;
+            document.SnapshotPostedByUsername = null;
+            document.SnapshotDeletedByName = null;
+
+            if (document.DocumentDetails != null)
+            {
+                foreach (var detail in document.DocumentDetails)
+                {
+                    detail.SnapshotProductName = string.Empty;
+                    detail.SnapshotProductCode = string.Empty;
+                    detail.SnapshotUnitName = string.Empty;
+                    detail.SnapshotBaseUnitName = string.Empty;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Đổ bê tông (Đóng băng) Master Data Snapshot khi Tạo thẳng, Chốt kho (Completed), hoặc Xóa mềm (Canceled).
+        /// </summary>
+        private async Task FreezeDocumentSnapshotsAsync(Models.Document document, long? actionUserId, bool isSoftDelete = false)
+        {
+            if (document == null) return;
+
+            #region 1. Snapshot Chi nhánh
+            if (document.BranchId > 0)
+            {
+                var branch = await _repo.GetBranchByIdAsync(document.BranchId);
+                if (branch != null)
+                {
+                    document.SnapshotBranchName = branch.Name;
+                }
+            }
+
+            if (document.ToBranchId.HasValue && document.ToBranchId.Value > 0)
+            {
+                var toBranch = await _repo.GetBranchByIdAsync(document.ToBranchId.Value);
+                if (toBranch != null)
+                {
+                    document.SnapshotToBranchName = toBranch.Name;
+                }
+            }
+            #endregion
+
+            #region 2. Snapshot Nhà cung cấp / Đối tác
+            if (document.PartnerId.HasValue && document.PartnerId.Value > 0)
+            {
+                var partner = await _repo.GetPartnerByIdAsync(document.PartnerId.Value);
+                if (partner != null)
+                {
+                    document.SnapshotPartnerName = partner.Name;
+                }
+            }
+            #endregion
+
+            #region 3. Snapshot Người tạo (CreatedBy)
+            if (document.CreatedBy.HasValue && document.CreatedBy.Value > 0)
+            {
+                var creator = await _repo.GetAccountByIdAsync(document.CreatedBy.Value);
+                if (creator != null)
+                {
+                    document.SnapshotCreatedByName = creator.Name;
+                    document.SnapshotCreatedByUsername = creator.Email;
+                }
+            }
+            #endregion
+
+            #region 4. Snapshot Người chốt (PostedBy) hoặc Người xóa (DeletedBy)
+            if (isSoftDelete)
+            {
+                if (actionUserId.HasValue && actionUserId.Value > 0)
+                {
+                    var deleter = await _repo.GetAccountByIdAsync(actionUserId.Value);
+                    if (deleter != null)
+                    {
+                        document.SnapshotDeletedByName = deleter.Name;
+                    }
+                }
+            }
+            else
+            {
+                if (document.PostedBy.HasValue && document.PostedBy.Value > 0)
+                {
+                    var poster = await _repo.GetAccountByIdAsync(document.PostedBy.Value);
+                    if (poster != null)
+                    {
+                        document.SnapshotPostedByName = poster.Name;
+                        document.SnapshotPostedByUsername = poster.Email;
+                    }
+                }
+            }
+            #endregion
+
+            #region 5. Snapshot Chi tiết chứng từ (DocumentDetails)
+            if (document.DocumentDetails != null)
+            {
+                foreach (var detail in document.DocumentDetails)
+                {
+                    var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                    if (binventory != null && binventory.Product != null)
+                    {
+                        detail.SnapshotProductName = binventory.Product.Name;
+                        detail.SnapshotProductCode = binventory.Product.SKUCode;
+                        detail.SnapshotBaseUnitName = binventory.Product.Name;
+
+                        if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                        {
+                            var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                            if (unitConversion != null)
+                            {
+                                detail.ConversionRate = unitConversion.ConversionPoint > 0 ? unitConversion.ConversionPoint : 1;
+                                detail.SnapshotUnitName = unitConversion.Unit?.Name ?? binventory.Product.Name;
+                            }
+                            else
+                            {
+                                detail.ConversionRate = 1;
+                                detail.SnapshotUnitName = binventory.Product.Name;
+                            }
+                        }
+                        else
+                        {
+                            detail.ConversionRate = 1;
+                            detail.SnapshotUnitName = binventory.Product.Name;
+                        }
+                    }
+                }
+            }
+            #endregion
+        }
+        #endregion
+
+        #region Tạo phiếu Nhập kho ở trạng thái Pending (Lưu tạm)
+        public async Task<Models.Document> CreateImportPendingAsync(Models.Document document, long userId)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ nhập kho không được để trống.");
+            }
+
+            document.Type = DocumentType.Import;
+            document.Status = DocumentStatus.Pending;
+            document.CreatedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+
+            await ValidateImportBaseRulesAsync(document);
+            ClearPendingSnapshots(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateImportCodeAsync(document);
+            return document;
+        }
+        #endregion
+
+        #region Cập nhật phiếu Nhập kho Pending
+        public async Task<Models.Document> UpdateImportPendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.Import)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Nhập kho với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chỉnh sửa khi chứng từ ở trạng thái Pending.");
+            }
+
+            updatedDocument.Type = DocumentType.Import;
+            await ValidateImportBaseRulesAsync(updatedDocument);
+            ClearPendingSnapshots(updatedDocument);
+
+            existing.Note = updatedDocument.Note;
+            existing.PartnerId = updatedDocument.PartnerId;
+            existing.OrderDate = updatedDocument.OrderDate;
+            existing.TotalAmount = updatedDocument.TotalAmount;
+            existing.AmountDue = updatedDocument.AmountDue;
+            existing.AmountPaid = updatedDocument.AmountPaid;
+
+            if (existing.DocumentDetails != null && existing.DocumentDetails.Any())
+            {
+                _repo.RemoveDetails(existing.DocumentDetails.ToList());
+            }
+
+            existing.DocumentDetails = updatedDocument.DocumentDetails;
+            ClearPendingSnapshots(existing);
+
+            if (!string.IsNullOrWhiteSpace(updatedDocument.Code) && updatedDocument.Code != existing.Code)
+            {
+                existing.Code = updatedDocument.Code;
+                await GenerateOrValidateImportCodeAsync(existing);
+            }
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+        #endregion
+
+        #region Chốt phiếu Nhập kho sang Completed (Chốt kho từ phiếu Pending)
+        public async Task<Models.Document> CompleteImportAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.Import)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Nhập kho với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            await ValidateImportCompletedRulesAsync(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await GenerateOrValidateImportCodeAsync(existing);
+            await ProcessWeightedAvgCostAndLedgerAsync(existing, userId);
+            await CreateImportCashFlowAsync(existing);
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+        #endregion
+
+        #region Tạo & Chốt trực tiếp phiếu Nhập kho (Lưu thẳng / Post)
+        public async Task<Models.Document> CreateImportCompletedAsync(Models.Document document, long userId)
+        {
+            document.Type = DocumentType.Import;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateImportCompletedRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateImportCodeAsync(document);
+            await ProcessWeightedAvgCostAndLedgerAsync(document, userId);
+            await CreateImportCashFlowAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+        #endregion
+
+        #region Xóa mềm phiếu Nhập kho Pending
+        public async Task<bool> SoftDeleteImportPendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.Import, userId, deleteNote);
+        }
+        #endregion
+
+        #region Lấy danh sách phiếu Nhập kho
+        public async Task<IEnumerable<Models.Document>> GetImportListAsync(long branchId)
+        {
+            return await _repo.GetImportDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 2. Nghiệp vụ Chứng từ Trả hàng NCC (Return)
+
+        #region Tạo & Chốt trực tiếp phiếu Trả hàng NCC
+        /// <summary>
+        /// Tạo & Chốt trực tiếp phiếu Trả hàng NCC (DocumentType.Return = 2, DocumentStatus.Completed).
+        /// Quy tắc:
+        /// - Bắt buộc trỏ ParentDocumentId đến phiếu Nhập kho gốc (Import) ở trạng thái Completed.
+        /// - Các dòng chi tiết DocumentDetail phải có FatherId trỏ đến DocumentDetail tương ứng của phiếu Nhập gốc.
+        /// - Kiểm soát lũy kế số lượng đã trả: Trả không quá (Số nhập gốc - Tổng số đã trả ở các phiếu Return trước).
+        /// - Dòng chi tiết có Quantity <= 0 sẽ bị loại bỏ.
+        /// - Thừa hưởng đơn vị tính, ConversionRate, BInventoryId, ProductId trực tiếp từ snapshot phiếu Nhập gốc.
+        /// - Đơn giá UnitPrice: Sử dụng detail.UnitPrice (nếu > 0) hoặc lấy từ fatherDetail.UnitPrice.
+        /// - Kiểm tra tồn kho BInventory hiện tại tại chi nhánh. Nếu tồn kho không đủ -> Báo lỗi.
+        /// - Trừ kho BInventory, triệt tiêu LeftOver = 0 nếu tồn kho về 0.
+        /// - Ghi thẻ Sổ kho InventoryLedger (QuantityDelta âm).
+        /// - Tự động tạo phiếu Thu tiền CashFlow (Inflow / Refund) từ NCC nếu AmountPaid > 0.
+        /// </summary>
+        public async Task<Models.Document> CreateReturnCompletedAsync(Models.Document document, long userId)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ trả hàng không được để trống.");
+            }
+
+            if (!document.ParentDocumentId.HasValue || document.ParentDocumentId.Value <= 0)
+            {
+                throw new ArgumentException("Phiếu trả hàng NCC bắt buộc phải liên kết với 1 phiếu Nhập kho gốc (ParentDocumentId).");
+            }
+
+            var parentImport = await _repo.GetByIdAsync(document.ParentDocumentId.Value);
+            if (parentImport == null || parentImport.Type != DocumentType.Import)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy phiếu Nhập kho gốc ID: {document.ParentDocumentId.Value}");
+            }
+
+            if (parentImport.Status != DocumentStatus.Completed)
+            {
+                throw new InvalidOperationException($"Phiếu Nhập kho gốc #{parentImport.Code} chưa ở trạng thái chốt kho (Completed). Không thể thực hiện trả hàng.");
+            }
+
+            #region Kiểm tra ghi chú Note & DeleteNote <= 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            // Gán thông tin cơ bản cho phiếu Return
+            document.Type = DocumentType.Return;
+            document.Status = DocumentStatus.Completed;
+            document.BranchId = parentImport.BranchId;
+            document.PartnerId = parentImport.PartnerId;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            #region Kiểm tra và làm sạch các dòng chi tiết trả hàng
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu trả hàng bắt buộc phải có ít nhất 1 mặt hàng.");
+            }
+
+            // Loại bỏ các dòng chi tiết có số lượng trả <= 0
+            var validDetails = document.DocumentDetails.Where(d => d.Quantity > 0).ToList();
+            if (validDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu trả hàng bắt buộc phải có ít nhất 1 mặt hàng có số lượng trả lớn hơn 0.");
+            }
+
+            // Lấy tổng số lượng đã trả tích lũy theo FatherId của phiếu nhập gốc
+            var previouslyReturnedMap = await _repo.GetPreviouslyReturnedQuantitiesAsync(parentImport.Id);
+
+            decimal totalDocumentAmount = 0m;
+
+            foreach (var detail in validDetails)
+            {
+                if (!detail.FatherId.HasValue || detail.FatherId.Value <= 0)
+                {
+                    throw new ArgumentException("Mỗi mặt hàng trong phiếu trả hàng bắt buộc phải chỉ định FatherId trỏ đến chi tiết phiếu Nhập gốc.");
+                }
+
+                var fatherDetail = parentImport.DocumentDetails?.FirstOrDefault(d => d.Id == detail.FatherId.Value);
+                if (fatherDetail == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy dòng chi tiết phiếu nhập gốc ID: {detail.FatherId.Value} trong phiếu nhập #{parentImport.Code}.");
+                }
+
+                // Sao chép trực tiếp Snapshot master data & đơn vị tính từ dòng gốc
+                detail.BInventoryId = fatherDetail.BInventoryId;
+                detail.UnitConversionId = fatherDetail.UnitConversionId;
+                detail.ConversionRate = fatherDetail.ConversionRate > 0 ? fatherDetail.ConversionRate : 1m;
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                detail.SnapshotProductName = fatherDetail.SnapshotProductName;
+                detail.SnapshotProductCode = fatherDetail.SnapshotProductCode;
+                detail.SnapshotUnitName = fatherDetail.SnapshotUnitName;
+                detail.SnapshotBaseUnitName = fatherDetail.SnapshotBaseUnitName;
+
+                // Đơn giá: Người dùng tự chọn/nhập (nếu > 0), nếu <= 0 thì lấy từ fatherDetail
+                if (detail.UnitPrice <= 0)
+                {
+                    detail.UnitPrice = fatherDetail.UnitPrice;
+                }
+
+                if (detail.UnitPrice > 10_000_000_000m)
+                {
+                    throw new ArgumentException($"Đơn giá trả hàng của mặt hàng '{fatherDetail.SnapshotProductName}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá tối đa 10 tỷ VNĐ.");
+                }
+
+                // Kiểm tra giới hạn số lượng trả tối đa (Số nhập gốc - Tổng đã trả trước đó)
+                decimal alreadyReturnedBaseQty = previouslyReturnedMap.GetValueOrDefault(fatherDetail.Id, 0m);
+                decimal remainingReturnableBaseQty = fatherDetail.BaseQuantity - alreadyReturnedBaseQty;
+
+                if (remainingReturnableBaseQty <= 0)
+                {
+                    throw new InvalidOperationException($"Mặt hàng '{fatherDetail.SnapshotProductName}' trong phiếu nhập #{parentImport.Code} đã được trả hết toàn bộ số lượng.");
+                }
+
+                if (detail.BaseQuantity > remainingReturnableBaseQty)
+                {
+                    decimal remainingInUnit = fatherDetail.ConversionRate > 0 ? (remainingReturnableBaseQty / fatherDetail.ConversionRate) : remainingReturnableBaseQty;
+                    throw new ArgumentException($"Số lượng trả hàng cho mặt hàng '{fatherDetail.SnapshotProductName}' ({detail.Quantity} {fatherDetail.SnapshotUnitName}) vượt quá số lượng tối đa còn có thể trả ({remainingInUnit} {fatherDetail.SnapshotUnitName}).");
+                }
+
+                // Kiểm tra tồn kho hiện tại tại Chi nhánh
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy tồn kho BInventory ID: {detail.BInventoryId}");
+                }
+
+                if (binventory.Quantity < detail.BaseQuantity)
+                {
+                    throw new InvalidOperationException($"Số lượng tồn kho hiện tại của mặt hàng '{fatherDetail.SnapshotProductName}' ({binventory.Quantity:N3}) không đủ để thực hiện xuất trả hàng ({detail.BaseQuantity:N3}).");
+                }
+
+                totalDocumentAmount += (detail.Quantity * detail.UnitPrice);
+            }
+
+            document.TotalAmount = totalDocumentAmount;
+            document.DocumentDetails = validDetails;
+            #endregion
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            #region Phát sinh Mã Chứng Từ TH (Nếu trống)
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TH{document.Id:D6}";
+            }
+            else
+            {
+                bool isExist = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExist)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống.");
+                }
+            }
+            #endregion
+
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+
+            #region Trừ kho, Ghi Sổ kho InventoryLedger & Sinh CashFlow
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory != null)
+                {
+                    decimal leftover_old = binventory.LeftOver;
+                    decimal val_delta;
+
+                    decimal q_return = detail.BaseQuantity;
+                    binventory.Quantity -= q_return;
+
+                    if (binventory.Quantity <= 0)
+                    {
+                        binventory.Quantity = 0;
+                        val_delta = -((q_return * binventory.Avg) + leftover_old);
+                        binventory.LeftOver = 0;
+                    }
+                    else
+                    {
+                        val_delta = -(q_return * binventory.Avg);
+                    }
+
+                    // Bản ghi Sổ kho InventoryLedger cho phiếu Trả hàng
+                    var ledger = new InventoryLedger
+                    {
+                        BInventoryId = binventory.Id,
+                        DocumentId = document.Id,
+                        PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                        PostedBy = userId,
+                        DocumentType = DocumentType.Return,
+                        SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                        SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                        SnapshotProductName = detail.SnapshotProductName,
+                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        QuantityDelta = -q_return,
+                        InventoryValueDelta = val_delta,
+                        RunningQuantity = binventory.Quantity,
+                        RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                        RunningAverageCost = binventory.Avg,
+                        UnitCost = (detail.ConversionRate > 0) ? (detail.UnitPrice / detail.ConversionRate) : detail.UnitPrice,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _repo.AddInventoryLedgerAsync(ledger);
+                }
+            }
+
+            // Sinh phiếu CashFlow Thu tiền (Refund / Inflow) từ NCC nếu AmountPaid > 0
+            if (document.AmountPaid > 0 && document.PartnerId.HasValue)
+            {
+                var cashFlow = new CashFlow
+                {
+                    BranchId = document.BranchId,
+                    DocumentId = document.Id,
+                    PartnerId = document.PartnerId,
+                    Code = $"CF_{document.Code}",
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = CashFlowDirection.Inflow, // Thu tiền NCC hoàn trả
+                    Type = CashFlowDetailType.Refund,
+                    PaymentMethod = PaymentMethod.Cash,
+                    Status = CashFlowStatus.Completed,
+                    TotalAmount = document.AmountPaid,
+                    Note = $"Thu tiền nhà cung cấp hoàn trả từ phiếu trả hàng #{document.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddCashFlowAsync(cashFlow);
+            }
+            #endregion
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+        #endregion
+
+        #region Lấy danh sách phiếu Trả hàng NCC
+        public async Task<IEnumerable<Models.Document>> GetReturnListAsync(long branchId)
+        {
+            return await _repo.GetReturnDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 3. Nghiệp vụ Chứng từ Xuất bán hàng (Sale)
+
+        #region DTO Nội Bộ Cho Trừ Kho Xuất Bán
+        private class SaleDeductionItem
+        {
+            public long ProductId { get; set; }
+            public Product Product { get; set; } = null!;
+            public decimal RequiredBaseQuantity { get; set; }
+            public long ParentDetailId { get; set; }
+        }
+        #endregion
+
+        #region Validation Nghiệp Vụ Phiếu Xuất Bán (Sale Validation Rules)
+        /// <summary>
+        /// Kiểm tra các quy tắc bắt buộc cho phiếu Xuất bán hàng:
+        /// - Note & DeleteNote <= 255 ký tự
+        /// - Tối thiểu 1 dòng chi tiết (DocumentDetail)
+        /// - Mặt hàng thuộc 3 loại: Regular, Manufactured, Processed
+        /// - Số lượng 0.001 <= Quantity <= 10 tỷ
+        /// - Đơn giá 0 <= UnitPrice <= 10 tỷ
+        /// - Tổng tiền đơn bán: TotalAmount <= 10 tỷ VNĐ
+        /// </summary>
+        private async Task ValidateSaleBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất bán không được để trống.");
+            }
+
+            #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Danh sách mặt hàng xuất bán
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu xuất bán bắt buộc phải có ít nhất 1 mặt hàng.");
+            }
+
+            const decimal MIN_QTY = 0.001m;
+            const decimal MAX_QTY = 10_000_000_000m;
+            const decimal MAX_PRICE = 10_000_000_000m;
+            const decimal MAX_TOTAL = 10_000_000_000m;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                if (binventory.Product == null)
+                {
+                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                }
+
+                var productType = binventory.Product.Type;
+                if (productType != ProductType.Regular && productType != ProductType.Manufactured && productType != ProductType.Processed)
+                {
+                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại '{productType}', không được phép xuất bán trực tiếp. Đơn bán chỉ chấp nhận 3 loại: Regular, Manufactured, Processed.");
+                }
+
+                if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
+                {
+                    throw new ArgumentException($"Số lượng xuất bán của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
+                }
+
+                if (detail.UnitPrice < 0 || detail.UnitPrice > MAX_PRICE)
+                {
+                    throw new ArgumentException($"Đơn giá xuất bán của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
+                }
+
+                #region Đơn vị tính và UnitConversion
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
+                    {
+                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                    }
+
+                    if (unitConversion.ConversionPoint <= 0)
+                    {
+                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                    }
+
+                    detail.ConversionRate = unitConversion.ConversionPoint;
+                }
+                else
+                {
+                    detail.ConversionRate = 1;
+                }
+                #endregion
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+            }
+            #endregion
+
+            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
+            if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_TOTAL)
+            {
+                throw new ArgumentException($"Tổng giá trị phiếu xuất bán ({calculatedTotalAmount:N0} VNĐ) vượt quá hạn mức tối đa 10 tỷ VNĐ.");
+            }
+
+            document.TotalAmount = calculatedTotalAmount;
+            if (!document.AmountDue.HasValue)
+            {
+                document.AmountDue = Math.Max(0, document.TotalAmount - document.AmountPaid);
+            }
+        }
+
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Xuất bán dựa trên ID (Tiền tố BH).
+        /// </summary>
+        private async Task GenerateOrValidateSaleCodeAsync(Models.Document document)
+        {
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"BH{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"BH{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+        }
+
+        #region Thuật toán Trừ kho Bán hàng (Sale Inventory Deduction Logic)
+
+        /// <summary>
+        /// BƯỚC 1: Kiểm tra Vòng lặp Công thức (Circular Dependency Check - DAG Check)
+        /// Ngừng giao dịch & Thăng ném lỗi lập tức nếu bất kỳ sản phẩm Processed nào tự trỏ đến chính nó (trực tiếp hoặc qua trung gian).
+        /// </summary>
+        private async Task ValidateCircularDependencyAsync(long processedProductId, HashSet<long> ancestorPath)
+        {
+            if (ancestorPath.Contains(processedProductId))
+            {
+                throw new InvalidOperationException($"Phát hiện VÒNG LẶP CÔNG THỨC (Circular Dependency) đối với sản phẩm Chế biến ID {processedProductId}. Công thức bị lặp đệ quy tự trỏ đến chính nó.");
+            }
+
+            ancestorPath.Add(processedProductId);
+
+            var recipes = await _repo.GetRecipesByParentProductIdAsync(processedProductId);
+            if (recipes == null || recipes.Count == 0) return;
+
+            foreach (var recipe in recipes)
+            {
+                var binventoryIngredient = await _repo.GetBInventoryByBranchAndProductAsync(0, recipe.IngredientProductId);
+                var ingredientProduct = binventoryIngredient?.Product;
+                if (ingredientProduct != null && ingredientProduct.Type == ProductType.Processed)
+                {
+                    await ValidateCircularDependencyAsync(recipe.IngredientProductId, new HashSet<long>(ancestorPath));
+                }
+            }
+        }
+
+        /// <summary>
+        /// BƯỚC 2: Phân rã Công thức Sâu (Deep Recipe Unrolling)
+        /// - Regular -> Trừ trực tiếp
+        /// - Manufactured -> TRỪ TRỰC TIẾP, TUYỆT ĐỐI KHÔNG BUNG CÔNG THỨC
+        /// - Processed -> Bung công thức đệ quy sâu, dừng tại INGREDIENT, MANUFACTURED, REGULAR
+        /// </summary>
+        private async Task UnrollProcessedProductRecipeAsync(long processedProductId, decimal multiplierQty, long parentDetailId, List<SaleDeductionItem> deductionList, HashSet<long>? visitedProductIds = null)
+        {
+            visitedProductIds ??= new HashSet<long>();
+            if (!visitedProductIds.Add(processedProductId))
+            {
+                throw new InvalidOperationException($"Phát hiện vòng lặp phụ thuộc (Circular Dependency) trong công thức của sản phẩm chế biến ID {processedProductId}.");
+            }
+
+            var recipes = await _repo.GetRecipesByParentProductIdAsync(processedProductId);
+            if (recipes == null || recipes.Count == 0)
+            {
+                throw new InvalidOperationException($"Sản phẩm chế biến (Processed) ID {processedProductId} không có công thức chi tiết (Recipe).");
+            }
+
+            foreach (var recipe in recipes)
+            {
+                decimal neededQty = recipe.Quantity * multiplierQty;
+
+                var binventoryIngredient = await _repo.GetBInventoryByBranchAndProductAsync(0, recipe.IngredientProductId);
+                var ingredientProduct = binventoryIngredient?.Product;
+                if (ingredientProduct == null)
+                {
+                    var tempBinventory = await _repo.GetBInventoryByIdAsync(recipe.IngredientProductId);
+                    ingredientProduct = tempBinventory?.Product;
+                }
+
+                if (ingredientProduct == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy sản phẩm nguyên liệu ID {recipe.IngredientProductId} trong công thức.");
+                }
+
+                if (ingredientProduct.Type == ProductType.Processed)
+                {
+                    await UnrollProcessedProductRecipeAsync(recipe.IngredientProductId, neededQty, parentDetailId, deductionList, visitedProductIds);
+                }
+                else
+                {
+                    deductionList.Add(new SaleDeductionItem
+                    {
+                        ProductId = recipe.IngredientProductId,
+                        Product = ingredientProduct,
+                        RequiredBaseQuantity = neededQty,
+                        ParentDetailId = parentDetailId
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Thực thi chốt phiếu Xuất bán Completed và Trừ kho:
+        /// 1. Validate DAG Circular Dependency.
+        /// 2. Phân rã & Tính toán nhu cầu tiêu hao (Unroll & Aggregate).
+        /// 3. Gộp nhu cầu (Consolidate).
+        /// 4. Kiểm tra tồn kho & Trừ kho hàng loạt (Batch Deduction + LeftOver + Ledger + Child Details).
+        /// </summary>
+        private async Task ProcessSaleCompletedAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            // BƯỚC 1: VALIDATE (Kiểm tra vòng lặp công thức cho toàn bộ sản phẩm PROCESSED)
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory?.Product != null && binventory.Product.Type == ProductType.Processed)
+                {
+                    await ValidateCircularDependencyAsync(binventory.ProductId, new HashSet<long>());
+                }
+            }
+
+            // BƯỚC 2: UNROLL & AGGREGATE (Phân rã & Tính toán nhu cầu)
+            var rawDeductions = new List<SaleDeductionItem>();
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null || binventory.Product == null) continue;
+
+                var product = binventory.Product;
+
+                if (product.Type == ProductType.Regular || product.Type == ProductType.Manufactured)
+                {
+                    // REGULAR & MANUFACTURED: Trừ trực tiếp, KHÔNG bung công thức
+                    rawDeductions.Add(new SaleDeductionItem
+                    {
+                        ProductId = binventory.ProductId,
+                        Product = product,
+                        RequiredBaseQuantity = detail.BaseQuantity,
+                        ParentDetailId = detail.Id
+                    });
+                }
+                else if (product.Type == ProductType.Processed)
+                {
+                    // PROCESSED: Bung công thức sâu đến tận cùng
+                    await UnrollProcessedProductRecipeAsync(binventory.ProductId, detail.BaseQuantity, detail.Id, rawDeductions);
+                }
+            }
+
+            // BƯỚC 3: CONSOLIDATE (Gộp dữ liệu theo mặt hàng)
+            var consolidatedDeductions = rawDeductions
+                .GroupBy(d => d.ProductId)
+                .Select(g => new
+                {
+                    ProductId = g.Key,
+                    Product = g.First().Product,
+                    TotalRequiredQuantity = g.Sum(x => x.RequiredBaseQuantity),
+                    ParentDetailIds = g.Select(x => x.ParentDetailId).Distinct().ToList()
+                })
+                .ToList();
+
+            // BƯỚC 4: BATCH DEDUCTION (Kiểm tra tồn & Trừ kho 1 lần)
+            var createdChildDetails = new List<DocumentDetail>();
+
+            foreach (var item in consolidatedDeductions)
+            {
+                var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, item.ProductId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Mặt hàng '{item.Product.Name}' chưa có trong kho của Chi nhánh này.");
+                }
+
+                if (binventory.Quantity < item.TotalRequiredQuantity)
+                {
+                    throw new InvalidOperationException($"Tồn kho chi nhánh không đủ để xuất bán sản phẩm '{item.Product.Name}'. Yêu cầu: {item.TotalRequiredQuantity:N3}, Tồn hiện tại: {binventory.Quantity:N3}.");
+                }
+
+                decimal leftover_old = binventory.LeftOver;
+                decimal val_delta;
+
+                binventory.Quantity -= item.TotalRequiredQuantity;
+
+                if (binventory.Quantity == 0)
+                {
+                    val_delta = -((item.TotalRequiredQuantity * binventory.Avg) + leftover_old);
+                    binventory.LeftOver = 0;
+                }
+                else
+                {
+                    val_delta = -(item.TotalRequiredQuantity * binventory.Avg);
+                }
+
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.Sale,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = item.Product.Name,
+                    SnapshotUnitName = string.Empty,
+                    QuantityDelta = -item.TotalRequiredQuantity,
+                    InventoryValueDelta = val_delta,
+                    RunningQuantity = binventory.Quantity,
+                    RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                    RunningAverageCost = binventory.Avg,
+                    UnitCost = binventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledger);
+
+                foreach (var parentId in item.ParentDetailIds)
+                {
+                    var parentDetail = document.DocumentDetails.FirstOrDefault(d => d.Id == parentId);
+                    if (parentDetail != null && parentDetail.BInventoryId != binventory.Id)
+                    {
+                        var childDetail = new DocumentDetail
+                        {
+                            DocumentId = document.Id,
+                            FatherId = parentDetail.Id,
+                            BInventoryId = binventory.Id,
+                            Quantity = item.TotalRequiredQuantity,
+                            ConversionRate = 1,
+                            BaseQuantity = item.TotalRequiredQuantity,
+                            UnitPrice = binventory.Avg,
+                            SnapshotProductName = item.Product.Name,
+                            SnapshotAvgCost = binventory.Avg
+                        };
+                        document.DocumentDetails.Add(childDetail);
+                    }
+                }
+            }
+        }
+        #endregion
+
+        #region API Handlers cho Sale
+        public async Task<Models.Document> CreateSaleCompletedAsync(Models.Document document, long userId)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất bán không được để trống.");
+            }
+
+            document.Type = DocumentType.Sale;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateSaleBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateSaleCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessSaleCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+
+        public async Task<IEnumerable<Models.Document>> GetSaleListAsync(long branchId)
+        {
+            return await _repo.GetSaleDocumentsAsync(branchId);
+        }
+        #endregion
+        #endregion
+        #endregion
+
+        #region 4. Nghiệp vụ Chứng từ Khách trả hàng (CustomerReturn)
+
+        #region Tạo & Chốt trực tiếp phiếu Khách trả hàng
+        public async Task<Models.Document> CreateCustomerReturnCompletedAsync(Models.Document document, long userId)
+        {
+            await ValidateParentDependencyRuleAsync(DocumentType.CustomerReturn, document.ParentDocumentId);
+
+            document.Type = DocumentType.CustomerReturn;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedBy = userId;
+            document.PostedAt = DateTime.UtcNow;
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+        #endregion
+
+        #region Lấy danh sách phiếu Khách trả hàng
+        public async Task<IEnumerable<Models.Document>> GetCustomerReturnListAsync(long branchId)
+        {
+            return await _repo.GetCustomerReturnDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 5. Nghiệp vụ Chứng từ Chuyển kho (Transfer)
+
+        #region Validation Nghiệp Vụ Phiếu Chuyển Kho (Transfer Validation Rules)
+        /// <summary>
+        /// Kiểm tra quy tắc bắt buộc cho phiếu Chuyển kho (Transfer):
+        /// - Note & DeleteNote <= 255 ký tự
+        /// - Chi nhánh gửi (BranchId) và Chi nhánh nhận (ToBranchId) không được rỗng và phải khác nhau.
+        /// - Không liên kết Supplier (PartnerId = null).
+        /// - Tối thiểu 1 dòng chi tiết (DocumentDetail), không chứa loại ProductType.Processed.
+        /// - Số lượng mỗi món: 0.001 <= Quantity <= 10 tỷ.
+        /// - Đơn giá mỗi món: 0 <= UnitPrice <= 10 tỷ.
+        /// - Tổng giá trị đơn chuyển kho: TotalAmount <= 10 tỷ VNĐ.
+        /// </summary>
+        private async Task ValidateTransferBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ chuyển kho không được để trống.");
+            }
+
+            #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Chi nhánh nhận (ToBranchId) phải khác Chi nhánh gửi (BranchId)
+            if (!document.ToBranchId.HasValue || document.ToBranchId.Value <= 0)
+            {
+                throw new ArgumentException("Phiếu chuyển kho bắt buộc phải chọn Chi nhánh nhận (ToBranchId).");
+            }
+            if (document.ToBranchId.Value == document.BranchId)
+            {
+                throw new ArgumentException("Chi nhánh nhận không được trùng với Chi nhánh gửi.");
+            }
+            #endregion
+
+            #region Quy tắc: Danh sách mặt hàng chuyển kho
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu chuyển kho bắt buộc phải có ít nhất 1 mặt hàng.");
+            }
+
+            const decimal MIN_QTY = 0.001m;
+            const decimal MAX_QTY = 10_000_000_000m;
+            const decimal MAX_PRICE = 10_000_000_000m;
+            const decimal MAX_TOTAL = 10_000_000_000m;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                if (binventory.Product == null)
+                {
+                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                }
+
+                if (binventory.Product.Type == ProductType.Processed)
+                {
+                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không được phép thực hiện chuyển kho.");
+                }
+
+                if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
+                {
+                    throw new ArgumentException($"Số lượng chuyển kho của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
+                }
+
+                if (detail.UnitPrice < 0 || detail.UnitPrice > MAX_PRICE)
+                {
+                    throw new ArgumentException($"Đơn giá chuyển của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
+                }
+
+                #region Đơn vị tính và UnitConversion
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
+                    {
+                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                    }
+
+                    if (unitConversion.ConversionPoint <= 0)
+                    {
+                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                    }
+
+                    detail.ConversionRate = unitConversion.ConversionPoint;
+                }
+                else
+                {
+                    detail.ConversionRate = 1;
+                }
+                #endregion
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+            }
+            #endregion
+
+            document.PartnerId = null;
+
+            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
+            if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_TOTAL)
+            {
+                throw new ArgumentException($"Tổng giá trị phiếu chuyển kho ({calculatedTotalAmount:N0} VNĐ) vượt quá hạn mức tối đa 10 tỷ VNĐ.");
+            }
+
+            document.TotalAmount = calculatedTotalAmount;
+            document.AmountPaid = 0;
+            document.AmountDue = 0;
+        }
+
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Chuyển kho dựa trên ID (Tiền tố CK).
+        /// </summary>
+        private async Task GenerateOrValidateTransferCodeAsync(Models.Document document)
+        {
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"CK{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"CK{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Thực thi chốt phiếu Chuyển kho Completed tại Chi nhánh Gửi:
+        /// 1. Kiểm tra tồn kho kho gửi (BInventory). Ném lỗi từ chối nếu không đủ hàng xuất.
+        /// 2. Trừ tồn kho kho gửi. Nếu kho gửi về 0 -> Triệt tiêu LeftOver kho gửi.
+        /// 3. Ghi thẻ Sổ kho InventoryLedger cho chi nhánh gửi (QuantityDelta âm).
+        /// 4. Đổi TransferStatus -> InTransit.
+        /// </summary>
+        private async Task ProcessTransferCompletedAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventorySend == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy kho gửi BInventory ID: {detail.BInventoryId}");
+                }
+
+                string productName = detail.SnapshotProductName;
+                if (string.IsNullOrWhiteSpace(productName) && binventorySend.Product != null)
+                {
+                    productName = binventorySend.Product.Name;
+                }
+
+                if (detail.BaseQuantity > binventorySend.Quantity)
+                {
+                    throw new InvalidOperationException($"Sản phẩm '{productName}' tại chi nhánh gửi không đủ tồn kho để chuyển. Số lượng yêu cầu: {detail.BaseQuantity:N3}, Tồn hiện tại: {binventorySend.Quantity:N3}.");
+                }
+
+                decimal leftover_old = binventorySend.LeftOver;
+                decimal val_delta;
+
+                binventorySend.Quantity -= detail.BaseQuantity;
+                detail.SnapshotAvgCost = binventorySend.Avg;
+
+                if (binventorySend.Quantity == 0)
+                {
+                    val_delta = -((detail.BaseQuantity * binventorySend.Avg) + leftover_old);
+                    binventorySend.LeftOver = 0;
+                }
+                else
+                {
+                    val_delta = -(detail.BaseQuantity * binventorySend.Avg);
+                }
+
+                var ledgerSend = new InventoryLedger
+                {
+                    BInventoryId = binventorySend.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.Transfer,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = productName,
+                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    QuantityDelta = -detail.BaseQuantity,
+                    InventoryValueDelta = val_delta,
+                    RunningQuantity = binventorySend.Quantity,
+                    RunningInventoryValue = binventorySend.Quantity == 0 ? 0m : (binventorySend.Quantity * binventorySend.Avg + binventorySend.LeftOver),
+                    RunningAverageCost = binventorySend.Avg,
+                    UnitCost = binventorySend.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledgerSend);
+            }
+
+            document.TransferStatus = DocumentTransferStatus.InTransit;
+        }
+
+        /// <summary>
+        /// Xử lý nhận hàng / từ chối hàng tại Chi nhánh Nhận khi phiếu ở trạng thái InTransit:
+        /// - Rejected: Hàng hóa được cộng hoàn trả lại kho chi nhánh gửi. Bắt buộc có note lý do.
+        /// - Received: Nhận đủ 100%. Cộng kho chi nhánh nhận, tính lại Avg & LeftOver cho chi nhánh nhận, ghi Sổ kho nhận.
+        /// - PartialReceived: Nhận một phần. Cộng số lượng thực nhận vào kho chi nhánh nhận, tính lại Avg & LeftOver, ghi Sổ kho nhận.
+        /// </summary>
+        public async Task<Models.Document> ProcessTransferReceiptAsync(long documentId, DocumentTransferStatus status, List<DocumentDetail>? receivedDetails, string? note, long userId)
+        {
+            var document = await _repo.GetByIdAsync(documentId);
+            if (document == null || document.Type != DocumentType.Transfer)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Chuyển kho với ID: {documentId}");
+            }
+
+            if (document.Status != DocumentStatus.Completed || document.TransferStatus != DocumentTransferStatus.InTransit)
+            {
+                throw new InvalidOperationException("Chỉ được phép xử lý nhận hàng/từ chối khi chứng từ đã được chốt kho gửi và đang ở trạng thái InTransit.");
+            }
+
+            if (!document.ToBranchId.HasValue)
+            {
+                throw new InvalidOperationException("Chứng từ chuyển kho chưa được thiết lập Chi nhánh nhận (ToBranchId).");
+            }
+
+            long receivingBranchId = document.ToBranchId.Value;
+
+            // Đóng băng thông tin Quản lý / Thủ kho phía Chi nhánh Nhận
+            var receiverAccount = await _repo.GetAccountByIdAsync(userId);
+            document.ReceiverAccountId = userId;
+            document.SnapshotReceiverName = receiverAccount?.Name ?? string.Empty;
+            document.SnapshotReceiverUsername = receiverAccount?.Email ?? string.Empty;
+
+            if (status == DocumentTransferStatus.Rejected)
+            {
+                #region Kịch bản 1: Từ Chối Nhận Hàng (Rejected)
+                if (string.IsNullOrWhiteSpace(note))
+                {
+                    throw new ArgumentException("Bắt buộc phải nhập Lý do / Ghi chú (Note) khi từ chối nhận hàng.");
+                }
+
+                document.Note = string.IsNullOrWhiteSpace(document.Note) ? $"[TỪ CHỐI]: {note}" : $"{document.Note} | [TỪ CHỐI]: {note}";
+
+                // Trả hàng về kho chi nhánh gửi
+                foreach (var detail in document.DocumentDetails)
+                {
+                    var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                    if (binventorySend == null) continue;
+
+                    string productName = detail.SnapshotProductName;
+                    if (string.IsNullOrWhiteSpace(productName) && binventorySend.Product != null)
+                    {
+                        productName = binventorySend.Product.Name;
+                    }
+
+                    decimal q_old = binventorySend.Quantity;
+                    decimal avg_old = binventorySend.Avg;
+                    decimal leftover_old = binventorySend.LeftOver;
+                    decimal ret_value = detail.BaseQuantity * detail.SnapshotAvgCost;
+
+                    decimal b1 = (q_old * avg_old) + leftover_old + ret_value;
+                    decimal b2 = q_old + detail.BaseQuantity;
+                    decimal avg_new = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+                    decimal c1 = avg_new * b2;
+                    decimal leftover_new = b1 - c1;
+
+                    binventorySend.Avg = avg_new;
+                    binventorySend.LeftOver = leftover_new;
+                    binventorySend.Quantity = b2;
+
+                    var ledgerReturn = new InventoryLedger
+                    {
+                        BInventoryId = binventorySend.Id,
+                        DocumentId = document.Id,
+                        PostedAt = DateTime.UtcNow,
+                        PostedBy = userId,
+                        DocumentType = DocumentType.Transfer,
+                        SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                        SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                        SnapshotProductName = productName,
+                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        QuantityDelta = +detail.BaseQuantity,
+                        InventoryValueDelta = +ret_value,
+                        RunningQuantity = b2,
+                        RunningInventoryValue = c1,
+                        RunningAverageCost = avg_new,
+                        UnitCost = detail.SnapshotAvgCost,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _repo.AddInventoryLedgerAsync(ledgerReturn);
+                }
+
+                document.TransferStatus = DocumentTransferStatus.Rejected;
+                #endregion
+            }
+            else if (status == DocumentTransferStatus.Received || status == DocumentTransferStatus.PartialReceived)
+            {
+                #region Kịch bản 2 & 3: Nhận Đủ (Received) hoặc Nhận Một Phần (PartialReceived)
+                foreach (var detail in document.DocumentDetails)
+                {
+                    decimal q_received = detail.BaseQuantity;
+
+                    if (status == DocumentTransferStatus.PartialReceived && receivedDetails != null)
+                    {
+                        var match = receivedDetails.FirstOrDefault(r => r.Id == detail.Id || r.BInventoryId == detail.BInventoryId);
+                        if (match != null)
+                        {
+                            q_received = match.ReceivedQuantity ?? match.Quantity;
+                        }
+                    }
+
+                    string productName = detail.SnapshotProductName;
+
+                    // Quy tắc: Số lượng thực nhận không được âm và không được vượt quá số lượng gửi đi
+                    if (q_received < 0)
+                    {
+                        throw new ArgumentException($"Số lượng thực nhận của mặt hàng '{productName}' không được là số âm ({q_received}).");
+                    }
+
+                    if (q_received > detail.BaseQuantity)
+                    {
+                        throw new ArgumentException($"Số lượng thực nhận của mặt hàng '{productName}' ({q_received:N3}) vượt quá số lượng đã gửi đi ({detail.BaseQuantity:N3}). Phía bên nhận chỉ được nhận tối đa bằng số lượng phía bên gửi.");
+                    }
+
+                    detail.ReceivedQuantity = q_received;
+
+                    if (q_received <= 0) continue;
+
+                    // Lấy hoặc tạo BInventory tại chi nhánh nhận
+                    var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                    if (binventorySend == null) continue;
+
+                    if (string.IsNullOrWhiteSpace(productName) && binventorySend.Product != null)
+                    {
+                        productName = binventorySend.Product.Name;
+                    }
+
+                    var binventoryRec = await _repo.GetBInventoryByBranchAndProductAsync(receivingBranchId, binventorySend.ProductId);
+                    if (binventoryRec == null)
+                    {
+                        binventoryRec = new BInventory
+                        {
+                            BranchId = receivingBranchId,
+                            ProductId = binventorySend.ProductId,
+                            Quantity = 0,
+                            Avg = 0,
+                            LeftOver = 0
+                        };
+                        await _repo.AddBInventoryAsync(binventoryRec);
+                        await _repo.SaveChangesAsync();
+                    }
+
+                    // Quy tắc: Đơn giá UnitPrice luôn được bảo lưu 100% theo bên gửi, bên nhận tuyệt đối không thể thay đổi đơn giá
+                    decimal effectiveUnitPrice = detail.UnitPrice > 0 ? detail.UnitPrice : detail.SnapshotAvgCost;
+                    decimal transfer_value = q_received * effectiveUnitPrice;
+
+                    decimal q_rec_old = binventoryRec.Quantity;
+                    decimal avg_rec_old = binventoryRec.Avg;
+                    decimal leftover_rec_old = binventoryRec.LeftOver;
+
+                    decimal b1 = (q_rec_old * avg_rec_old) + leftover_rec_old + transfer_value;
+                    decimal b2 = q_rec_old + q_received;
+                    decimal avg_rec_new = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+                    decimal c1 = avg_rec_new * b2;
+                    decimal leftover_rec_new = b1 - c1;
+
+                    binventoryRec.Avg = avg_rec_new;
+                    binventoryRec.LeftOver = leftover_rec_new;
+                    binventoryRec.Quantity = b2;
+
+                    var ledgerRec = new InventoryLedger
+                    {
+                        BInventoryId = binventoryRec.Id,
+                        DocumentId = document.Id,
+                        PostedAt = DateTime.UtcNow,
+                        PostedBy = userId,
+                        DocumentType = DocumentType.Transfer,
+                        SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                        SnapshotBranchName = document.SnapshotToBranchName ?? string.Empty,
+                        SnapshotProductName = productName,
+                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        QuantityDelta = +q_received,
+                        InventoryValueDelta = +transfer_value,
+                        RunningQuantity = b2,
+                        RunningInventoryValue = c1,
+                        RunningAverageCost = avg_rec_new,
+                        UnitCost = effectiveUnitPrice,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _repo.AddInventoryLedgerAsync(ledgerRec);
+                }
+
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    document.Note = string.IsNullOrWhiteSpace(document.Note) ? note : $"{document.Note} | {note}";
+                }
+
+                document.TransferStatus = status;
+                #endregion
+            }
+            else
+            {
+                throw new ArgumentException("Trạng thái nhận hàng không hợp lệ. Chỉ chấp nhận Received, PartialReceived hoặc Rejected.");
+            }
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+        #endregion
+
+        #region API Handlers cho Transfer
+        public async Task<Models.Document> CreateTransferPendingAsync(Models.Document document, long userId)
+        {
+            await ValidateTransferBaseRulesAsync(document);
+            var created = await CreatePendingBaseAsync(document, DocumentType.Transfer, userId);
+            await GenerateOrValidateTransferCodeAsync(created);
+            return created;
+        }
+
+        public async Task<Models.Document> CreateTransferCompletedAsync(Models.Document document, long userId)
+        {
+            document.Type = DocumentType.Transfer;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateTransferBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateTransferCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessTransferCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+
+        public async Task<Models.Document> UpdateTransferPendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            var existing = await UpdatePendingBaseAsync(documentId, updatedDocument, DocumentType.Transfer);
+            await ValidateTransferBaseRulesAsync(existing);
+            await GenerateOrValidateTransferCodeAsync(existing);
+            return existing;
+        }
+
+        public async Task<Models.Document> CompleteTransferAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.Transfer)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Chuyển kho với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+            }
+
+            await ValidateTransferBaseRulesAsync(existing);
+            await GenerateOrValidateTransferCodeAsync(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+            await ProcessTransferCompletedAsync(existing, userId);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+
+        public async Task<bool> SoftDeleteTransferPendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.Transfer, userId, deleteNote);
+        }
+
+        public async Task<IEnumerable<Models.Document>> GetTransferListAsync(long branchId)
+        {
+            return await _repo.GetTransferDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #region 6. Nghiệp vụ Chứng từ Xuất dùng nội bộ (Export)
+
+        #region Tạo phiếu Xuất dùng nội bộ ở trạng thái Pending
+        public async Task<Models.Document> CreateExportPendingAsync(Models.Document document, long userId)
+        {
+            return await CreatePendingBaseAsync(document, DocumentType.Export, userId);
+        }
+        #endregion
+
+        #region Cập nhật phiếu Xuất dùng nội bộ Pending
+        public async Task<Models.Document> UpdateExportPendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            return await UpdatePendingBaseAsync(documentId, updatedDocument, DocumentType.Export);
+        }
+        #endregion
+
+        #region Tạo phiếu Xuất dùng nội bộ ở trạng thái Completed trực tiếp
+        public async Task<Models.Document> CreateExportCompletedAsync(Models.Document document, long userId)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất dùng nội bộ không được để trống.");
+            }
+
+            document.Type = DocumentType.Export;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateExportDeleteBaseRulesAsync(document);
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateExportDeleteCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessExportDeleteCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+        #endregion
+
+        #region Chốt phiếu Xuất dùng nội bộ sang Completed
+        public async Task<Models.Document> CompleteExportAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.Export)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Xuất dùng nội bộ với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await ValidateExportDeleteBaseRulesAsync(existing);
+            await GenerateOrValidateExportDeleteCodeAsync(existing);
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+            await ProcessExportDeleteCompletedAsync(existing, userId);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+        #endregion
+
+        #region Xóa mềm phiếu Xuất dùng nội bộ Pending
+        public async Task<bool> SoftDeleteExportPendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.Export, userId, deleteNote);
+        }
+        #endregion
+
+        #region Lấy danh sách phiếu Xuất dùng nội bộ
+        public async Task<IEnumerable<Models.Document>> GetExportListAsync(long branchId)
+        {
+            return await _repo.GetExportDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 6b. Nghiệp vụ Chứng từ Xuất hủy (ExportDelete)
+
+        #region Validation Nghiệp Vụ Phiếu Xuất Hủy (ExportDelete Validation Rules)
+        /// <summary>
+        /// Kiểm tra các quy tắc bắt buộc chung cho phiếu Xuất hủy (ExportDelete):
+        /// - Note & DeleteNote <= 255 ký tự
+        /// - Tối thiểu 1 chi tiết (DocumentDetail), không trùng BInventoryId
+        /// - Product.Type != ProductType.Processed (không được phép chọn loại Processed)
+        /// - Số lượng 0.001 <= Quantity <= 10 tỷ (không cho phép xuất âm hoặc 0)
+        /// - Không liên kết Supplier (PartnerId = null)
+        /// </summary>
+        private async Task ValidateExportDeleteBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất hủy không được để trống.");
+            }
+
+            #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Tối thiểu 1 DocumentDetail
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu xuất hủy bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
+            }
+            #endregion
+
+            #region Quy tắc: Mỗi BInventoryId chỉ xuất hiện 1 lần
+            var duplicateBInventory = document.DocumentDetails
+                .GroupBy(d => d.BInventoryId)
+                .FirstOrDefault(g => g.Count() > 1);
+
+            if (duplicateBInventory != null)
+            {
+                throw new ArgumentException($"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu xuất hủy. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
+            }
+            #endregion
+
+            #region Quy tắc: Kiểm tra loại sản phẩm (!= Processed) và Số lượng (không âm/không 0)
+            const decimal MIN_QTY = 0.001m;
+            const decimal MAX_QTY = 10_000_000_000m;
+            const decimal MAX_AMOUNT = 10_000_000_000m;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                if (binventory.Product == null)
+                {
+                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                }
+
+                var productType = binventory.Product.Type;
+                if (productType == ProductType.Processed)
+                {
+                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép xuất hủy. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
+                }
+
+                if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
+                {
+                    throw new ArgumentException($"Số lượng xuất hủy của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ (không cho phép số âm hoặc 0).");
+                }
+
+                #region Đơn vị tính và UnitConversion
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
+                    {
+                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                    }
+
+                    if (unitConversion.ConversionPoint <= 0)
+                    {
+                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                    }
+
+                    detail.ConversionRate = unitConversion.ConversionPoint;
+                }
+                else
+                {
+                    detail.ConversionRate = 1;
+                }
+                #endregion
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+            }
+            #endregion
+
+            // Xuất hủy không liên kết tới Supplier (PartnerId = null)
+            document.PartnerId = null;
+
+            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
+            if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_AMOUNT)
+            {
+                throw new ArgumentException($"Tổng giá trị phiếu xuất hủy ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
+            }
+            document.TotalAmount = calculatedTotalAmount;
+            document.AmountPaid = 0;
+            document.AmountDue = 0;
+        }
+
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Xuất hủy dựa trên ID (Tiền tố XH).
+        /// </summary>
+        private async Task GenerateOrValidateExportDeleteCodeAsync(Models.Document document)
+        {
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"XH{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"XH{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Thực thi chốt phiếu Xuất hủy Completed:
+        /// - Kiểm tra tồn kho thực tế: detail.BaseQuantity <= binventory.Quantity (nếu quá -> throw InvalidOperationException)
+        /// - Trừ tồn kho: binventory.Quantity -= detail.BaseQuantity
+        /// - Nếu kho về 0 -> Triệt tiêu toàn bộ LeftOver cũ: binventory.LeftOver = 0
+        /// - Ghi Sổ kho InventoryLedger (QuantityDelta âm)
+        /// </summary>
+        private async Task ProcessExportDeleteCompletedAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                decimal q_export = detail.BaseQuantity;
+                if (q_export > binventory.Quantity)
+                {
+                    string productName = binventory.Product?.Name ?? $"BInventory ID {binventory.Id}";
+                    throw new InvalidOperationException($"Số lượng xuất hủy của mặt hàng '{productName}' ({q_export}) vượt quá số lượng tồn kho hiện tại ({binventory.Quantity}). Không cho phép xuất vượt quá tồn kho hoặc xuất âm.");
+                }
+
+                decimal leftover_old = binventory.LeftOver;
+                decimal val_delta;
+
+                // Trừ tồn kho
+                binventory.Quantity -= q_export;
+                detail.SnapshotAvgCost = binventory.Avg;
+
+                if (binventory.Quantity == 0)
+                {
+                    // Khi tồn kho về 0 -> Triệt tiêu toàn bộ LeftOver cũ
+                    val_delta = -((q_export * binventory.Avg) + leftover_old);
+                    binventory.LeftOver = 0;
+                }
+                else
+                {
+                    val_delta = -(q_export * binventory.Avg);
+                }
+
+                // Bản ghi Sổ kho InventoryLedger
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = document.Type,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
+                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    QuantityDelta = -q_export,
+                    InventoryValueDelta = val_delta,
+                    RunningQuantity = binventory.Quantity,
+                    RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                    RunningAverageCost = binventory.Avg,
+                    UnitCost = binventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledger);
+            }
+        }
+        #endregion
+
+        #region API Handlers cho ExportDelete
+        public async Task<Models.Document> CreateExportDeletePendingAsync(Models.Document document, long userId)
+        {
+            await ValidateExportDeleteBaseRulesAsync(document);
+            var created = await CreatePendingBaseAsync(document, DocumentType.ExportDelete, userId);
+            await GenerateOrValidateExportDeleteCodeAsync(created);
+            return created;
+        }
+
+        public async Task<Models.Document> CreateExportDeleteCompletedAsync(Models.Document document, long userId)
+        {
+            document.Type = DocumentType.ExportDelete;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateExportDeleteBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateExportDeleteCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessExportDeleteCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+
+        public async Task<Models.Document> UpdateExportDeletePendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            var existing = await UpdatePendingBaseAsync(documentId, updatedDocument, DocumentType.ExportDelete);
+            await ValidateExportDeleteBaseRulesAsync(existing);
+            await GenerateOrValidateExportDeleteCodeAsync(existing);
+            return existing;
+        }
+
+        public async Task<Models.Document> CompleteExportDeleteAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.ExportDelete)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Xuất hủy với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+            }
+
+            await ValidateExportDeleteBaseRulesAsync(existing);
+            await GenerateOrValidateExportDeleteCodeAsync(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+            await ProcessExportDeleteCompletedAsync(existing, userId);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+
+        public async Task<bool> SoftDeleteExportDeletePendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.ExportDelete, userId, deleteNote);
+        }
+
+        public async Task<IEnumerable<Models.Document>> GetExportDeleteListAsync(long branchId)
+        {
+            return await _repo.GetExportDeleteDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 7. Nghiệp vụ Chứng từ Sản xuất (Production)
+
+        #region Validation Nghiệp Vụ Phiếu Sản Xuất (Production Validation Rules cho Pending & Base)
+        /// <summary>
+        /// Kiểm tra quy tắc cơ bản khi lưu tạm (Pending) cho phiếu Sản xuất (Production):
+        /// - Note & DeleteNote <= 255 ký tự
+        /// - Chứa duy nhất 1 sản phẩm sản xuất chính (thành phẩm Manufactured với FatherId == null)
+        /// - Bắt buộc thành phẩm phải có công thức chi tiết (RecipesDetailed). Nếu không có -> Reject.
+        /// - Số lượng thành phẩm > 0 và <= 10 tỷ (luôn tính theo đơn vị nhỏ nhất: ConversionRate = 1)
+        /// - Không kiểm tra tồn kho NVL và không sinh các dòng chi tiết NVL phụ khi Pending.
+        /// </summary>
+        private async Task ValidateProductionBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ sản xuất không được để trống.");
+            }
+
+            #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Phải có ít nhất 1 DocumentDetail cho thành phẩm chính
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu sản xuất bắt buộc phải có thông tin sản phẩm sản xuất.");
+            }
+
+            // Tìm dòng sản phẩm chính (FatherId == null)
+            var parentDetail = document.DocumentDetails.FirstOrDefault(d => d.FatherId == null);
+            if (parentDetail == null)
+            {
+                parentDetail = document.DocumentDetails.First();
+            }
+
+            var binventory = await _repo.GetBInventoryByIdAsync(parentDetail.BInventoryId);
+            if (binventory == null)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {parentDetail.BInventoryId}");
+            }
+
+            if (binventory.Product == null)
+            {
+                throw new InvalidOperationException($"BInventory ID {parentDetail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+            }
+
+            if (binventory.Product.Type != ProductType.Manufactured)
+            {
+                throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' có loại (ProductType = {binventory.Product.Type}) không phải là sản phẩm sản xuất (Manufactured). Phiếu sản xuất chỉ áp dụng cho sản phẩm loại Manufactured.");
+            }
+
+            // Kiểm tra công thức chi tiết của thành phẩm
+            var recipeItems = await _repo.GetRecipesByParentProductIdAsync(binventory.ProductId);
+            if (recipeItems == null || recipeItems.Count == 0)
+            {
+                throw new ArgumentException($"Sản phẩm sản xuất '{binventory.Product.Name}' chưa có công thức chi tiết (Recipe). Không thể lập phiếu sản xuất.");
+            }
+
+            const decimal MIN_QTY = 0.001m;
+            const decimal MAX_QTY = 10_000_000_000m;
+            if (parentDetail.Quantity < MIN_QTY || parentDetail.Quantity > MAX_QTY)
+            {
+                throw new ArgumentException($"Số lượng sản xuất của sản phẩm '{binventory.Product.Name}' ({parentDetail.Quantity}) không hợp lệ. Số lượng phải lớn hơn 0 và từ 0.001 đến 10 tỷ.");
+            }
+
+            // Luôn dùng đơn vị kho cơ sở nhỏ nhất (ConversionRate = 1)
+            parentDetail.UnitConversionId = null;
+            parentDetail.ConversionRate = 1;
+            parentDetail.BaseQuantity = parentDetail.Quantity;
+            #endregion
+
+            document.PartnerId = null;
+            document.TotalAmount = 0;
+            document.AmountPaid = 0;
+            document.AmountDue = 0;
+        }
+
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Sản xuất dựa trên ID (Tiền tố SX).
+        /// </summary>
+        private async Task GenerateOrValidateProductionCodeAsync(Models.Document document)
+        {
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"SX{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"SX{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Thực thi chốt phiếu Sản xuất Completed:
+        /// 1. Kiểm tra tồn kho nguyên liệu NVL. Từ chối ngay nếu có 1 NVL không đủ tồn kho.
+        /// 2. Tự động sinh/cập nhật các dòng DocumentDetail phụ cho NVL với FatherId trỏ về thành phẩm.
+        /// 3. Trừ tồn kho NVL, ghi nhận thẻ Sổ kho InventoryLedger cho từng NVL (số lượng âm). Nếu tồn NVL về 0 -> reset LeftOver = 0.
+        /// 4. Tính tổng chi phí NVL tiêu hao -> Cộng tồn kho Thành phẩm TP, tính giá vốn trung bình Avg & LeftOver mới cho TP, ghi thẻ Sổ kho InventoryLedger cho TP (số lượng dương).
+        /// </summary>
+        private async Task ProcessProductionCompletedAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            var parentDetail = document.DocumentDetails.FirstOrDefault(d => d.FatherId == null) ?? document.DocumentDetails.First();
+            var parentBinventory = await _repo.GetBInventoryByIdAsync(parentDetail.BInventoryId);
+            if (parentBinventory == null || parentBinventory.Product == null)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy kho thành phẩm BInventory ID: {parentDetail.BInventoryId}");
+            }
+
+            // Lấy danh sách công thức chi tiết
+            var recipeItems = await _repo.GetRecipesByParentProductIdAsync(parentBinventory.ProductId);
+            if (recipeItems == null || recipeItems.Count == 0)
+            {
+                throw new ArgumentException($"Sản phẩm sản xuất '{parentBinventory.Product.Name}' chưa có công thức chi tiết (Recipe).");
+            }
+
+            decimal producedQty = parentDetail.BaseQuantity;
+
+            // Bước 1: Kiểm tra đủ tồn kho từng nguyên liệu
+            var ingredientRequirements = new List<(RecipesDetailed RecipeItem, BInventory IngredientBinventory, decimal RequiredQty)>();
+            foreach (var recipeItem in recipeItems)
+            {
+                decimal requiredQty = producedQty * recipeItem.Quantity;
+                var ingredientBinventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, recipeItem.IngredientProductId);
+
+                if (ingredientBinventory == null)
+                {
+                    string ingredientName = recipeItem.IngredientProduct?.Name ?? $"ProductId {recipeItem.IngredientProductId}";
+                    throw new InvalidOperationException($"Không tìm thấy kho hàng của nguyên liệu '{ingredientName}' tại chi nhánh.");
+                }
+
+                if (requiredQty > ingredientBinventory.Quantity)
+                {
+                    string ingredientName = ingredientBinventory.Product?.Name ?? recipeItem.IngredientProduct?.Name ?? $"ProductId {recipeItem.IngredientProductId}";
+                    throw new InvalidOperationException($"Nguyên liệu '{ingredientName}' không đủ tồn kho để sản xuất. Số lượng cần: {requiredQty:N3}, Tồn kho hiện tại: {ingredientBinventory.Quantity:N3}.");
+                }
+
+                ingredientRequirements.Add((recipeItem, ingredientBinventory, requiredQty));
+            }
+
+            // Xóa các dòng chi tiết NVL cũ (nếu có) để tạo lại chuẩn từ công thức
+            var oldChildDetails = document.DocumentDetails.Where(d => d.FatherId != null).ToList();
+            foreach (var child in oldChildDetails)
+            {
+                document.DocumentDetails.Remove(child);
+            }
+
+            decimal totalProductionCost = 0m;
+
+            // Bước 2 & 3: Xử lý trừ kho NVL, tạo chi tiết phụ và ghi Sổ kho NVL
+            foreach (var (recipeItem, ingredientBinventory, requiredQty) in ingredientRequirements)
+            {
+                string ingredientName = ingredientBinventory.Product?.Name ?? recipeItem.IngredientProduct?.Name ?? string.Empty;
+                string ingredientCode = ingredientBinventory.Product?.SKUCode ?? string.Empty;
+
+                // Tạo dòng DocumentDetail phụ cho nguyên liệu bị dùng
+                var childDetail = new DocumentDetail
+                {
+                    DocumentId = document.Id,
+                    BInventoryId = ingredientBinventory.Id,
+                    FatherId = parentDetail.Id,
+                    UnitConversionId = null,
+                    SnapshotProductName = ingredientName,
+                    SnapshotProductCode = ingredientCode,
+                    SnapshotUnitName = string.Empty,
+                    SnapshotBaseUnitName = string.Empty,
+                    ConversionRate = 1,
+                    Quantity = requiredQty,
+                    BaseQuantity = requiredQty,
+                    UnitPrice = ingredientBinventory.Avg,
+                    SnapshotAvgCost = ingredientBinventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                document.DocumentDetails.Add(childDetail);
+
+                decimal leftover_old = ingredientBinventory.LeftOver;
+                decimal val_delta;
+
+                // Trừ tồn kho NVL
+                ingredientBinventory.Quantity -= requiredQty;
+                decimal ingredientCost = requiredQty * ingredientBinventory.Avg;
+                totalProductionCost += ingredientCost;
+
+                if (ingredientBinventory.Quantity == 0)
+                {
+                    // Nếu NVL về 0 -> Triệt tiêu LeftOver cũ
+                    val_delta = -((requiredQty * ingredientBinventory.Avg) + leftover_old);
+                    ingredientBinventory.LeftOver = 0;
+                }
+                else
+                {
+                    val_delta = -ingredientCost;
+                }
+
+                // Bản ghi Sổ kho InventoryLedger cho NVL bị dùng
+                var ingredientLedger = new InventoryLedger
+                {
+                    BInventoryId = ingredientBinventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.Production,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = ingredientName,
+                    SnapshotUnitName = string.Empty,
+                    QuantityDelta = -requiredQty,
+                    InventoryValueDelta = val_delta,
+                    RunningQuantity = ingredientBinventory.Quantity,
+                    RunningInventoryValue = ingredientBinventory.Quantity == 0 ? 0m : (ingredientBinventory.Quantity * ingredientBinventory.Avg + ingredientBinventory.LeftOver),
+                    RunningAverageCost = ingredientBinventory.Avg,
+                    UnitCost = ingredientBinventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ingredientLedger);
+            }
+
+            // Bước 4: Xử lý cộng kho Thành phẩm TP & Tính giá vốn trung bình TP
+            decimal q_old = parentBinventory.Quantity;
+            decimal avg_old = parentBinventory.Avg;
+            decimal tp_leftover_old = parentBinventory.LeftOver;
+
+            decimal b1 = (q_old * avg_old) + tp_leftover_old + totalProductionCost;
+            decimal b2 = q_old + producedQty;
+
+            decimal tp_avg = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+            decimal c1 = tp_avg * b2;
+            decimal tp_leftover_new = b1 - c1;
+
+            parentBinventory.Avg = tp_avg;
+            parentBinventory.LeftOver = tp_leftover_new;
+            parentBinventory.Quantity = b2;
+
+            parentDetail.SnapshotAvgCost = tp_avg;
+            parentDetail.UnitPrice = (producedQty > 0) ? (totalProductionCost / producedQty) : 0m;
+
+            // Bản ghi Sổ kho InventoryLedger cho Thành phẩm sản xuất
+            var parentLedger = new InventoryLedger
+            {
+                BInventoryId = parentBinventory.Id,
+                DocumentId = document.Id,
+                PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                PostedBy = userId,
+                DocumentType = DocumentType.Production,
+                SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                SnapshotProductName = string.IsNullOrWhiteSpace(parentDetail.SnapshotProductName) && parentBinventory.Product != null ? parentBinventory.Product.Name : parentDetail.SnapshotProductName,
+                SnapshotUnitName = parentDetail.SnapshotUnitName ?? string.Empty,
+                QuantityDelta = +producedQty,
+                InventoryValueDelta = +totalProductionCost,
+                RunningQuantity = b2,
+                RunningInventoryValue = c1,
+                RunningAverageCost = tp_avg,
+                UnitCost = (producedQty > 0) ? (totalProductionCost / producedQty) : tp_avg,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _repo.AddInventoryLedgerAsync(parentLedger);
+        }
+        #endregion
+
+        #region API Handlers cho Production
+        public async Task<Models.Document> CreateProductionPendingAsync(Models.Document document, long userId)
+        {
+            await ValidateProductionBaseRulesAsync(document);
+            var created = await CreatePendingBaseAsync(document, DocumentType.Production, userId);
+            await GenerateOrValidateProductionCodeAsync(created);
+            return created;
+        }
+
+        public async Task<Models.Document> CreateProductionCompletedAsync(Models.Document document, long userId)
+        {
+            document.Type = DocumentType.Production;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateProductionBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateProductionCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessProductionCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+
+        public async Task<Models.Document> UpdateProductionPendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            var existing = await UpdatePendingBaseAsync(documentId, updatedDocument, DocumentType.Production);
+            await ValidateProductionBaseRulesAsync(existing);
+            await GenerateOrValidateProductionCodeAsync(existing);
+            return existing;
+        }
+
+        public async Task<Models.Document> CompleteProductionAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.Production)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Sản xuất với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+            }
+
+            await ValidateProductionBaseRulesAsync(existing);
+            await GenerateOrValidateProductionCodeAsync(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+            await ProcessProductionCompletedAsync(existing, userId);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+
+        public async Task<bool> SoftDeleteProductionPendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.Production, userId, deleteNote);
+        }
+
+        public async Task<IEnumerable<Models.Document>> GetProductionListAsync(long branchId)
+        {
+            return await _repo.GetProductionDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 8. Nghiệp vụ Chứng từ Kiểm kho (Check)
+
+        #region Validation Nghiệp Vụ Phiếu Kiểm Kho (Check Validation Rules)
+        /// <summary>
+        /// Kiểm tra các quy tắc bắt buộc chung cho phiếu Kiểm kho (Check):
+        /// - Note & DeleteNote <= 255 ký tự
+        /// - Tối thiểu 1 chi tiết (DocumentDetail), không trùng BInventoryId
+        /// - Product.Type != ProductType.Processed (chỉ cấm sản phẩm loại Processed)
+        /// - Số lượng kiểm thực tế 0 <= Quantity <= 100 tỷ (cho phép số nhỏ hoặc 0, không cho phép số âm)
+        /// - Snapshot SystemQuantity và ActualQuantity
+        /// </summary>
+        private async Task ValidateCheckBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ kiểm kho không được để trống.");
+            }
+
+            #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Tối thiểu 1 DocumentDetail
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu kiểm kho bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
+            }
+            #endregion
+
+            #region Quy tắc: Mỗi BInventoryId chỉ xuất hiện 1 lần
+            var duplicateBInventory = document.DocumentDetails
+                .GroupBy(d => d.BInventoryId)
+                .FirstOrDefault(g => g.Count() > 1);
+
+            if (duplicateBInventory != null)
+            {
+                throw new ArgumentException($"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu kiểm kho. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
+            }
+            #endregion
+
+            #region Quy tắc: Kiểm tra loại sản phẩm (!= Processed) và Số lượng (0 <= Quantity <= 100 tỷ)
+            const decimal MIN_QTY = 0m;
+            const decimal MAX_QTY = 100_000_000_000m;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                if (binventory.Product == null)
+                {
+                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                }
+
+                var productType = binventory.Product.Type;
+                if (productType == ProductType.Processed)
+                {
+                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép kiểm kho. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
+                }
+
+                if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
+                {
+                    throw new ArgumentException($"Số lượng kiểm thực tế của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Số lượng phải nằm trong khoảng từ 0 đến 100 tỷ.");
+                }
+
+                #region Đơn vị tính và UnitConversion
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
+                    {
+                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                    }
+
+                    if (unitConversion.ConversionPoint <= 0)
+                    {
+                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                    }
+
+                    detail.ConversionRate = unitConversion.ConversionPoint;
+                }
+                else
+                {
+                    detail.ConversionRate = 1;
+                }
+                #endregion
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                detail.SystemQuantity = binventory.Quantity;
+                detail.ActualQuantity = detail.BaseQuantity;
+            }
+            #endregion
+
+            document.PartnerId = null;
+            document.TotalAmount = 0;
+            document.AmountPaid = 0;
+            document.AmountDue = 0;
+        }
+
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Kiểm kho dựa trên ID (Tiền tố KK).
+        /// </summary>
+        private async Task GenerateOrValidateCheckCodeAsync(Models.Document document)
+        {
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"KK{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"KK{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Thực thi chốt phiếu Kiểm kho Completed:
+        /// - Cập nhật tồn kho thực tế: binventory.Quantity = detail.ActualQuantity.Value
+        /// - Nếu actual_q == 0 -> Triệt tiêu toàn bộ LeftOver cũ: binventory.LeftOver = 0
+        /// - Ghi Sổ kho InventoryLedger (QuantityDelta = actual_q - q_system_old)
+        /// </summary>
+        private async Task ProcessCheckCompletedAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                decimal actual_q = detail.ActualQuantity ?? detail.BaseQuantity;
+                decimal system_q = detail.SystemQuantity ?? binventory.Quantity;
+                decimal q_delta = actual_q - system_q;
+
+                decimal leftover_old = binventory.LeftOver;
+                decimal val_delta;
+
+                if (actual_q == 0)
+                {
+                    // Tồn kho thực tế về 0 -> Triệt tiêu toàn bộ LeftOver cũ
+                    val_delta = -((system_q * binventory.Avg) + leftover_old);
+                    binventory.Quantity = 0;
+                    binventory.LeftOver = 0;
+                }
+                else
+                {
+                    binventory.Quantity = actual_q;
+                    val_delta = q_delta * binventory.Avg;
+                }
+
+                detail.SnapshotAvgCost = binventory.Avg;
+
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.Check,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
+                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    QuantityDelta = q_delta,
+                    InventoryValueDelta = val_delta,
+                    RunningQuantity = binventory.Quantity,
+                    RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                    RunningAverageCost = binventory.Avg,
+                    UnitCost = binventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledger);
+            }
+        }
+        #endregion
+
+        #region API Handlers cho Check
+        public async Task<Models.Document> CreateCheckPendingAsync(Models.Document document, long userId)
+        {
+            await ValidateCheckBaseRulesAsync(document);
+            var created = await CreatePendingBaseAsync(document, DocumentType.Check, userId);
+            await GenerateOrValidateCheckCodeAsync(created);
+            return created;
+        }
+
+        public async Task<Models.Document> CreateCheckCompletedAsync(Models.Document document, long userId)
+        {
+            document.Type = DocumentType.Check;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateCheckBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateCheckCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessCheckCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+
+        public async Task<Models.Document> UpdateCheckPendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            var existing = await UpdatePendingBaseAsync(documentId, updatedDocument, DocumentType.Check);
+            await ValidateCheckBaseRulesAsync(existing);
+            await GenerateOrValidateCheckCodeAsync(existing);
+            return existing;
+        }
+
+        public async Task<Models.Document> CompleteCheckAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.Check)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Kiểm kho với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+            }
+
+            await ValidateCheckBaseRulesAsync(existing);
+            await GenerateOrValidateCheckCodeAsync(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+            await ProcessCheckCompletedAsync(existing, userId);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+
+        public async Task<bool> SoftDeleteCheckPendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.Check, userId, deleteNote);
+        }
+
+        public async Task<IEnumerable<Models.Document>> GetCheckListAsync(long branchId)
+        {
+            return await _repo.GetCheckDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #endregion
+
+        #region 9. Nghiệp vụ Chứng từ Điều chỉnh giá vốn (CostAdjustment)
+
+        #region Validation Nghiệp Vụ Phiếu Điều Chỉnh Giá Vốn (CostAdjustment Validation Rules cho Pending & Base)
+        /// <summary>
+        /// Kiểm tra quy tắc cơ bản cho phiếu Điều chỉnh giá vốn (CostAdjustment):
+        /// - Note & DeleteNote <= 255 ký tự
+        /// - Cấm sản phẩm loại ProductType.Processed (chế biến không có kho)
+        /// - Giới hạn số tiền điều chỉnh (V_adj) từ -10,000,000,000 đến +10,000,000,000 (-10 tỷ đến +10 tỷ) và khác 0.
+        /// - Áp dụng cả khi lưu tạm (Pending) và khi chốt (Completed).
+        /// </summary>
+        private async Task ValidateCostAdjustmentBaseRulesAsync(Models.Document document)
+        {
+            if (document == null)
+            {
+                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ điều chỉnh giá vốn không được để trống.");
+            }
+
+            #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
+            if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
+            {
+                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+            }
+            if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
+            {
+                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+            }
+            #endregion
+
+            #region Quy tắc: Danh sách mặt hàng điều chỉnh
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
+            {
+                throw new ArgumentException("Phiếu điều chỉnh giá vốn bắt buộc phải có ít nhất 1 mặt hàng.");
+            }
+
+            const decimal MIN_ADJ_VAL = -10_000_000_000m;
+            const decimal MAX_ADJ_VAL = 10_000_000_000m;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null)
+                {
+                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                }
+
+                if (binventory.Product == null)
+                {
+                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                }
+
+                if (binventory.Product.Type == ProductType.Processed)
+                {
+                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không quản lý tồn kho và không được phép điều chỉnh giá vốn.");
+                }
+
+                decimal adjVal = detail.AdjustedCostDelta ?? detail.UnitPrice;
+                if (adjVal == 0)
+                {
+                    throw new ArgumentException($"Giá trị điều chỉnh của sản phẩm '{binventory.Product.Name}' phải khác 0.");
+                }
+
+                if (adjVal < MIN_ADJ_VAL || adjVal > MAX_ADJ_VAL)
+                {
+                    throw new ArgumentException($"Giá trị điều chỉnh giá vốn của sản phẩm '{binventory.Product.Name}' ({adjVal:N0} VNĐ) không hợp lệ. Hạn mức quy định từ -10 tỷ đến +10 tỷ VNĐ.");
+                }
+
+                // Không sử dụng quy đổi đơn vị tính cho điều chỉnh giá vốn
+                detail.UnitConversionId = null;
+                detail.ConversionRate = 1;
+                detail.AdjustedCostDelta = adjVal;
+                detail.UnitPrice = adjVal;
+            }
+            #endregion
+
+            document.PartnerId = null;
+            document.TotalAmount = 0;
+            document.AmountPaid = 0;
+            document.AmountDue = 0;
+        }
+
+        /// <summary>
+        /// Phát sinh hoặc kiểm tra trùng lặp mã chứng từ cho phiếu Điều chỉnh giá vốn dựa trên ID (Tiền tố DC).
+        /// </summary>
+        private async Task GenerateOrValidateCostAdjustmentCodeAsync(Models.Document document)
+        {
+            if (!string.IsNullOrWhiteSpace(document.Code))
+            {
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                }
+            }
+            else
+            {
+                document.Code = $"DC{document.Id:D6}";
+                bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExists)
+                {
+                    document.Code = $"DC{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Thực thi chốt phiếu Điều chỉnh giá vốn Completed:
+        /// 1. Kiểm tra số lượng tồn kho hiện tại (q > 0). Báo lỗi nếu q == 0.
+        /// 2. Tính tổng giá trị kho hiện tại: V_old = (q * avg_old) + leftover_old.
+        /// 3. Tính tổng giá trị kho mới: V_new = V_old + V_adj.
+        /// 4. Nếu V_adj < 0 làm V_new < 0 (giá trị kho bị âm) -> Ngăn chặn tuyệt đối (Ném lỗi).
+        /// 5. Tính lại Avg_new = Math.Round(V_new / q, 6) và LeftOver_new = V_new - (Avg_new * q).
+        /// 6. Cập nhật BInventory, snapshot detail và tạo bản ghi InventoryLedger với QuantityDelta = 0 và InventoryValueDelta = V_adj.
+        /// </summary>
+        private async Task ProcessCostAdjustmentCompletedAsync(Models.Document document, long userId)
+        {
+            if (document.DocumentDetails == null || document.DocumentDetails.Count == 0) return;
+
+            foreach (var detail in document.DocumentDetails)
+            {
+                var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
+                if (binventory == null) continue;
+
+                string productName = detail.SnapshotProductName;
+                if (string.IsNullOrWhiteSpace(productName) && binventory.Product != null)
+                {
+                    productName = binventory.Product.Name;
+                }
+
+                decimal q = binventory.Quantity;
+                if (q <= 0)
+                {
+                    throw new InvalidOperationException($"Không thể điều chỉnh giá vốn cho sản phẩm '{productName}' vì số lượng tồn kho hiện tại bằng 0 ({q}).");
+                }
+
+                decimal avg_old = binventory.Avg;
+                decimal leftover_old = binventory.LeftOver;
+                decimal v_adj = detail.AdjustedCostDelta ?? detail.UnitPrice;
+
+                decimal v_old_total = (q * avg_old) + leftover_old;
+                decimal v_new_total = v_old_total + v_adj;
+
+                if (v_new_total < 0)
+                {
+                    throw new InvalidOperationException($"Điều chỉnh giảm giá vốn ({v_adj:N0} VNĐ) khiến tổng giá trị tồn kho của sản phẩm '{productName}' bị âm ({v_new_total:N0} VNĐ). Hệ thống ngăn chặn tuyệt đối.");
+                }
+
+                decimal avg_new = Math.Round(v_new_total / q, 6);
+                decimal c1 = avg_new * q;
+                decimal leftover_new = v_new_total - c1;
+
+                binventory.Avg = avg_new;
+                binventory.LeftOver = leftover_new;
+
+                detail.AdjustedCostDelta = v_adj;
+                detail.NewAvgCost = avg_new;
+                detail.SnapshotAvgCost = avg_new;
+
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = document.PostedAt ?? DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.CostAdjustment,
+                    SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
+                    SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
+                    SnapshotProductName = productName,
+                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    QuantityDelta = 0m,
+                    InventoryValueDelta = v_adj,
+                    RunningQuantity = q,
+                    RunningInventoryValue = c1,
+                    RunningAverageCost = avg_new,
+                    UnitCost = avg_new,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledger);
+            }
+        }
+        #endregion
+
+        #region API Handlers cho CostAdjustment
+        public async Task<Models.Document> CreateCostAdjustmentPendingAsync(Models.Document document, long userId)
+        {
+            await ValidateCostAdjustmentBaseRulesAsync(document);
+            var created = await CreatePendingBaseAsync(document, DocumentType.CostAdjustment, userId);
+            await GenerateOrValidateCostAdjustmentCodeAsync(created);
+            return created;
+        }
+
+        public async Task<Models.Document> CreateCostAdjustmentCompletedAsync(Models.Document document, long userId)
+        {
+            document.Type = DocumentType.CostAdjustment;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateCostAdjustmentBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateCostAdjustmentCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            await ProcessCostAdjustmentCompletedAsync(document, userId);
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
+
+        public async Task<Models.Document> UpdateCostAdjustmentPendingAsync(long documentId, Models.Document updatedDocument, long userId)
+        {
+            var existing = await UpdatePendingBaseAsync(documentId, updatedDocument, DocumentType.CostAdjustment);
+            await ValidateCostAdjustmentBaseRulesAsync(existing);
+            await GenerateOrValidateCostAdjustmentCodeAsync(existing);
+            return existing;
+        }
+
+        public async Task<Models.Document> CompleteCostAdjustmentAsync(long documentId, long userId)
+        {
+            var existing = await _repo.GetByIdAsync(documentId);
+            if (existing == null || existing.Type != DocumentType.CostAdjustment)
+            {
+                throw new KeyNotFoundException($"Không tìm thấy chứng từ Điều chỉnh giá vốn với ID: {documentId}");
+            }
+
+            ValidateDocumentNotLocked(existing);
+
+            if (existing.Status != DocumentStatus.Pending)
+            {
+                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+            }
+
+            await ValidateCostAdjustmentBaseRulesAsync(existing);
+            await GenerateOrValidateCostAdjustmentCodeAsync(existing);
+
+            existing.Status = DocumentStatus.Completed;
+            existing.PostedBy = userId;
+            existing.PostedAt = DateTime.UtcNow;
+
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
+            await ProcessCostAdjustmentCompletedAsync(existing, userId);
+
+            _repo.Update(existing);
+            await _repo.SaveChangesAsync();
+            return existing;
+        }
+
+        public async Task<bool> SoftDeleteCostAdjustmentPendingAsync(long documentId, long userId, string deleteNote)
+        {
+            return await SoftDeletePendingBaseAsync(documentId, DocumentType.CostAdjustment, userId, deleteNote);
+        }
+
+        public async Task<IEnumerable<Models.Document>> GetCostAdjustmentListAsync(long branchId)
+        {
+            return await _repo.GetCostAdjustmentDocumentsAsync(branchId);
+        }
+        #endregion
+        #endregion
+        #endregion
+    }
+}
