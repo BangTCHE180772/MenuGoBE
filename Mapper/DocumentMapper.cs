@@ -27,6 +27,8 @@ namespace MenuGoBE.Mapper
                 BranchId = document.BranchId,
                 ToBranchId = document.ToBranchId,
                 PartnerId = document.PartnerId,
+                ParentDocumentId = document.ParentDocumentId,
+                ParentDocumentCode = document.ParentDocument?.Code,
                 PostingSequence = document.PostingSequence,
                 Code = document.Code,
                 Type = document.Type,
@@ -71,6 +73,7 @@ namespace MenuGoBE.Mapper
                 ToBranchId = document.ToBranchId,
                 PartnerId = document.PartnerId,
                 ParentDocumentId = document.ParentDocumentId,
+                ParentDocumentCode = document.ParentDocument?.Code,
                 PostingSequence = document.PostingSequence,
 
                 Code = document.Code,
@@ -177,11 +180,26 @@ namespace MenuGoBE.Mapper
                             SnapshotBaseUnitName = dt.SnapshotBaseUnitName,
                             SnapshotAvgCost = dt.SnapshotAvgCost,
 
+                            // Fallback Display Names (Đảm bảo FE luôn nhận được tên/mã/đơn vị tính dù là phiếu đã chốt hay phiếu nháp)
+                            ProductName = !string.IsNullOrWhiteSpace(dt.SnapshotProductName) 
+                                ? dt.SnapshotProductName 
+                                : (dt.BInventory?.Product?.Name ?? string.Empty),
+                            ProductCode = !string.IsNullOrWhiteSpace(dt.SnapshotProductCode) 
+                                ? dt.SnapshotProductCode 
+                                : (dt.BInventory?.Product?.SKUCode ?? string.Empty),
+                            UnitName = !string.IsNullOrWhiteSpace(dt.SnapshotUnitName) 
+                                ? dt.SnapshotUnitName 
+                                : (dt.UnitConversion?.Unit?.Name ?? dt.BInventory?.Product?.UnitConversions?.FirstOrDefault(uc => uc.BaseId == null)?.Unit?.Name ?? string.Empty),
+                            BaseUnitName = !string.IsNullOrWhiteSpace(dt.SnapshotBaseUnitName) 
+                                ? dt.SnapshotBaseUnitName 
+                                : (dt.BInventory?.Product?.UnitConversions?.FirstOrDefault(uc => uc.BaseId == null)?.Unit?.Name ?? string.Empty),
+
                             // Quantities & Prices
                             ConversionRate = dt.ConversionRate,
                             Quantity = dt.Quantity,
                             BaseQuantity = dt.BaseQuantity,
                             UnitPrice = dt.UnitPrice,
+                            TotalPrice = dt.Quantity * dt.UnitPrice,
 
                             // Special quantities
                             SystemQuantity = dt.SystemQuantity,
@@ -195,8 +213,8 @@ namespace MenuGoBE.Mapper
                             CreatedAt = dt.CreatedAt
                         };
 
-                        // Nếu là phiếu Pending, bổ sung thêm dữ liệu Current Live Data từ BInventory & Product & UnitConversion
-                        if (isPending && dt.BInventory != null)
+                        // Bổ sung dữ liệu Current Live Data từ BInventory & Product & UnitConversion nếu có
+                        if (dt.BInventory != null)
                         {
                             var baseUnitConv = dt.BInventory.Product?.UnitConversions?.FirstOrDefault(uc => uc.BaseId == null);
 

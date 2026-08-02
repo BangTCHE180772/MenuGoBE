@@ -141,6 +141,11 @@ namespace MenuGoBE.Service.Document
             document.SnapshotCreatedByName = null;
             document.SnapshotCreatedByUsername = null;
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = string.Empty;
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
             return document;
@@ -1107,6 +1112,74 @@ namespace MenuGoBE.Service.Document
         }
         #endregion
 
+        #region Lấy thông tin chi tiết phiếu Nhập kho cho tạo phiếu Trả hàng
+        /// <summary>
+        /// Lấy thông tin dòng chi tiết của phiếu Nhập kho (đã Completed) kèm số lượng đã trả tích lũy.
+        /// Toàn bộ dữ liệu sản phẩm lấy từ Snapshot của phiếu Nhập đã chốt (không phụ thuộc master data hiện tại).
+        /// </summary>
+        public async Task<Dtos.Document.ImportReturnDetailsDto?> GetImportReturnDetailsAsync(long importDocumentId)
+        {
+            var importDoc = await _repo.GetByIdAsync(importDocumentId);
+            if (importDoc == null || importDoc.Type != DocumentType.Import)
+            {
+                return null;
+            }
+
+            if (importDoc.Status != DocumentStatus.Completed)
+            {
+                throw new InvalidOperationException($"Phiếu Nhập kho #{importDoc.Code} chưa ở trạng thái chốt kho (Completed). Chỉ có thể trả hàng cho phiếu đã chốt.");
+            }
+
+            // Lấy số lượng đã trả tích lũy theo từng FatherId (dòng chi tiết phiếu Nhập gốc)
+            var previouslyReturnedMap = await _repo.GetPreviouslyReturnedQuantitiesAsync(importDoc.Id);
+
+            var result = new Dtos.Document.ImportReturnDetailsDto
+            {
+                ImportDocumentId = importDoc.Id,
+                ImportDocumentCode = importDoc.Code ?? string.Empty,
+                PartnerId = importDoc.PartnerId,
+                // Tên NCC: dùng Snapshot nếu có
+                PartnerName = importDoc.SnapshotPartnerName ?? string.Empty,
+                Details = new List<Dtos.Document.ImportReturnDetailItemDto>()
+            };
+
+            if (importDoc.DocumentDetails != null)
+            {
+                foreach (var detail in importDoc.DocumentDetails)
+                {
+                    // Số lượng (BaseQuantity) đã trả tích lũy theo dòng này
+                    decimal alreadyReturnedBase = previouslyReturnedMap.GetValueOrDefault(detail.Id, 0m);
+
+                    // Số lượng BaseQuantity còn được trả
+                    decimal remainingBase = Math.Max(0m, detail.BaseQuantity - alreadyReturnedBase);
+
+                    // Quy về đơn vị tính (chia cho ConversionRate)
+                    decimal convRate = detail.ConversionRate > 0 ? detail.ConversionRate : 1m;
+                    decimal maxReturnInUnit = Math.Round(remainingBase / convRate, 6);
+
+                    result.Details.Add(new Dtos.Document.ImportReturnDetailItemDto
+                    {
+                        Id = detail.Id,
+                        BInventoryId = detail.BInventoryId,
+                        UnitConversionId = detail.UnitConversionId,
+                        // Hoàn toàn dựa vào Snapshot của phiếu Nhập đã chốt
+                        ProductName = detail.SnapshotProductName ?? string.Empty,
+                        ProductCode = detail.SnapshotProductCode ?? string.Empty,
+                        UnitName = detail.SnapshotUnitName ?? string.Empty,
+                        ConversionRate = convRate,
+                        Quantity = detail.Quantity,
+                        BaseQuantity = detail.BaseQuantity,
+                        UnitPrice = detail.UnitPrice,
+                        AlreadyReturnedBaseQuantity = alreadyReturnedBase,
+                        MaxReturnQuantity = maxReturnInUnit
+                    });
+                }
+            }
+
+            return result;
+        }
+        #endregion
+
         #endregion
 
         #region 3. Nghiệp vụ Chứng từ Xuất bán hàng (Sale)
@@ -1274,8 +1347,7 @@ namespace MenuGoBE.Service.Document
 
             foreach (var recipe in recipes)
             {
-                var binventoryIngredient = await _repo.GetBInventoryByBranchAndProductAsync(0, recipe.IngredientProductId);
-                var ingredientProduct = binventoryIngredient?.Product;
+                var ingredientProduct = recipe.IngredientProduct;
                 if (ingredientProduct != null && ingredientProduct.Type == ProductType.Processed)
                 {
                     await ValidateCircularDependencyAsync(recipe.IngredientProductId, new HashSet<long>(ancestorPath));
@@ -1307,13 +1379,7 @@ namespace MenuGoBE.Service.Document
             {
                 decimal neededQty = recipe.Quantity * multiplierQty;
 
-                var binventoryIngredient = await _repo.GetBInventoryByBranchAndProductAsync(0, recipe.IngredientProductId);
-                var ingredientProduct = binventoryIngredient?.Product;
-                if (ingredientProduct == null)
-                {
-                    var tempBinventory = await _repo.GetBInventoryByIdAsync(recipe.IngredientProductId);
-                    ingredientProduct = tempBinventory?.Product;
-                }
+                var ingredientProduct = recipe.IngredientProduct;
 
                 if (ingredientProduct == null)
                 {
@@ -3066,6 +3132,11 @@ namespace MenuGoBE.Service.Document
             document.CreatedAt = DateTime.UtcNow;
             document.PostedAt = DateTime.UtcNow;
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = string.Empty;
+            }
+
             await ValidateCheckBaseRulesAsync(document);
 
             await _repo.AddAsync(document);
@@ -3186,22 +3257,43 @@ namespace MenuGoBE.Service.Document
                     throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không quản lý tồn kho và không được phép điều chỉnh giá vốn.");
                 }
 
-                decimal adjVal = detail.AdjustedCostDelta ?? detail.UnitPrice;
-                if (adjVal == 0)
+                decimal newAvgCostVal = detail.NewAvgCost ?? 0m;
+
+                if (newAvgCostVal < 0)
                 {
-                    throw new ArgumentException($"Giá trị điều chỉnh của sản phẩm '{binventory.Product.Name}' phải khác 0.");
+                    throw new ArgumentException($"Giá vốn mới của sản phẩm '{binventory.Product.Name}' không được nhỏ hơn 0.");
                 }
 
-                if (adjVal < MIN_ADJ_VAL || adjVal > MAX_ADJ_VAL)
+                decimal q = binventory.Quantity;
+                if (q <= 0)
                 {
-                    throw new ArgumentException($"Giá trị điều chỉnh giá vốn của sản phẩm '{binventory.Product.Name}' ({adjVal:N0} VNĐ) không hợp lệ. Hạn mức quy định từ -10 tỷ đến +10 tỷ VNĐ.");
+                    throw new InvalidOperationException($"Không thể điều chỉnh giá vốn cho sản phẩm '{binventory.Product.Name}' vì số lượng tồn kho hiện tại không lớn hơn 0 (Tồn kho: {q}).");
+                }
+
+                // Nếu NewAvgCost chưa có nhưng có AdjustedCostDelta/UnitPrice (gọi từ code cũ), tự tính NewAvgCost
+                if (!detail.NewAvgCost.HasValue || detail.NewAvgCost.Value == 0)
+                {
+                    if ((detail.AdjustedCostDelta.HasValue && detail.AdjustedCostDelta.Value != 0) || detail.UnitPrice != 0)
+                    {
+                        decimal oldVal = detail.AdjustedCostDelta ?? detail.UnitPrice;
+                        newAvgCostVal = binventory.Avg + (oldVal / q);
+                        detail.NewAvgCost = newAvgCostVal;
+                    }
+                }
+
+                decimal avg_old = binventory.Avg;
+                decimal v_adj = (newAvgCostVal - avg_old) * q;
+
+                if (v_adj < MIN_ADJ_VAL || v_adj > MAX_ADJ_VAL)
+                {
+                    throw new ArgumentException($"Giá trị điều chỉnh giá vốn của sản phẩm '{binventory.Product.Name}' ({v_adj:N0} VNĐ) không hợp lệ. Hạn mức quy định từ -10 tỷ đến +10 tỷ VNĐ.");
                 }
 
                 // Không sử dụng quy đổi đơn vị tính cho điều chỉnh giá vốn
                 detail.UnitConversionId = null;
                 detail.ConversionRate = 1;
-                detail.AdjustedCostDelta = adjVal;
-                detail.UnitPrice = adjVal;
+                detail.AdjustedCostDelta = v_adj;
+                detail.UnitPrice = v_adj;
             }
             #endregion
 
@@ -3239,12 +3331,11 @@ namespace MenuGoBE.Service.Document
 
         /// <summary>
         /// Thực thi chốt phiếu Điều chỉnh giá vốn Completed:
-        /// 1. Kiểm tra số lượng tồn kho hiện tại (q > 0). Báo lỗi nếu q == 0.
-        /// 2. Tính tổng giá trị kho hiện tại: V_old = (q * avg_old) + leftover_old.
-        /// 3. Tính tổng giá trị kho mới: V_new = V_old + V_adj.
-        /// 4. Nếu V_adj < 0 làm V_new < 0 (giá trị kho bị âm) -> Ngăn chặn tuyệt đối (Ném lỗi).
-        /// 5. Tính lại Avg_new = Math.Round(V_new / q, 6) và LeftOver_new = V_new - (Avg_new * q).
-        /// 6. Cập nhật BInventory, snapshot detail và tạo bản ghi InventoryLedger với QuantityDelta = 0 và InventoryValueDelta = V_adj.
+        /// 1. Kiểm tra số lượng tồn kho hiện tại (q > 0). Báo lỗi nếu q <= 0.
+        /// 2. Kiểm tra giá vốn mới (NewAvgCost >= 0).
+        /// 3. Tính chênh lệch tổng tiền kho theo yêu cầu: V_adj = (Giá mới - Giá cũ) * q.
+        /// 4. Cập nhật BInventory.Avg = NewAvgCost, BInventory.LeftOver = 0.
+        /// 5. Tạo bản ghi InventoryLedger với QuantityDelta = 0 và InventoryValueDelta = V_adj.
         /// </summary>
         private async Task ProcessCostAdjustmentCompletedAsync(Models.Document document, long userId)
         {
@@ -3264,29 +3355,26 @@ namespace MenuGoBE.Service.Document
                 decimal q = binventory.Quantity;
                 if (q <= 0)
                 {
-                    throw new InvalidOperationException($"Không thể điều chỉnh giá vốn cho sản phẩm '{productName}' vì số lượng tồn kho hiện tại bằng 0 ({q}).");
+                    throw new InvalidOperationException($"Không thể điều chỉnh giá vốn cho sản phẩm '{productName}' vì số lượng tồn kho hiện tại không lớn hơn 0 (Tồn kho: {q}).");
+                }
+
+                decimal newAvgCostVal = detail.NewAvgCost ?? 0m;
+
+                if (newAvgCostVal < 0)
+                {
+                    throw new ArgumentException($"Giá vốn mới của sản phẩm '{productName}' không được nhỏ hơn 0.");
                 }
 
                 decimal avg_old = binventory.Avg;
-                decimal leftover_old = binventory.LeftOver;
-                decimal v_adj = detail.AdjustedCostDelta ?? detail.UnitPrice;
-
-                decimal v_old_total = (q * avg_old) + leftover_old;
-                decimal v_new_total = v_old_total + v_adj;
-
-                if (v_new_total < 0)
-                {
-                    throw new InvalidOperationException($"Điều chỉnh giảm giá vốn ({v_adj:N0} VNĐ) khiến tổng giá trị tồn kho của sản phẩm '{productName}' bị âm ({v_new_total:N0} VNĐ). Hệ thống ngăn chặn tuyệt đối.");
-                }
-
-                decimal avg_new = Math.Round(v_new_total / q, 6);
-                decimal c1 = avg_new * q;
-                decimal leftover_new = v_new_total - c1;
+                decimal avg_new = newAvgCostVal;
+                decimal v_adj = (avg_new - avg_old) * q;
+                decimal v_new_total = avg_new * q;
 
                 binventory.Avg = avg_new;
-                binventory.LeftOver = leftover_new;
+                binventory.LeftOver = 0m;
 
                 detail.AdjustedCostDelta = v_adj;
+                detail.UnitPrice = v_adj;
                 detail.NewAvgCost = avg_new;
                 detail.SnapshotAvgCost = avg_new;
 
@@ -3304,7 +3392,7 @@ namespace MenuGoBE.Service.Document
                     QuantityDelta = 0m,
                     InventoryValueDelta = v_adj,
                     RunningQuantity = q,
-                    RunningInventoryValue = c1,
+                    RunningInventoryValue = v_new_total,
                     RunningAverageCost = avg_new,
                     UnitCost = avg_new,
                     CreatedAt = DateTime.UtcNow
@@ -3332,6 +3420,11 @@ namespace MenuGoBE.Service.Document
             document.PostedBy = userId;
             document.CreatedAt = DateTime.UtcNow;
             document.PostedAt = DateTime.UtcNow;
+
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = string.Empty;
+            }
 
             await ValidateCostAdjustmentBaseRulesAsync(document);
 

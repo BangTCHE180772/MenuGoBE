@@ -59,6 +59,7 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.Partner)
                     .ThenInclude(p => p.Address)
                 .Include(d => d.CashFlows)
+                .Include(d => d.ParentDocument)
                 .Include(d => d.Creator)
                 .Include(d => d.Poster)
                 .Include(d => d.Deleter)
@@ -260,6 +261,7 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.Partner)
                     .ThenInclude(p => p.Address)
                 .Include(d => d.CashFlows)
+                .Include(d => d.ParentDocument)
                 .Include(d => d.Creator)
                 .Where(d => d.BranchId == branchId);
 

@@ -103,6 +103,14 @@ namespace MenuGoBE.Interface.Services.Document
         Task<IEnumerable<Models.Document>> GetReturnListAsync(long branchId);
         #endregion
 
+        #region Lấy thông tin chi tiết phiếu Nhập kho cho tạo phiếu Trả hàng
+        /// <summary>
+        /// Lấy thông tin dòng chi tiết của phiếu Nhập kho (đã Completed) kèm số lượng đã trả tích lũy,
+        /// phục vụ màn hình tạo phiếu Trả hàng NCC.
+        /// </summary>
+        Task<Dtos.Document.ImportReturnDetailsDto?> GetImportReturnDetailsAsync(long importDocumentId);
+        #endregion
+
         #endregion
 
         #region 3. Nghiệp vụ Chứng từ Xuất bán hàng (Sale)

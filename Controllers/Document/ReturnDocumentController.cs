@@ -48,6 +48,7 @@ namespace MenuGoBE.Controllers.Document
         /// Lấy chi tiết 1 phiếu Trả hàng NCC theo ID (Trả về DocumentResponseDto).
         /// </summary>
         [HttpGet("{id:long}")]
+        [HttpGet("/api/document/return/{id:long}")]
         public async Task<IActionResult> GetReturnById(long id)
         {
             if (!ValidateUserToken(out _, out var errorResult))

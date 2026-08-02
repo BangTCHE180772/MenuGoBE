@@ -16,6 +16,8 @@ namespace MenuGoBE.Dtos.Document
         public long BranchId { get; set; }
         public long? ToBranchId { get; set; }
         public long? PartnerId { get; set; }
+        public long? ParentDocumentId { get; set; }
+        public string? ParentDocumentCode { get; set; }
         public long PostingSequence { get; set; }
 
         public string Code { get; set; } = string.Empty;
@@ -63,6 +65,7 @@ namespace MenuGoBE.Dtos.Document
         public long? ToBranchId { get; set; }
         public long? PartnerId { get; set; }
         public long? ParentDocumentId { get; set; }
+        public string? ParentDocumentCode { get; set; }
         public long PostingSequence { get; set; }
         #endregion
 
