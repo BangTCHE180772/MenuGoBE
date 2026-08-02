@@ -2,6 +2,7 @@ using AutoMapper;
 using MenuGoBE.Data;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using Microsoft.EntityFrameworkCore;
@@ -534,6 +535,7 @@ namespace MenuGoBE.Service
                                            .Select(g => new { ProductId = g.Key, Quantity = g.Sum(d => d.Quantity), Price = g.First().Price })
                                            .ToList();
 
+#if FALSE
                 var document = new MenuGoBE.Models.Document
                 {
                     BranchId = branchId.Value,
@@ -727,6 +729,7 @@ namespace MenuGoBE.Service
                         cashFlowDetails
                     );
                 }
+#endif
             }
 
             await _repo.SaveChangesAsync();
