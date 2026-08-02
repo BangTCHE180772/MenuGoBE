@@ -1,29 +1,33 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using MenuGoBE.Dtos.Document;
 using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Controllers.Document
 {
     /// <summary>
     /// Controller chuyên biệt quản lý nghiệp vụ Chứng từ Trả hàng NCC (Return Document).
+    /// Chuẩn hóa sử dụng DTO yêu cầu (ReturnDocumentCreateDto) và DTO phản hồi (DocumentResponseDto).
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class ReturnDocumentController : BaseApiController
     {
-        #region 0. Constructor & Dependency Injection
         private readonly IDocumentService _documentService;
 
         public ReturnDocumentController(IDocumentService documentService)
         {
             _documentService = documentService;
         }
-        #endregion
 
-        #region 1. Query APIs (Truy vấn Phiếu Trả hàng NCC)
+        #region GET api/returndocument (Lấy danh sách phiếu trả hàng NCC DTO)
         /// <summary>
-        /// Lấy danh sách phiếu Trả hàng NCC theo Chi nhánh.
+        /// Lấy danh sách phiếu Trả hàng NCC thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
         [HttpGet]
         [HttpGet("/api/document/return")]
@@ -34,32 +38,74 @@ namespace MenuGoBE.Controllers.Document
                 return errorResult!;
             }
 
-            var result = await _documentService.GetReturnListAsync(branchId);
+            var result = await _documentService.GetDocumentListDtosAsync(branchId, DocumentType.Return);
             return Ok(result);
         }
         #endregion
 
-        #region 2. Create APIs (Tạo mới Phiếu Trả hàng NCC)
+        #region GET api/returndocument/{id} (Lấy chi tiết phiếu trả hàng NCC DTO)
         /// <summary>
-        /// Tạo & Chốt trực tiếp phiếu Trả hàng NCC.
-        /// Trích xuất Creator User ID trực tiếp từ Token Access.
+        /// Lấy chi tiết 1 phiếu Trả hàng NCC theo ID (Trả về DocumentResponseDto).
         /// </summary>
-        [HttpPost("completed")]
-        [HttpPost("/api/document/return/completed")]
-        public async Task<IActionResult> CreateReturnCompleted([FromBody] Models.Document document)
+        [HttpGet("{id:long}")]
+        public async Task<IActionResult> GetReturnById(long id)
         {
-            if (document == null)
-            {
-                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
-            }
-
-            if (!ValidateUserAndBranchToken(document.BranchId, out long userId, out var errorResult))
+            if (!ValidateUserToken(out _, out var errorResult))
             {
                 return errorResult!;
             }
 
-            var result = await _documentService.CreateReturnCompletedAsync(document, userId);
+            var result = await _documentService.GetDocumentByIdDtoAsync(id);
+            if (result == null || result.Type != DocumentType.Return)
+            {
+                return NotFound(new { message = $"Không tìm thấy phiếu Trả hàng NCC với ID: {id}" });
+            }
+
             return Ok(result);
+        }
+        #endregion
+
+        #region POST api/returndocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        /// <summary>
+        /// Tạo và Chốt trực tiếp phiếu Trả hàng NCC sang Completed sử dụng ReturnDocumentCreateDto.
+        /// </summary>
+        [HttpPost("completed")]
+        [HttpPost("/api/document/return/completed")]
+        public async Task<IActionResult> CreateReturnCompleted([FromBody] ReturnDocumentCreateDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
+
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var document = new Models.Document
+            {
+                BranchId = dto.BranchId,
+                PartnerId = dto.PartnerId,
+                ParentDocumentId = dto.ParentDocumentId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                AmountPaid = dto.AmountPaid,
+                Type = DocumentType.Return,
+                DocumentDetails = (dto.Details ?? new List<ReturnDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
+                {
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    FatherId = d.FatherId,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Note = d.Note
+                }).ToList()
+            };
+
+            var createdDoc = await _documentService.CreateReturnCompletedAsync(document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(createdDoc.Id);
+            return Ok(responseDto ?? (object)createdDoc);
         }
         #endregion
     }

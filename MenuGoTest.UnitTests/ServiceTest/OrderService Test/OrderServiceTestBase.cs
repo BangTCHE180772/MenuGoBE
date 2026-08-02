@@ -1,6 +1,7 @@
 using AutoMapper;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Service;

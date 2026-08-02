@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using MenuGoBE.Dtos.Document;
 using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
@@ -9,93 +12,193 @@ namespace MenuGoBE.Controllers.Document
 {
     /// <summary>
     /// Controller chuyên biệt quản lý nghiệp vụ Chứng từ Chuyển kho (Transfer Document).
+    /// Chuẩn hóa sử dụng DTO yêu cầu (TransferDocumentCreateDto, TransferDocumentUpdateDto, TransferReceiptRequestDto) và DTO phản hồi (DocumentResponseDto).
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class TransferDocumentController : BaseApiController
     {
-        #region 0. Constructor & Dependency Injection
         private readonly IDocumentService _documentService;
 
         public TransferDocumentController(IDocumentService documentService)
         {
             _documentService = documentService;
         }
-        #endregion
 
-        #region 1. Query APIs (Truy vấn Phiếu Chuyển kho)
+        #region GET api/transferdocument (Lấy danh sách phiếu Chuyển kho DTO)
         /// <summary>
-        /// Lấy danh sách phiếu Chuyển kho theo Chi nhánh gửi.
+        /// Lấy danh sách phiếu Chuyển kho thuộc chi nhánh gửi (Trả về List DTO gọn nhẹ).
         /// </summary>
         [HttpGet]
         [HttpGet("/api/document/transfer")]
         public async Task<IActionResult> GetTransferList([FromQuery] long branchId)
         {
-            var result = await _documentService.GetTransferListAsync(branchId);
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var result = await _documentService.GetDocumentListDtosAsync(branchId, DocumentType.Transfer);
             return Ok(result);
         }
         #endregion
 
-        #region 2. Create APIs (Tạo mới Phiếu Chuyển kho: Nháp & Chốt)
+        #region GET api/transferdocument/{id} (Lấy chi tiết phiếu Chuyển kho DTO)
         /// <summary>
-        /// Tạo mới phiếu Chuyển kho ở trạng thái Pending.
-        /// Trích xuất Creator User ID trực tiếp từ Token Access.
+        /// Lấy chi tiết 1 phiếu Chuyển kho theo ID (Trả về DocumentResponseDto).
+        /// </summary>
+        [HttpGet("{id:long}")]
+        public async Task<IActionResult> GetTransferById(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var result = await _documentService.GetDocumentByIdDtoAsync(id);
+            if (result == null || result.Type != DocumentType.Transfer)
+            {
+                return NotFound(new { message = $"Không tìm thấy phiếu Chuyển kho với ID: {id}" });
+            }
+
+            return Ok(result);
+        }
+        #endregion
+
+        #region POST api/transferdocument/pending (Tạo phiếu nháp theo DTO)
+        /// <summary>
+        /// Tạo mới phiếu Chuyển kho ở trạng thái Pending (Lưu tạm) sử dụng TransferDocumentCreateDto.
         /// </summary>
         [HttpPost("pending")]
         [HttpPost("/api/document/transfer/pending")]
-        public async Task<IActionResult> CreateTransferPending([FromBody] Models.Document document)
+        public async Task<IActionResult> CreateTransferPending([FromBody] TransferDocumentCreateDto dto)
         {
-            if (!ValidateUserToken(out long userId, out var errorResult))
+            if (dto == null)
+            {
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
+
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
             {
                 return errorResult!;
             }
 
-            var result = await _documentService.CreateTransferPendingAsync(document, userId);
-            return Ok(result);
-        }
-
-        /// <summary>
-        /// Tạo và Chốt trực tiếp phiếu Chuyển kho sang Completed tại Chi nhánh Gửi.
-        /// Trích xuất Creator User ID trực tiếp từ Token Access.
-        /// </summary>
-        [HttpPost("completed")]
-        [HttpPost("/api/document/transfer/completed")]
-        public async Task<IActionResult> CreateTransferCompleted([FromBody] Models.Document document)
-        {
-            if (!ValidateUserToken(out long userId, out var errorResult))
+            var document = new Models.Document
             {
-                return errorResult!;
-            }
+                BranchId = dto.BranchId,
+                ToBranchId = dto.ToBranchId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                Type = DocumentType.Transfer,
+                DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
+                {
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    Quantity = d.Quantity,
+                    Note = d.Note
+                }).ToList()
+            };
 
-            var result = await _documentService.CreateTransferCompletedAsync(document, userId);
-            return Ok(result);
+            var createdDoc = await _documentService.CreateTransferPendingAsync(document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(createdDoc.Id);
+            return Ok(responseDto ?? (object)createdDoc);
         }
         #endregion
 
-        #region 3. Update & State Transition APIs (Cập nhật & Xử lý Chuyển/Nhận hàng)
+        #region POST api/transferdocument/completed (Tạo & Chốt trực tiếp theo DTO)
         /// <summary>
-        /// Cập nhật phiếu Chuyển kho ở trạng thái Pending.
-        /// Trích xuất Creator User ID trực tiếp từ Token Access.
+        /// Tạo và Chốt trực tiếp phiếu Chuyển kho sang Completed tại chi nhánh gửi sử dụng TransferDocumentCreateDto.
         /// </summary>
-        [HttpPut("pending/{id}")]
-        [HttpPut("/api/document/transfer/pending/{id}")]
-        public async Task<IActionResult> UpdateTransferPending(long id, [FromBody] Models.Document document)
+        [HttpPost("completed")]
+        [HttpPost("/api/document/transfer/completed")]
+        public async Task<IActionResult> CreateTransferCompleted([FromBody] TransferDocumentCreateDto dto)
         {
-            if (!ValidateUserToken(out long userId, out var errorResult))
+            if (dto == null)
+            {
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
+
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
             {
                 return errorResult!;
             }
 
-            var result = await _documentService.UpdateTransferPendingAsync(id, document, userId);
-            return Ok(result);
-        }
+            var document = new Models.Document
+            {
+                BranchId = dto.BranchId,
+                ToBranchId = dto.ToBranchId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                Type = DocumentType.Transfer,
+                DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
+                {
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    Quantity = d.Quantity,
+                    Note = d.Note
+                }).ToList()
+            };
 
+            var createdDoc = await _documentService.CreateTransferCompletedAsync(document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(createdDoc.Id);
+            return Ok(responseDto ?? (object)createdDoc);
+        }
+        #endregion
+
+        #region PUT api/transferdocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        /// <summary>
+        /// Cập nhật phiếu Chuyển kho ở trạng thái Pending sử dụng TransferDocumentUpdateDto.
+        /// </summary>
+        [HttpPut("pending/{id:long}")]
+        [HttpPut("/api/document/transfer/pending/{id:long}")]
+        public async Task<IActionResult> UpdateTransferPending(long id, [FromBody] TransferDocumentUpdateDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
+
+            var existingDoc = await _documentService.GetDocumentByIdDtoAsync(id);
+            if (existingDoc == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy phiếu Chuyển kho với ID: {id}" });
+            }
+
+            if (!ValidateUserAndBranchToken(existingDoc.BranchId, out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var document = new Models.Document
+            {
+                Id = id,
+                BranchId = existingDoc.BranchId,
+                ToBranchId = dto.ToBranchId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                Type = DocumentType.Transfer,
+                DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailUpdateDto>()).Select(d => new Models.DocumentDetail
+                {
+                    Id = d.Id ?? 0,
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    Quantity = d.Quantity,
+                    Note = d.Note
+                }).ToList()
+            };
+
+            var updatedDoc = await _documentService.UpdateTransferPendingAsync(id, document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(updatedDoc.Id);
+            return Ok(responseDto ?? (object)updatedDoc);
+        }
+        #endregion
+
+        #region POST api/transferdocument/{id}/complete (Chốt phiếu nháp tại chi nhánh gửi)
         /// <summary>
         /// Chốt phiếu Chuyển kho Pending -> Completed tại Chi nhánh Gửi.
-        /// Trích xuất Creator User ID trực tiếp từ Token Access.
         /// </summary>
-        [HttpPost("{id}/complete")]
-        [HttpPost("/api/document/transfer/{id}/complete")]
+        [HttpPost("{id:long}/complete")]
+        [HttpPost("/api/document/transfer/{id:long}/complete")]
         public async Task<IActionResult> CompleteTransfer(long id)
         {
             if (!ValidateUserToken(out long userId, out var errorResult))
@@ -103,17 +206,19 @@ namespace MenuGoBE.Controllers.Document
                 return errorResult!;
             }
 
-            var result = await _documentService.CompleteTransferAsync(id, userId);
-            return Ok(result);
+            var completedDoc = await _documentService.CompleteTransferAsync(id, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(completedDoc.Id);
+            return Ok(responseDto ?? (object)completedDoc);
         }
+        #endregion
 
+        #region POST api/transferdocument/{id}/receive (Chi nhánh nhận xử lý nhận/từ chối hàng)
         /// <summary>
         /// Xử lý nhận hàng / từ chối nhận hàng tại Chi nhánh Nhận khi phiếu đang ở trạng thái InTransit.
-        /// Chấp nhận 3 trạng thái: Received, PartialReceived, Rejected.
         /// </summary>
-        [HttpPost("{id}/receive")]
-        [HttpPost("/api/document/transfer/{id}/receive")]
-        public async Task<IActionResult> ProcessTransferReceipt(long id, [FromBody] TransferReceiptRequest request)
+        [HttpPost("{id:long}/receive")]
+        [HttpPost("/api/document/transfer/{id:long}/receive")]
+        public async Task<IActionResult> ProcessTransferReceipt(long id, [FromBody] TransferReceiptRequestDto request)
         {
             if (!ValidateUserToken(out long userId, out var errorResult))
             {
@@ -125,18 +230,24 @@ namespace MenuGoBE.Controllers.Document
                 return BadRequest(new { message = "Thông tin xác nhận nhận hàng không được để trống." });
             }
 
-            var result = await _documentService.ProcessTransferReceiptAsync(id, request.Status, request.ReceivedDetails, request.Note, userId);
-            return Ok(result);
+            var receivedDetailsList = request.ReceivedDetails?.Select(rd => new DocumentDetail
+            {
+                Id = rd.DetailId,
+                ReceivedQuantity = rd.ReceivedQuantity
+            }).ToList();
+
+            var result = await _documentService.ProcessTransferReceiptAsync(id, request.Status, receivedDetailsList, request.Note, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(result.Id);
+            return Ok(responseDto ?? (object)result);
         }
         #endregion
 
-        #region 4. Soft Delete APIs (Hủy Phiếu Chuyển kho)
+        #region DELETE api/transferdocument/{id}/soft-delete (Hủy phiếu nháp)
         /// <summary>
         /// Xóa mềm phiếu Chuyển kho Pending -> Chuyển sang Canceled.
-        /// Trích xuất Creator User ID trực tiếp từ Token Access.
         /// </summary>
-        [HttpDelete("{id}/soft-delete")]
-        [HttpDelete("/api/document/transfer/{id}/soft-delete")]
+        [HttpDelete("{id:long}/soft-delete")]
+        [HttpDelete("/api/document/transfer/{id:long}/soft-delete")]
         public async Task<IActionResult> SoftDeleteTransferPending(long id, [FromQuery] string deleteNote)
         {
             if (!ValidateUserToken(out long userId, out var errorResult))
@@ -149,16 +260,4 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
     }
-
-    #region Supporting Request Models
-    /// <summary>
-    /// Model dữ liệu cho yêu cầu xử lý nhận hàng / từ chối hàng chuyển kho tại Chi nhánh Nhận.
-    /// </summary>
-    public class TransferReceiptRequest
-    {
-        public DocumentTransferStatus Status { get; set; }
-        public List<DocumentDetail>? ReceivedDetails { get; set; }
-        public string? Note { get; set; }
-    }
-    #endregion
 }
