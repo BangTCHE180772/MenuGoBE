@@ -11,6 +11,7 @@ namespace MenuGoBE.Interface.Repository
         Task<List<Table>> GetAllAsync();
         Task<List<Table>> GetByBranchIdsAsync(List<long> branchIds);
         Task<Table?> GetByIdAsync(long id);
+        Task<Table?> GetByNameAndAreaAsync(string name, long areaId);
 
         Task CreateAsync(Table entity);
         Task UpdateAsync(Table entity);
