@@ -28,7 +28,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _service = new DocumentService(_mockRepo.Object, _mapper);
         }
 
-        private Document CreateValidCostAdjustmentDocument(decimal unitPriceAdjustment = 5000000)
+        private Document CreateValidCostAdjustmentDocument(decimal newAvgCost = 250000)
         {
             return new Document
             {
@@ -44,7 +44,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
                         Id = 901,
                         BInventoryId = 3,
                         Quantity = 1,
-                        UnitPrice = unitPriceAdjustment, // V_adj (+5 triệu hoặc -2 triệu)
+                        NewAvgCost = newAvgCost, // Giá vốn mới (250,000 VNĐ)
                         ConversionRate = 1,
                         BaseQuantity = 1,
                         SnapshotProductName = "Rượu vang Pháp"
@@ -76,8 +76,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CreateCostAdjustmentPendingAsync_ValidDocument_CreatesSuccessfully()
         {
-            var doc = CreateValidCostAdjustmentDocument();
-            var bInv = CreateValidBInventory();
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 250000);
+            var bInv = CreateValidBInventory(qty: 100, avg: 200000);
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);
@@ -89,9 +89,9 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
-        public async Task CreateCostAdjustmentPendingAsync_Exceeds10BillionPositiveLimit_ThrowsArgumentException()
+        public async Task CreateCostAdjustmentPendingAsync_NegativeNewAvgCost_ThrowsArgumentException()
         {
-            var doc = CreateValidCostAdjustmentDocument(unitPriceAdjustment: 15_000_000_000m); // > +10 billion
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: -10000); // Negative new avg cost
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(CreateValidBInventory());
 
@@ -99,19 +99,20 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
-        public async Task CreateCostAdjustmentPendingAsync_Exceeds10BillionNegativeLimit_ThrowsArgumentException()
+        public async Task CreateCostAdjustmentPendingAsync_ZeroOrNegativeStockQuantity_ThrowsInvalidOperationException()
         {
-            var doc = CreateValidCostAdjustmentDocument(unitPriceAdjustment: -15_000_000_000m); // < -10 billion
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 250000);
+            var zeroStockInventory = CreateValidBInventory(qty: 0, avg: 200000);
 
-            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(CreateValidBInventory());
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(zeroStockInventory);
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateCostAdjustmentPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateCostAdjustmentPendingAsync(doc, 1));
         }
 
         [Fact]
         public async Task UpdateCostAdjustmentPendingAsync_ValidDocument_UpdatesSuccessfully()
         {
-            var doc = CreateValidCostAdjustmentDocument();
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 230000);
             var bInv = CreateValidBInventory();
 
             _mockRepo.Setup(r => r.GetByIdAsync(90)).ReturnsAsync(doc);
@@ -137,8 +138,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CompleteCostAdjustmentAsync_PositiveAdjustment_UpdatesAvgCostAndLeftOver()
         {
-            var doc = CreateValidCostAdjustmentDocument(unitPriceAdjustment: 5000000); // +5,000,000 VNĐ
-            var bInv = CreateValidBInventory(3, qty: 100, avg: 200000, leftOver: 0); // Initial value = 20M. New value = 25M
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 250000); // 200k -> 250k (+50k * 100 = +5,000,000)
+            var bInv = CreateValidBInventory(3, qty: 100, avg: 200000, leftOver: 0);
 
             _mockRepo.Setup(r => r.GetByIdAsync(90)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(bInv);
@@ -147,7 +148,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.CompleteCostAdjustmentAsync(90, 1);
 
             Assert.Equal(DocumentStatus.Completed, result.Status);
-            Assert.Equal(250000, bInv.Avg); // 25,000,000 / 100 = 250,000 VNĐ
+            Assert.Equal(250000, bInv.Avg); // New avg cost = 250,000 VNĐ
+            Assert.Equal(0, bInv.LeftOver);
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.Is<InventoryLedger>(l =>
                 l.QuantityDelta == 0 &&
                 l.InventoryValueDelta == 5000000 &&
@@ -158,8 +160,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CompleteCostAdjustmentAsync_NegativeAdjustment_ReducesAvgCostAndLeftOver()
         {
-            var doc = CreateValidCostAdjustmentDocument(unitPriceAdjustment: -5000000); // -5,000,000 VNĐ
-            var bInv = CreateValidBInventory(3, qty: 100, avg: 200000, leftOver: 0); // Initial 20M -> New 15M
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 150000); // 200k -> 150k (-50k * 100 = -5,000,000)
+            var bInv = CreateValidBInventory(3, qty: 100, avg: 200000, leftOver: 0);
 
             _mockRepo.Setup(r => r.GetByIdAsync(90)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(bInv);
@@ -167,14 +169,15 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             var result = await _service.CompleteCostAdjustmentAsync(90, 1);
 
-            Assert.Equal(150000, bInv.Avg); // 15,000,000 / 100 = 150,000 VNĐ
+            Assert.Equal(150000, bInv.Avg);
+            Assert.Equal(0, bInv.LeftOver);
         }
 
         [Fact]
-        public async Task CompleteCostAdjustmentAsync_NegativeAdjustmentCausingNegativeStockValue_ThrowsInvalidOperationException()
+        public async Task CompleteCostAdjustmentAsync_ZeroStockQuantity_ThrowsInvalidOperationException()
         {
-            var doc = CreateValidCostAdjustmentDocument(unitPriceAdjustment: -25_000_000m); // -25M on a 20M stock -> Negative value (-5M)
-            var bInv = CreateValidBInventory(3, qty: 100, avg: 200000, leftOver: 0); // Stock value = 20M
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 150000);
+            var bInv = CreateValidBInventory(3, qty: 0, avg: 200000, leftOver: 0);
 
             _mockRepo.Setup(r => r.GetByIdAsync(90)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(bInv);
@@ -185,8 +188,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CreateCostAdjustmentCompletedAsync_DirectPostsSuccessfully()
         {
-            var doc = CreateValidCostAdjustmentDocument(unitPriceAdjustment: 1000000);
-            var bInv = CreateValidBInventory(3, qty: 50, avg: 100000); // Total 5M -> New 6M -> Avg 120,000
+            var doc = CreateValidCostAdjustmentDocument(newAvgCost: 120000);
+            var bInv = CreateValidBInventory(3, qty: 50, avg: 100000); // 100k -> 120k (+20k * 50 = +1,000,000)
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);

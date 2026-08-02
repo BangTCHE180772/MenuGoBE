@@ -12,6 +12,8 @@ namespace MenuGoBE.Dtos.Document
         [Required(ErrorMessage = "Mã chi nhánh không được để trống.")]
         public long BranchId { get; set; }
 
+        public string? Code { get; set; }
+
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
         [MaxLength(255)]
@@ -43,6 +45,8 @@ namespace MenuGoBE.Dtos.Document
     /// </summary>
     public class CostAdjustmentDocumentUpdateDto
     {
+        public string? Code { get; set; }
+
         public DateTime OrderDate { get; set; }
 
         [MaxLength(255)]
