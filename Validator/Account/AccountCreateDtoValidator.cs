@@ -36,6 +36,9 @@ namespace MenuGoBE.Validator.Account
             RuleFor(x => x.DateOfBirth)
                 .Must(dob => dob == null || dob < DateOnly.FromDateTime(DateTime.Today))
                 .WithMessage("Ngày sinh phải là một ngày trong quá khứ.");
+
+            RuleFor(x => x.AvatarImage)
+                .NotEmpty().WithMessage("Ảnh đại diện không được để trống.");
         }
     }
 }
