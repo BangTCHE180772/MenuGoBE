@@ -1,6 +1,7 @@
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Repositories
@@ -19,11 +20,29 @@ namespace MenuGoBE.Repositories
             return await _context.Groups.ToListAsync();
         }
 
-        public async Task<List<Group>> GetSellableAsync()
+        public async Task<List<Group>> GetSellableAsync(long? branchId = null)
         {
-            return await _context.Groups
-                .Where(g => g.Products.Any(p => p.IsSellable))
-                .ToListAsync();
+            var validTypes = new[] { ProductType.Processed, ProductType.Manufactured, ProductType.Regular };
+
+            var query = _context.Groups.AsQueryable();
+
+            if (branchId.HasValue)
+            {
+                query = query.Where(g => g.Products.Any(p => 
+                    p.IsSellable && 
+                    validTypes.Contains(p.Type) &&
+                    p.BInventories.Any(bi => bi.BranchId == branchId.Value && bi.BranchActive && bi.ChainActive)
+                ));
+            }
+            else
+            {
+                query = query.Where(g => g.Products.Any(p => 
+                    p.IsSellable && 
+                    validTypes.Contains(p.Type)
+                ));
+            }
+
+            return await query.ToListAsync();
         }
 
         public async Task<Group?> GetByIdAsync(long id)

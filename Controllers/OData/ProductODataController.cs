@@ -19,7 +19,8 @@ namespace MenuGoBE.Controllers.OData
         [EnableQuery]
         public IActionResult Get()
         {
-            return Ok(_context.Products.AsQueryable());
+            var validTypes = new[] { MenuGoBE.Models.Enums.ProductType.Processed, MenuGoBE.Models.Enums.ProductType.Manufactured, MenuGoBE.Models.Enums.ProductType.Regular };
+            return Ok(_context.Products.Where(p => validTypes.Contains(p.Type)).AsQueryable());
         }
     }
 }

@@ -36,7 +36,7 @@ namespace MenuGoBE.BackgroundServices
                     _logger.LogError(ex, "Lỗi xảy ra trong quá trình đồng bộ Inventory từ Redis về PostgreSQL.");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
 
             _logger.LogInformation("InventorySyncWorker is stopping.");
@@ -49,40 +49,16 @@ namespace MenuGoBE.BackgroundServices
             var redisService = scope.ServiceProvider.GetRequiredService<IRedisInventoryService>();
             var binvRepo = scope.ServiceProvider.GetRequiredService<IBInventoryRepository>();
 
-            // Lấy toàn bộ ReservedQuantity từ Redis
-            var reservedData = await redisService.GetAllReservedQuantitiesAsync();
+            // Lấy toàn bộ ReservedQuantity bị thay đổi (dirty) từ Redis
+            var reservedData = await redisService.GetAndClearDirtyReservedQuantitiesAsync();
             if (reservedData.Count == 0)
             {
                 return;
             }
 
-            int updatedCount = 0;
-            foreach (var kvp in reservedData)
-            {
-                var parts = kvp.Key.Split(':');
-                if (parts.Length == 2 && long.TryParse(parts[0], out long branchId) && long.TryParse(parts[1], out long productId))
-                {
-                    long redisQuantity = kvp.Value;
-
-                    // Đồng bộ xuống PostgreSQL
-                    var binv = await binvRepo.GetByProductAndBranchAsync(productId, branchId);
-                    if (binv != null)
-                    {
-                        if (binv.ReservedQuantity != redisQuantity)
-                        {
-                            binv.ReservedQuantity = redisQuantity;
-                            await binvRepo.UpdateAsync(binv);
-                            updatedCount++;
-                        }
-                    }
-                }
-            }
-
-            if (updatedCount > 0)
-            {
-                await binvRepo.SaveChangesAsync();
-                _logger.LogInformation("InventorySyncWorker: Đồng bộ thành công {Count} sản phẩm từ Redis về PostgreSQL.", updatedCount);
-            }
+            // Đồng bộ hàng loạt xuống PostgreSQL
+            await binvRepo.BulkUpdateReservedQuantitiesAsync(reservedData);
+            _logger.LogInformation("InventorySyncWorker: Đồng bộ thành công {Count} sản phẩm từ Redis về PostgreSQL.", reservedData.Count);
         }
     }
 }

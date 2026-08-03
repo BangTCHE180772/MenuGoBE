@@ -152,7 +152,10 @@ namespace MenuGoBE.Service
         public async Task<List<MenuProductViewDto>> GetProductsAsync(long menuId)
         {
             var products = await _context.MenuProducts
-                .Where(mp => mp.MenuId == menuId && mp.Product.IsSellable)
+                .Where(mp => mp.MenuId == menuId && mp.Product.IsSellable &&
+                             (mp.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed ||
+                              mp.Product.Type == MenuGoBE.Models.Enums.ProductType.Manufactured ||
+                              mp.Product.Type == MenuGoBE.Models.Enums.ProductType.Regular))
                 .Include(mp => mp.Product)
                     .ThenInclude(p => p.Group)
                 .Include(mp => mp.Product)

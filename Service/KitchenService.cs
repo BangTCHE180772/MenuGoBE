@@ -2,6 +2,7 @@ using MenuGoBE.Dtos.Kitchen;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
 using MenuGoBE.Hubs;
 using Microsoft.AspNetCore.SignalR;
@@ -18,6 +19,7 @@ public class KitchenService : IKitchenService
     private readonly IOrderRepository _orderRepo;
     private readonly IOrderDetailRepository _orderDetailRepo;
     private readonly IDocumentRepository _documentRepo;
+    private readonly IDocumentService _documentService;
     private readonly IRecipesDetailedRepository _recipesRepo;
     private readonly IBInventoryRepository _bInventoryRepo;
     private readonly IHubContext<NotificationHub> _hubContext;
@@ -29,6 +31,7 @@ public class KitchenService : IKitchenService
         IOrderRepository orderRepo,
         IOrderDetailRepository orderDetailRepo,
         IDocumentRepository documentRepo,
+        IDocumentService documentService,
         IRecipesDetailedRepository recipesRepo,
         IBInventoryRepository bInventoryRepo,
         IHubContext<NotificationHub> hubContext)
@@ -39,6 +42,7 @@ public class KitchenService : IKitchenService
         _orderRepo = orderRepo;
         _orderDetailRepo = orderDetailRepo;
         _documentRepo = documentRepo;
+        _documentService = documentService;
         _recipesRepo = recipesRepo;
         _bInventoryRepo = bInventoryRepo;
         _hubContext = hubContext;
@@ -118,129 +122,100 @@ public class KitchenService : IKitchenService
         return true;
     }
 
-    public async Task<bool> HandleInternalRestockCompletionAsync(long orderDetailId)
-    {
-        var detail = await _orderDetailRepo.GetByIdAsync(orderDetailId);
-        if (detail == null) return false;
-        
-        var order = await _orderRepo.GetByIdAsync(detail.OrderId);
-        if (order == null || order.Status != "Internal") return false;
-        
-        var table = await _tableRepo.GetByIdAsync(order.TableId);
-        if (table == null) return false;
-        var area = await _areaRepo.GetByIdAsync(table.AreaId);
-        if (area == null) return false;
-
-        var branchId = area.BranchId;
-
-        var docDetails = new List<DocumentDetail>();
-        var ledgersToCreate = new List<InventoryLedger>();
-        var updatedBInvs = new List<BInventory>();
-
-        var recipes = await _recipesRepo.GetRecipesByProductIdAsync(detail.ProductId);
-
-        foreach (var recipe in recipes)
+        public async Task<bool> HandleInternalRestockCompletionAsync(long orderDetailId)
         {
-            var totalQtyNeeded = recipe.Quantity * detail.Quantity;
+            var detail = await _orderDetailRepo.GetByIdAsync(orderDetailId);
+            if (detail == null) return false;
             
-            var bInventory = await _bInventoryRepo.GetByProductAndBranchAsync(recipe.IngredientProductId, branchId);
-            if (bInventory == null)
+            var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+            if (order == null || order.Status != "Internal") return false;
+            
+            var table = await _tableRepo.GetByIdAsync(order.TableId);
+            if (table == null) return false;
+            var area = await _areaRepo.GetByIdAsync(table.AreaId);
+            if (area == null) return false;
+
+            var branchId = area.BranchId;
+
+            var recipes = await _recipesRepo.GetRecipesByProductIdAsync(detail.ProductId);
+
+            foreach (var recipe in recipes)
             {
-                bInventory = new BInventory
+                var bInventory = await _bInventoryRepo.GetByProductAndBranchAsync(recipe.IngredientProductId, branchId);
+                if (bInventory == null)
+                {
+                    var ingredientProduct = await _productRepo.GetByIdAsync(recipe.IngredientProductId);
+                    bInventory = new BInventory
+                    {
+                        BranchId = branchId,
+                        ProductId = recipe.IngredientProductId,
+                        Quantity = 0,
+                        Type = BInventoryType.RawMaterial,
+                        IsManageQuantity = ingredientProduct?.IsManageQuantity ?? true,
+                        ChainActive = true,
+                        BranchActive = true
+                    };
+                    await _bInventoryRepo.CreateAsync(bInventory);
+                }
+            }
+            try 
+            {
+                await _bInventoryRepo.SaveChangesAsync();
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+            {
+                // Bỏ qua lỗi xung đột tạo trùng do click nhiều lần
+            }
+
+            var productInventory = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
+            if (productInventory == null)
+            {
+                var finishedProduct = await _productRepo.GetByIdAsync(detail.ProductId);
+                productInventory = new BInventory
                 {
                     BranchId = branchId,
-                    ProductId = recipe.IngredientProductId,
+                    ProductId = detail.ProductId,
                     Quantity = 0,
-                    Type = BInventoryType.RawMaterial,
-                    IsManageQuantity = true,
+                    Type = BInventoryType.Finished,
+                    IsManageQuantity = finishedProduct?.IsManageQuantity ?? true,
                     ChainActive = true,
                     BranchActive = true
                 };
-                await _bInventoryRepo.CreateAsync(bInventory);
+                try
+                {
+                    await _bInventoryRepo.CreateAsync(productInventory);
+                    await _bInventoryRepo.SaveChangesAsync();
+                }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+                {
+                    // Lỗi trùng lặp, query lại
+                    productInventory = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
+                    if (productInventory == null) return false;
+                }
             }
-            
-            bInventory.Quantity -= totalQtyNeeded;
-            updatedBInvs.Add(bInventory);
-            
-            var docDetail = new DocumentDetail
-            {
-                BInventory = bInventory,
-                Quantity = totalQtyNeeded,
-                UnitPrice = 0,
-                Note = "Trừ nguyên liệu sản xuất nội bộ",
-                CreatedAt = DateTime.UtcNow
-            };
-            docDetails.Add(docDetail);
-        }
 
-#if FALSE
-            var ledger = new InventoryLedger
-            {
-                QuantityDelta = -totalQtyNeeded,
-                RunningQuantity = bInventory.Quantity,
-                BusinessDate = DateTime.UtcNow,
-                DocumentType = DocumentType.Production,
-                CreatedAt = DateTime.UtcNow
-            };
-            ledgersToCreate.Add(ledger);
-
-        var productInventory = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
-        if (productInventory == null)
-        {
-            productInventory = new BInventory
+            var document = new DocumentEntity
             {
                 BranchId = branchId,
-                ProductId = detail.ProductId,
-                Quantity = 0,
-                Type = BInventoryType.Finished,
-                IsManageQuantity = true,
-                ChainActive = true,
-                BranchActive = true
+                Type = DocumentType.Production,
+                TotalAmount = 0,
+                Note = "Sản xuất nội bộ",
+                DocumentDetails = new List<DocumentDetail>
+                {
+                    new DocumentDetail
+                    {
+                        BInventoryId = productInventory.Id,
+                        BaseQuantity = detail.Quantity,
+                        Quantity = detail.Quantity,
+                        UnitPrice = 0,
+                        Note = "Nhập thành phẩm sau sản xuất"
+                    }
+                }
             };
-            await _bInventoryRepo.CreateAsync(productInventory);
+
+            await _documentService.CreateProductionCompletedAsync(document, order.CreatedBy ?? 1);
+
+            await _hubContext.Clients.All.SendAsync("ReceiveKitchenOrderUpdate", branchId);
+            return true;
         }
-        productInventory.Quantity += detail.Quantity;
-        updatedBInvs.Add(productInventory);
-
-        var productDocDetail = new DocumentDetail
-        {
-            BInventory = productInventory,
-            Quantity = detail.Quantity,
-            UnitPrice = 0,
-            Note = "Nhập thành phẩm sau sản xuất",
-            CreatedAt = DateTime.UtcNow
-        };
-        docDetails.Add(productDocDetail);
-
-        var productLedger = new InventoryLedger
-        {
-            QuantityDelta = detail.Quantity,
-            RunningQuantity = productInventory.Quantity,
-            BusinessDate = DateTime.UtcNow,
-            DocumentType = DocumentType.Production,
-            CreatedAt = DateTime.UtcNow
-        };
-        ledgersToCreate.Add(productLedger);
-
-        var document = new DocumentEntity
-        {
-            BranchId = branchId,
-            Type = DocumentType.Production,
-            Code = $"PROD-{DateTime.UtcNow:yyyyMMddHHmmssfff}",
-            BusinessDate = DateTime.UtcNow,
-            TotalAmount = 0,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _documentRepo.ExecuteDocumentTransactionAsync(
-            document, docDetails, new List<DocumentPartner>(), updatedBInvs, ledgersToCreate, new List<InventoryLedger>(), new List<CashFlow>(), new List<CashFlowDetail>());
-#endif
-
-        detail.CookingStatus = "Served";
-        await _orderDetailRepo.UpdateAsync(detail);
-        await _orderDetailRepo.SaveChangesAsync();
-        
-        await _hubContext.Clients.All.SendAsync("ReceiveKitchenOrderUpdate", branchId);
-        return true;
-    }
 }
