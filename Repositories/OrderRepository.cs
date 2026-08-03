@@ -53,7 +53,7 @@ namespace MenuGoBE.Repositories
         public async Task<Order?> GetActiveOrderByTableIdAsync(long tableId)
         {
             var activeOrders = await _context.Orders
-                .Where(o => o.TableId == tableId && o.Status == "Active")
+                .Where(o => o.TableId == tableId && (o.Status == "Active" || o.Status == "Internal"))
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
