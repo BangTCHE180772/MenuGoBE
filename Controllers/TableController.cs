@@ -28,7 +28,7 @@ namespace MenuGoBE.Controllers
 
         [HttpGet]
         [EnableQuery]
-        public async Task<IActionResult> GetAll([FromQuery] string? branchIds)
+        public async Task<IActionResult> GetAll([FromQuery] string? branchIds, [FromQuery] bool includeInternal = false)
         {
             var idList = new List<long>();
             if (!string.IsNullOrEmpty(branchIds))
@@ -69,11 +69,11 @@ namespace MenuGoBE.Controllers
 
             if (idList.Any())
             {
-                var filteredResult = await _service.GetByBranchIdsAsync(idList);
+                var filteredResult = await _service.GetByBranchIdsAsync(idList, includeInternal);
                 return Ok(filteredResult);
             }
 
-            var result = await _service.GetAllAsync();
+            var result = await _service.GetAllAsync(includeInternal);
             return Ok(result);
         }
 

@@ -26,17 +26,17 @@ namespace MenuGoBE.Service
             _orderRepo = orderRepo;
         }
 
-        public async Task<List<TableViewDto>> GetAllAsync()
+        public async Task<List<TableViewDto>> GetAllAsync(bool includeInternal = false)
         {
             var data = await _repo.GetAllAsync();
-            var filtered = data.Where(t => t.Status != "Internal" && t.Status != "Deleted").ToList();
+            var filtered = data.Where(t => (includeInternal || t.Status != "Internal") && t.Status != "Deleted").ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
 
-        public async Task<List<TableViewDto>> GetByBranchIdsAsync(List<long> branchIds)
+        public async Task<List<TableViewDto>> GetByBranchIdsAsync(List<long> branchIds, bool includeInternal = false)
         {
             var data = await _repo.GetByBranchIdsAsync(branchIds);
-            var filtered = data.Where(t => t.Status != "Internal" && t.Status != "Deleted").ToList();
+            var filtered = data.Where(t => (includeInternal || t.Status != "Internal") && t.Status != "Deleted").ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
 
