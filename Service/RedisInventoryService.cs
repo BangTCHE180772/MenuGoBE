@@ -28,6 +28,37 @@ namespace MenuGoBE.Service
             return result;
         }
 
+        public async Task<bool> TryReserveInventoryAsync(int branchId, int productId, int quantity, decimal maxQuantity)
+        {
+            var script = @"
+                local reservedKey = KEYS[1]
+                local maxQty = tonumber(ARGV[1])
+                local orderQty = tonumber(ARGV[2])
+
+                local currentReserved = tonumber(redis.call('GET', reservedKey) or '0')
+
+                if (currentReserved + orderQty) <= maxQty then
+                    redis.call('INCRBY', reservedKey, orderQty)
+                    return 1
+                else
+                    return 0
+                end
+            ";
+
+            var result = await _db.ScriptEvaluateAsync(script, 
+                new RedisKey[] { GetKey(branchId, productId) }, 
+                new RedisValue[] { (double)maxQuantity, quantity });
+
+            bool success = (int)result == 1;
+
+            if (success)
+            {
+                await _db.SetAddAsync(DirtyKeysSet, $"{branchId}:{productId}");
+            }
+
+            return success;
+        }
+
         public async Task<long> DecrementReservedQuantityAsync(int branchId, int productId, int quantity)
         {
             var result = await _db.StringDecrementAsync(GetKey(branchId, productId), quantity);
