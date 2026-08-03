@@ -41,6 +41,14 @@ namespace MenuGoBE.Dtos.Document
         public string? CurrentCreatedByName { get; set; }
         public string CreatedByName => !string.IsNullOrWhiteSpace(SnapshotCreatedByName) ? SnapshotCreatedByName : CurrentCreatedByName ?? string.Empty;
 
+        public string? SnapshotBranchName { get; set; }
+        public string? CurrentBranchName { get; set; }
+        public string BranchName => !string.IsNullOrWhiteSpace(SnapshotBranchName) ? SnapshotBranchName : CurrentBranchName ?? string.Empty;
+
+        public string? SnapshotToBranchName { get; set; }
+        public string? CurrentToBranchName { get; set; }
+        public string ToBranchName => !string.IsNullOrWhiteSpace(SnapshotToBranchName) ? SnapshotToBranchName : CurrentToBranchName ?? string.Empty;
+
         public string? SnapshotPartnerName { get; set; }
         public string? CurrentPartnerName { get; set; }
         public string PartnerName => !string.IsNullOrWhiteSpace(SnapshotPartnerName) ? SnapshotPartnerName : CurrentPartnerName ?? string.Empty;

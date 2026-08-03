@@ -230,6 +230,11 @@ namespace MenuGoBE.Controllers.Document
                 return BadRequest(new { message = "Thông tin xác nhận nhận hàng không được để trống." });
             }
 
+            if (string.IsNullOrWhiteSpace(request.Note))
+            {
+                return BadRequest(new { message = "Bắt buộc phải nhập Ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng." });
+            }
+
             var receivedDetailsList = request.ReceivedDetails?.Select(rd => new DocumentDetail
             {
                 Id = rd.DetailId,

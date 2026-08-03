@@ -202,6 +202,19 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
+        public async Task ProcessTransferReceiptAsync_FullReceiveWithoutNote_ThrowsArgumentException()
+        {
+            var doc = CreateValidTransferDocument();
+            doc.Status = DocumentStatus.Completed;
+            doc.TransferStatus = DocumentTransferStatus.InTransit;
+
+            _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
+
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "   ", 2)); // Empty note
+        }
+
+        [Fact]
         public async Task ProcessTransferReceiptAsync_FullReceive_IncreasesReceiverStockAndSetsReceivedStatus()
         {
             var doc = CreateValidTransferDocument();
