@@ -144,6 +144,20 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Cập nhật sản phẩm thành công." });
         }
 
+        /// <summary>
+        /// Cập nhật giá bán hàng loạt (chỉ Regular, Manufactured, Processed).
+        /// Body: [{ "id": 1, "sellPrice": 50000 }, ...]
+        /// </summary>
+        [HttpPatch("sell-price")]
+        public async Task<IActionResult> BulkUpdateSellPrice([FromBody] List<SellPriceBulkUpdateItemDto> items)
+        {
+            if (items == null || items.Count == 0)
+                return BadRequest(new { message = "Danh sách sản phẩm cần cập nhật không được rỗng." });
+
+            var count = await _service.BulkUpdateSellPriceAsync(items);
+            return Ok(new { message = $"Đã cập nhật giá bán cho {count} sản phẩm.", updatedCount = count });
+        }
+
         [HttpPut("/api/ProcessedProduct")]
         [HttpPut("/api/ProcessedProduct/{id:long}")]
         public async Task<IActionResult> UpdateProcessed([FromBody] ProcessedProductUpdateDto dto, long? id = null)
