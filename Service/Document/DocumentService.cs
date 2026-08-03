@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Mapper;
@@ -52,12 +53,12 @@ namespace MenuGoBE.Service.Document
         {
             if (document.Status == DocumentStatus.Completed)
             {
-                throw new InvalidOperationException($"Chứng từ {document.Code} đã CHỐT (Completed). Không được phép chỉnh sửa hoặc xóa.");
+                throw new MenuGoException(ErrorCodes.DocumentLockedCompleted, $"Chứng từ {document.Code} đã CHỐT (Completed). Không được phép chỉnh sửa hoặc xóa.");
             }
 
             if (document.Status == DocumentStatus.Cancelled)
             {
-                throw new InvalidOperationException($"Chứng từ {document.Code} đã bị HỦY (Canceled). Không được phép thao tác.");
+                throw new MenuGoException(ErrorCodes.DocumentLockedCancelled, $"Chứng từ {document.Code} đã bị HỦY (Canceled). Không được phép thao tác.");
             }
         }
         #endregion
@@ -73,13 +74,13 @@ namespace MenuGoBE.Service.Document
             {
                 if (!parentDocumentId.HasValue)
                 {
-                    throw new ArgumentException("Phiếu Trả Hàng (Return) BẮT BUỘC phải trỏ tới chứng từ Nhập kho (Import) gốc.");
+                    throw new MenuGoException(ErrorCodes.DocumentParentRequired, "Phiếu Trả Hàng (Return) BẮT BUỘC phải trỏ tới chứng từ Nhập kho (Import) gốc.");
                 }
 
                 bool isValidParent = await _repo.ValidateParentDocumentAsync(parentDocumentId.Value, DocumentType.Import);
                 if (!isValidParent)
                 {
-                    throw new InvalidOperationException($"Chứng từ gốc ID {parentDocumentId.Value} không hợp lệ hoặc chưa ở trạng thái Completed.");
+                    throw new MenuGoException(ErrorCodes.DocumentParentNotCompleted, $"Chứng từ gốc ID {parentDocumentId.Value} không hợp lệ hoặc chưa ở trạng thái Completed.");
                 }
             }
             #endregion
@@ -89,13 +90,13 @@ namespace MenuGoBE.Service.Document
             {
                 if (!parentDocumentId.HasValue)
                 {
-                    throw new ArgumentException("Phiếu Khách Trả Hàng (CustomerReturn) BẮT BUỘC phải trỏ tới chứng từ Xuất bán (Sale) gốc.");
+                    throw new MenuGoException(ErrorCodes.DocumentParentRequired, "Phiếu Khách Trả Hàng (CustomerReturn) BẮT BUỘC phải trỏ tới chứng từ Xuất bán (Sale) gốc.");
                 }
 
                 bool isValidParent = await _repo.ValidateParentDocumentAsync(parentDocumentId.Value, DocumentType.Sale);
                 if (!isValidParent)
                 {
-                    throw new InvalidOperationException($"Chứng từ bán gốc ID {parentDocumentId.Value} không hợp lệ hoặc chưa ở trạng thái Completed.");
+                    throw new MenuGoException(ErrorCodes.DocumentParentNotCompleted, $"Chứng từ bán gốc ID {parentDocumentId.Value} không hợp lệ hoặc chưa ở trạng thái Completed.");
                 }
             }
             #endregion
@@ -119,7 +120,20 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         public async Task<IEnumerable<DocumentListResponseDto>> GetDocumentListDtosAsync(long branchId, DocumentType? type = null, DocumentStatus? status = null)
         {
-            var documents = await _repo.GetDocumentsAsync(branchId, type, status);
+            IEnumerable<Models.Document> documents;
+            if (type == DocumentType.Transfer)
+            {
+                documents = await _repo.GetTransferDocumentsAsync(branchId);
+                if (status.HasValue)
+                {
+                    documents = documents.Where(d => d.Status == status.Value);
+                }
+            }
+            else
+            {
+                documents = await _repo.GetDocumentsAsync(branchId, type, status);
+            }
+
             return _mapper.Map<IEnumerable<DocumentListResponseDto>>(documents);
         }
         #endregion
@@ -141,6 +155,11 @@ namespace MenuGoBE.Service.Document
             document.SnapshotCreatedByName = null;
             document.SnapshotCreatedByUsername = null;
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = string.Empty;
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
             return document;
@@ -156,14 +175,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != expectedType)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chỉnh sửa khi chứng từ ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chỉnh sửa khi chứng từ ở trạng thái Pending.");
             }
 
             existing.Note = updatedDocument.Note;
@@ -171,7 +190,24 @@ namespace MenuGoBE.Service.Document
             existing.TotalAmount = updatedDocument.TotalAmount;
             existing.AmountDue = updatedDocument.AmountDue;
             existing.AmountPaid = updatedDocument.AmountPaid;
-            existing.DocumentDetails = updatedDocument.DocumentDetails;
+
+            if (updatedDocument.DocumentDetails != null && !ReferenceEquals(existing.DocumentDetails, updatedDocument.DocumentDetails))
+            {
+                if (existing.DocumentDetails != null && existing.DocumentDetails.Any())
+                {
+                    _repo.RemoveDetails(existing.DocumentDetails.ToList());
+                    existing.DocumentDetails.Clear();
+                }
+                else if (existing.DocumentDetails == null)
+                {
+                    existing.DocumentDetails = new List<Models.DocumentDetail>();
+                }
+
+                foreach (var detail in updatedDocument.DocumentDetails)
+                {
+                    existing.DocumentDetails.Add(detail);
+                }
+            }
 
             _repo.Update(existing);
             await _repo.SaveChangesAsync();
@@ -188,7 +224,7 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != expectedType)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
@@ -215,7 +251,7 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != expectedType)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ {expectedType} với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
@@ -223,7 +259,7 @@ namespace MenuGoBE.Service.Document
             #region Quy tắc: DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(deleteNote) && deleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
@@ -250,24 +286,24 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ nhập kho không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ nhập kho không được để trống.");
             }
 
             #region Quy tắc: Comment/Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Tối thiểu phải có 1 DocumentDetail
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu nhập kho bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu nhập kho bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
             }
             #endregion
 
@@ -278,7 +314,7 @@ namespace MenuGoBE.Service.Document
 
             if (duplicateBInventory != null)
             {
-                throw new ArgumentException($"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu nhập. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
+                throw new MenuGoException(ErrorCodes.DocumentDuplicateDetail, $"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu nhập. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
             }
             #endregion
 
@@ -292,32 +328,32 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 #region Kiểm tra loại sản phẩm chỉ được phép nhập (Tool, Regular, Ingredient)
                 if (binventory.Product == null)
                 {
-                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
                 }
 
                 var productType = binventory.Product.Type;
                 if (productType != ProductType.Tool && productType != ProductType.Regular && productType != ProductType.Ingredient)
                 {
-                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' có loại (ProductType = {productType}) không được phép nhập kho. Chỉ cho phép các loại: Tool, Regular, Ingredient.");
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidProductTypeForImport, $"Sản phẩm '{binventory.Product.Name}' có loại (ProductType = {productType}) không được phép nhập kho. Chỉ cho phép các loại: Tool, Regular, Ingredient.");
                 }
                 #endregion
 
                 if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
                 {
-                    throw new ArgumentException($"Số lượng nhập của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
+                    throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng nhập của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
                 }
 
                 #region Kiểm tra đơn giá (UnitPrice không âm và không vượt quá 10 tỷ)
                 const decimal MAX_UNIT_PRICE = 10_000_000_000m;
                 if (detail.UnitPrice < 0 || detail.UnitPrice > MAX_UNIT_PRICE)
                 {
-                    throw new ArgumentException($"Đơn giá nhập của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice}) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidUnitPrice, $"Đơn giá nhập của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice}) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
                 }
                 #endregion
 
@@ -327,12 +363,12 @@ namespace MenuGoBE.Service.Document
                     var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
                     if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
                     {
-                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
                     }
 
                     if (unitConversion.ConversionPoint <= 0)
                     {
-                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
                     }
 
                     detail.ConversionRate = unitConversion.ConversionPoint;
@@ -354,23 +390,25 @@ namespace MenuGoBE.Service.Document
             decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
             if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_AMOUNT)
             {
-                throw new ArgumentException($"Tổng giá trị phiếu nhập kho ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
+                throw new MenuGoException(ErrorCodes.DocumentTotalAmountExceedsLimit, $"Tổng giá trị phiếu nhập kho ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
             }
             document.TotalAmount = calculatedTotalAmount;
 
-            // 2. Validate AmountPaid
-            if (document.AmountPaid < 0 || document.AmountPaid > document.TotalAmount)
+            var (roundedTotal, roundingValue) = CalculateDocumentRounding(calculatedTotalAmount);
+
+            // 2. Validate AmountPaid đối với giá trị phải trả đã làm tròn
+            if (document.AmountPaid < 0 || document.AmountPaid > roundedTotal)
             {
-                throw new ArgumentException($"Số tiền đã trả (AmountPaid: {document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền chứng từ ({document.TotalAmount:N0} VNĐ).");
+                throw new MenuGoException(ErrorCodes.DocumentAmountPaidInvalid, $"Số tiền đã trả (AmountPaid: {document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền chứng từ sau làm tròn ({roundedTotal:N0} VNĐ).");
             }
 
-            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = TotalAmount - AmountPaid
-            document.AmountDue = document.TotalAmount - document.AmountPaid;
+            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = RoundedTotal - AmountPaid
+            document.AmountDue = Math.Max(0, roundedTotal - document.AmountPaid);
 
             // 4. Quy tắc: Nếu phát sinh tiền đã trả (AmountPaid > 0) -> Ngay cả phiếu Pending cũng BẮT BUỘC chỉ định Nhà cung cấp (PartnerId)
             if (document.AmountPaid > 0 && (!document.PartnerId.HasValue || document.PartnerId.Value <= 0))
             {
-                throw new ArgumentException("Khi phiếu nhập tạm phát sinh tiền đã trả (AmountPaid > 0), BẮT BUỘC phải chọn Nhà cung cấp (Supplier).");
+                throw new MenuGoException(ErrorCodes.DocumentSupplierRequiredForPayment, "Khi phiếu nhập tạm phát sinh tiền đã trả (AmountPaid > 0), BẮT BUỘC phải chọn Nhà cung cấp (Supplier).");
             }
             #endregion
         }
@@ -387,7 +425,7 @@ namespace MenuGoBE.Service.Document
             #region Quy tắc a3: Bắt buộc phải chọn Supplier (PartnerId) cho phiếu chốt
             if (!document.PartnerId.HasValue || document.PartnerId.Value <= 0)
             {
-                throw new ArgumentException("Khi chốt phiếu Nhập kho (Completed), BẮT BUỘC phải chọn Nhà cung cấp (Supplier).");
+                throw new MenuGoException(ErrorCodes.DocumentSupplierRequiredForComplete, "Khi chốt phiếu Nhập kho (Completed), BẮT BUỘC phải chọn Nhà cung cấp (Supplier).");
             }
             #endregion
         }
@@ -405,7 +443,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -444,7 +482,7 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 // 1. Lấy tồn kho hiện tại (q_old), giá vốn hiện tại (avg_old) và leftover cũ (leftover_old)
@@ -452,27 +490,38 @@ namespace MenuGoBE.Service.Document
                 decimal avg_old = binventory.Avg;
                 decimal leftover_old = binventory.LeftOver;
 
-                // 2. Xác định tổng giá b1 (Giá trị kho cũ + Leftover cũ + Giá trị nhập mới)
+                // 2. Xác định đơn giá nhập theo đơn vị kho cơ sở
+                decimal unit_cost_import = (detail.ConversionRate > 0) ? (detail.UnitPrice / detail.ConversionRate) : detail.UnitPrice;
                 decimal val_import = detail.Quantity * detail.UnitPrice;
-                decimal b1 = (q_old * avg_old) + leftover_old + val_import;
-
-                // 3. Xác định tổng số lượng b2 (Số lượng tồn cũ + Số lượng nhập mới)
                 decimal q_import = detail.BaseQuantity;
-                decimal b2 = q_old + q_import;
 
-                // 4. avg = b1 / b2 làm tròn 6 chữ số thập phân
-                decimal avg = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+                decimal avg;
+                decimal leftover;
+                decimal b2;
 
-                // 5. c1 = avg * b2
-                decimal c1 = avg * b2;
-
-                // 6. leftover = b1 - c1
-                decimal leftover = b1 - c1;
+                if (q_old <= 0)
+                {
+                    // Tồn kho trước khi nhập <= 0 (về 0 hoặc âm):
+                    // Giá vốn (Avg) được làm mới hoàn toàn dựa trên đơn giá lô nhập mới này, triệt tiêu LeftOver cũ.
+                    avg = Math.Round(unit_cost_import, 6);
+                    leftover = 0m;
+                    b2 = q_import;
+                    binventory.Quantity = b2;
+                }
+                else
+                {
+                    // Tồn kho trước khi nhập > 0: Áp dụng công thức tính giá vốn bình quân gia quyền (Weighted Average Cost)
+                    decimal b1 = (q_old * avg_old) + leftover_old + val_import;
+                    b2 = q_old + q_import;
+                    avg = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
+                    decimal c1 = avg * b2;
+                    leftover = b1 - c1;
+                    binventory.Quantity = b2;
+                }
 
                 // 7. Cập nhật lại BInventory
                 binventory.Avg = avg;
                 binventory.LeftOver = leftover;
-                binventory.Quantity = b2;
 
                 // Snapshot Avg Cost vào chi tiết chứng từ
                 detail.SnapshotAvgCost = avg;
@@ -487,14 +536,15 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.Import,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = q_import,
                     InventoryValueDelta = val_import,
                     RunningQuantity = b2,
-                    RunningInventoryValue = c1,
+                    RunningInventoryValue = b2 == 0 ? 0m : (b2 * avg + leftover),
                     RunningAverageCost = avg,
-                    UnitCost = (detail.ConversionRate > 0) ? (detail.UnitPrice / detail.ConversionRate) : detail.UnitPrice,
+                    UnitCost = unit_cost_import,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -503,14 +553,32 @@ namespace MenuGoBE.Service.Document
         }
         #endregion
 
-        #region Xử lý Phát Sinh Phiếu CashFlow Khi Thanh Toán (Rule a7)
+        #region Xử lý Phát Sinh Phiếu CashFlow Khi Thanh Toán (Rule a7 & Rounding)
 
         /// <summary>
-        /// Tạo phiếu chi CashFlow thanh toán cho Nhà cung cấp nếu AmountPaid > 0 khi chốt phiếu.
+        /// Tính toán làm tròn giá tiền theo quy tắc:
+        /// - phần dư < 0.5 thì làm tròn về hàng đơn vị (tròn xuống)
+        /// - phần dư >= 0.5 thì làm tròn lên hàng đơn vị
+        /// RoundingValue = RawTotal - RoundedTotal (có thể dương, âm hoặc 0).
+        /// EffectivePayable = RawTotal - RoundingValue = RoundedTotal.
+        /// </summary>
+        public static (decimal roundedTotal, decimal roundingValue) CalculateDocumentRounding(decimal rawTotal)
+        {
+            decimal remainder = rawTotal - Math.Floor(rawTotal);
+            decimal roundedTotal = remainder < 0.5m ? Math.Floor(rawTotal) : Math.Floor(rawTotal) + 1m;
+            decimal roundingValue = rawTotal - roundedTotal;
+            return (roundedTotal, roundingValue);
+        }
+
+        /// <summary>
+        /// Tạo phiếu chi CashFlow thanh toán cho Nhà cung cấp nếu AmountPaid > 0 khi chốt phiếu,
+        /// và tự động sinh phiếu CashFlow Rounding nếu có chênh lệch làm tròn.
         /// </summary>
         private async Task CreateImportCashFlowAsync(Models.Document document)
         {
-            #region Quy tắc a7: Nếu AmountPaid > 0 khi chốt phiếu -> Tạo CashFlow
+            var (roundedTotal, roundingValue) = CalculateDocumentRounding(document.TotalAmount);
+
+            #region Quy tắc a7: Nếu AmountPaid > 0 khi chốt phiếu -> Tạo CashFlow Thanh Toán
             if (document.AmountPaid > 0)
             {
                 var cashFlow = new CashFlow
@@ -530,6 +598,29 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddCashFlowAsync(cashFlow);
+            }
+            #endregion
+
+            #region Quy tắc sinh CashFlow Rounding nếu có phần dư làm tròn
+            if (roundingValue != 0)
+            {
+                var roundingCashFlow = new CashFlow
+                {
+                    BranchId = document.BranchId,
+                    DocumentId = document.Id,
+                    PartnerId = document.PartnerId,
+                    Code = $"CF_RND_{document.Code}",
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = CashFlowDirection.Outflow,
+                    Type = CashFlowDetailType.Rounding,
+                    PaymentMethod = PaymentMethod.Cash,
+                    Status = CashFlowStatus.Completed,
+                    TotalAmount = roundingValue,
+                    Note = $"Điều chỉnh làm tròn (Rounding) phiếu nhập kho #{document.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddCashFlowAsync(roundingCashFlow);
             }
             #endregion
         }
@@ -681,7 +772,7 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ nhập kho không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ nhập kho không được để trống.");
             }
 
             document.Type = DocumentType.Import;
@@ -706,14 +797,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.Import)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Nhập kho với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Nhập kho với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chỉnh sửa khi chứng từ ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chỉnh sửa khi chứng từ ở trạng thái Pending.");
             }
 
             updatedDocument.Type = DocumentType.Import;
@@ -730,9 +821,20 @@ namespace MenuGoBE.Service.Document
             if (existing.DocumentDetails != null && existing.DocumentDetails.Any())
             {
                 _repo.RemoveDetails(existing.DocumentDetails.ToList());
+                existing.DocumentDetails.Clear();
+            }
+            else if (existing.DocumentDetails == null)
+            {
+                existing.DocumentDetails = new List<Models.DocumentDetail>();
             }
 
-            existing.DocumentDetails = updatedDocument.DocumentDetails;
+            if (updatedDocument.DocumentDetails != null)
+            {
+                foreach (var detail in updatedDocument.DocumentDetails)
+                {
+                    existing.DocumentDetails.Add(detail);
+                }
+            }
             ClearPendingSnapshots(existing);
 
             if (!string.IsNullOrWhiteSpace(updatedDocument.Code) && updatedDocument.Code != existing.Code)
@@ -753,7 +855,7 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.Import)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Nhập kho với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Nhập kho với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
@@ -765,9 +867,9 @@ namespace MenuGoBE.Service.Document
             existing.PostedAt = DateTime.UtcNow;
 
             await GenerateOrValidateImportCodeAsync(existing);
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
             await ProcessWeightedAvgCostAndLedgerAsync(existing, userId);
             await CreateImportCashFlowAsync(existing);
-            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
 
             _repo.Update(existing);
             await _repo.SaveChangesAsync();
@@ -791,9 +893,9 @@ namespace MenuGoBE.Service.Document
             await _repo.SaveChangesAsync();
 
             await GenerateOrValidateImportCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
             await ProcessWeightedAvgCostAndLedgerAsync(document, userId);
             await CreateImportCashFlowAsync(document);
-            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
 
             _repo.Update(document);
             await _repo.SaveChangesAsync();
@@ -838,33 +940,33 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ trả hàng không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ trả hàng không được để trống.");
             }
 
             if (!document.ParentDocumentId.HasValue || document.ParentDocumentId.Value <= 0)
             {
-                throw new ArgumentException("Phiếu trả hàng NCC bắt buộc phải liên kết với 1 phiếu Nhập kho gốc (ParentDocumentId).");
+                throw new MenuGoException(ErrorCodes.DocumentParentRequired, "Phiếu trả hàng NCC bắt buộc phải liên kết với 1 phiếu Nhập kho gốc (ParentDocumentId).");
             }
 
             var parentImport = await _repo.GetByIdAsync(document.ParentDocumentId.Value);
             if (parentImport == null || parentImport.Type != DocumentType.Import)
             {
-                throw new KeyNotFoundException($"Không tìm thấy phiếu Nhập kho gốc ID: {document.ParentDocumentId.Value}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy phiếu Nhập kho gốc ID: {document.ParentDocumentId.Value}");
             }
 
             if (parentImport.Status != DocumentStatus.Completed)
             {
-                throw new InvalidOperationException($"Phiếu Nhập kho gốc #{parentImport.Code} chưa ở trạng thái chốt kho (Completed). Không thể thực hiện trả hàng.");
+                throw new MenuGoException(ErrorCodes.DocumentParentNotCompleted, $"Phiếu Nhập kho gốc #{parentImport.Code} chưa ở trạng thái chốt kho (Completed). Không thể thực hiện trả hàng.");
             }
 
             #region Kiểm tra ghi chú Note & DeleteNote <= 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
@@ -881,14 +983,14 @@ namespace MenuGoBE.Service.Document
             #region Kiểm tra và làm sạch các dòng chi tiết trả hàng
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu trả hàng bắt buộc phải có ít nhất 1 mặt hàng.");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu trả hàng bắt buộc phải có ít nhất 1 mặt hàng.");
             }
 
             // Loại bỏ các dòng chi tiết có số lượng trả <= 0
             var validDetails = document.DocumentDetails.Where(d => d.Quantity > 0).ToList();
             if (validDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu trả hàng bắt buộc phải có ít nhất 1 mặt hàng có số lượng trả lớn hơn 0.");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu trả hàng bắt buộc phải có ít nhất 1 mặt hàng có số lượng trả lớn hơn 0.");
             }
 
             // Lấy tổng số lượng đã trả tích lũy theo FatherId của phiếu nhập gốc
@@ -900,13 +1002,13 @@ namespace MenuGoBE.Service.Document
             {
                 if (!detail.FatherId.HasValue || detail.FatherId.Value <= 0)
                 {
-                    throw new ArgumentException("Mỗi mặt hàng trong phiếu trả hàng bắt buộc phải chỉ định FatherId trỏ đến chi tiết phiếu Nhập gốc.");
+                    throw new MenuGoException(ErrorCodes.DocumentFatherIdRequired, "Mỗi mặt hàng trong phiếu trả hàng bắt buộc phải chỉ định FatherId trỏ đến chi tiết phiếu Nhập gốc.");
                 }
 
                 var fatherDetail = parentImport.DocumentDetails?.FirstOrDefault(d => d.Id == detail.FatherId.Value);
                 if (fatherDetail == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy dòng chi tiết phiếu nhập gốc ID: {detail.FatherId.Value} trong phiếu nhập #{parentImport.Code}.");
+                    throw new MenuGoException(ErrorCodes.DocumentParentDetailNotFound, $"Không tìm thấy dòng chi tiết phiếu nhập gốc ID: {detail.FatherId.Value} trong phiếu nhập #{parentImport.Code}.");
                 }
 
                 // Sao chép trực tiếp Snapshot master data & đơn vị tính từ dòng gốc
@@ -927,7 +1029,7 @@ namespace MenuGoBE.Service.Document
 
                 if (detail.UnitPrice > 10_000_000_000m)
                 {
-                    throw new ArgumentException($"Đơn giá trả hàng của mặt hàng '{fatherDetail.SnapshotProductName}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá tối đa 10 tỷ VNĐ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidUnitPrice, $"Đơn giá trả hàng của mặt hàng '{fatherDetail.SnapshotProductName}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá tối đa 10 tỷ VNĐ.");
                 }
 
                 // Kiểm tra giới hạn số lượng trả tối đa (Số nhập gốc - Tổng đã trả trước đó)
@@ -936,25 +1038,25 @@ namespace MenuGoBE.Service.Document
 
                 if (remainingReturnableBaseQty <= 0)
                 {
-                    throw new InvalidOperationException($"Mặt hàng '{fatherDetail.SnapshotProductName}' trong phiếu nhập #{parentImport.Code} đã được trả hết toàn bộ số lượng.");
+                    throw new MenuGoException(ErrorCodes.DocumentReturnAllAlreadyReturned, $"Mặt hàng '{fatherDetail.SnapshotProductName}' trong phiếu nhập #{parentImport.Code} đã được trả hết toàn bộ số lượng.");
                 }
 
                 if (detail.BaseQuantity > remainingReturnableBaseQty)
                 {
                     decimal remainingInUnit = fatherDetail.ConversionRate > 0 ? (remainingReturnableBaseQty / fatherDetail.ConversionRate) : remainingReturnableBaseQty;
-                    throw new ArgumentException($"Số lượng trả hàng cho mặt hàng '{fatherDetail.SnapshotProductName}' ({detail.Quantity} {fatherDetail.SnapshotUnitName}) vượt quá số lượng tối đa còn có thể trả ({remainingInUnit} {fatherDetail.SnapshotUnitName}).");
+                    throw new MenuGoException(ErrorCodes.DocumentReturnQuantityExceeded, $"Số lượng trả hàng cho mặt hàng '{fatherDetail.SnapshotProductName}' ({detail.Quantity} {fatherDetail.SnapshotUnitName}) vượt quá số lượng tối đa còn có thể trả ({remainingInUnit} {fatherDetail.SnapshotUnitName}).");
                 }
 
                 // Kiểm tra tồn kho hiện tại tại Chi nhánh
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy tồn kho BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy tồn kho BInventory ID: {detail.BInventoryId}");
                 }
 
                 if (binventory.Quantity < detail.BaseQuantity)
                 {
-                    throw new InvalidOperationException($"Số lượng tồn kho hiện tại của mặt hàng '{fatherDetail.SnapshotProductName}' ({binventory.Quantity:N3}) không đủ để thực hiện xuất trả hàng ({detail.BaseQuantity:N3}).");
+                    throw new MenuGoException(ErrorCodes.DocumentReturnInsufficientInventory, $"Số lượng tồn kho hiện tại của mặt hàng '{fatherDetail.SnapshotProductName}' ({binventory.Quantity:N3}) không đủ để thực hiện xuất trả hàng ({detail.BaseQuantity:N3}).");
                 }
 
                 totalDocumentAmount += (detail.Quantity * detail.UnitPrice);
@@ -962,6 +1064,15 @@ namespace MenuGoBE.Service.Document
 
             document.TotalAmount = totalDocumentAmount;
             document.DocumentDetails = validDetails;
+
+            var (roundedReturnTotal, roundingReturnValue) = CalculateDocumentRounding(totalDocumentAmount);
+
+            if (document.AmountPaid < 0 || document.AmountPaid > roundedReturnTotal)
+            {
+                throw new MenuGoException(ErrorCodes.DocumentAmountPaidInvalid, $"Số tiền nhà cung cấp đã trả ({document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền hoàn trả sau làm tròn ({roundedReturnTotal:N0} VNĐ).");
+            }
+
+            document.AmountDue = Math.Max(0, roundedReturnTotal - document.AmountPaid);
             #endregion
 
             await _repo.AddAsync(document);
@@ -977,7 +1088,7 @@ namespace MenuGoBE.Service.Document
                 bool isExist = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExist)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống.");
                 }
             }
             #endregion
@@ -1017,8 +1128,9 @@ namespace MenuGoBE.Service.Document
                         DocumentType = DocumentType.Return,
                         SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                         SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                        SnapshotProductName = detail.SnapshotProductName,
-                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                        ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                         QuantityDelta = -q_return,
                         InventoryValueDelta = val_delta,
                         RunningQuantity = binventory.Quantity,
@@ -1053,6 +1165,28 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddCashFlowAsync(cashFlow);
             }
+
+            // Sinh phiếu CashFlow Rounding nếu có phần dư làm tròn
+            if (roundingReturnValue != 0 && document.PartnerId.HasValue)
+            {
+                var roundingCashFlow = new CashFlow
+                {
+                    BranchId = document.BranchId,
+                    DocumentId = document.Id,
+                    PartnerId = document.PartnerId,
+                    Code = $"CF_RND_{document.Code}",
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = CashFlowDirection.Inflow,
+                    Type = CashFlowDetailType.Rounding,
+                    PaymentMethod = PaymentMethod.Cash,
+                    Status = CashFlowStatus.Completed,
+                    TotalAmount = roundingReturnValue,
+                    Note = $"Điều chỉnh làm tròn (Rounding) phiếu trả hàng #{document.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddCashFlowAsync(roundingCashFlow);
+            }
             #endregion
 
             _repo.Update(document);
@@ -1065,6 +1199,74 @@ namespace MenuGoBE.Service.Document
         public async Task<IEnumerable<Models.Document>> GetReturnListAsync(long branchId)
         {
             return await _repo.GetReturnDocumentsAsync(branchId);
+        }
+        #endregion
+
+        #region Lấy thông tin chi tiết phiếu Nhập kho cho tạo phiếu Trả hàng
+        /// <summary>
+        /// Lấy thông tin dòng chi tiết của phiếu Nhập kho (đã Completed) kèm số lượng đã trả tích lũy.
+        /// Toàn bộ dữ liệu sản phẩm lấy từ Snapshot của phiếu Nhập đã chốt (không phụ thuộc master data hiện tại).
+        /// </summary>
+        public async Task<Dtos.Document.ImportReturnDetailsDto?> GetImportReturnDetailsAsync(long importDocumentId)
+        {
+            var importDoc = await _repo.GetByIdAsync(importDocumentId);
+            if (importDoc == null || importDoc.Type != DocumentType.Import)
+            {
+                return null;
+            }
+
+            if (importDoc.Status != DocumentStatus.Completed)
+            {
+                throw new MenuGoException(ErrorCodes.DocumentParentNotCompleted, $"Phiếu Nhập kho #{importDoc.Code} chưa ở trạng thái chốt kho (Completed). Chỉ có thể trả hàng cho phiếu đã chốt.");
+            }
+
+            // Lấy số lượng đã trả tích lũy theo từng FatherId (dòng chi tiết phiếu Nhập gốc)
+            var previouslyReturnedMap = await _repo.GetPreviouslyReturnedQuantitiesAsync(importDoc.Id);
+
+            var result = new Dtos.Document.ImportReturnDetailsDto
+            {
+                ImportDocumentId = importDoc.Id,
+                ImportDocumentCode = importDoc.Code ?? string.Empty,
+                PartnerId = importDoc.PartnerId,
+                // Tên NCC: dùng Snapshot nếu có
+                PartnerName = importDoc.SnapshotPartnerName ?? string.Empty,
+                Details = new List<Dtos.Document.ImportReturnDetailItemDto>()
+            };
+
+            if (importDoc.DocumentDetails != null)
+            {
+                foreach (var detail in importDoc.DocumentDetails)
+                {
+                    // Số lượng (BaseQuantity) đã trả tích lũy theo dòng này
+                    decimal alreadyReturnedBase = previouslyReturnedMap.GetValueOrDefault(detail.Id, 0m);
+
+                    // Số lượng BaseQuantity còn được trả
+                    decimal remainingBase = Math.Max(0m, detail.BaseQuantity - alreadyReturnedBase);
+
+                    // Quy về đơn vị tính (chia cho ConversionRate)
+                    decimal convRate = detail.ConversionRate > 0 ? detail.ConversionRate : 1m;
+                    decimal maxReturnInUnit = Math.Round(remainingBase / convRate, 6);
+
+                    result.Details.Add(new Dtos.Document.ImportReturnDetailItemDto
+                    {
+                        Id = detail.Id,
+                        BInventoryId = detail.BInventoryId,
+                        UnitConversionId = detail.UnitConversionId,
+                        // Hoàn toàn dựa vào Snapshot của phiếu Nhập đã chốt
+                        ProductName = detail.SnapshotProductName ?? string.Empty,
+                        ProductCode = detail.SnapshotProductCode ?? string.Empty,
+                        UnitName = detail.SnapshotUnitName ?? string.Empty,
+                        ConversionRate = convRate,
+                        Quantity = detail.Quantity,
+                        BaseQuantity = detail.BaseQuantity,
+                        UnitPrice = detail.UnitPrice,
+                        AlreadyReturnedBaseQuantity = alreadyReturnedBase,
+                        MaxReturnQuantity = maxReturnInUnit
+                    });
+                }
+            }
+
+            return result;
         }
         #endregion
 
@@ -1096,24 +1298,24 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất bán không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ xuất bán không được để trống.");
             }
 
             #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Danh sách mặt hàng xuất bán
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu xuất bán bắt buộc phải có ít nhất 1 mặt hàng.");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu xuất bán bắt buộc phải có ít nhất 1 mặt hàng.");
             }
 
             const decimal MIN_QTY = 0.001m;
@@ -1126,28 +1328,28 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 if (binventory.Product == null)
                 {
-                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
                 }
 
                 var productType = binventory.Product.Type;
                 if (productType != ProductType.Regular && productType != ProductType.Manufactured && productType != ProductType.Processed)
                 {
-                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại '{productType}', không được phép xuất bán trực tiếp. Đơn bán chỉ chấp nhận 3 loại: Regular, Manufactured, Processed.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductTypeNotAllowed, $"Sản phẩm '{binventory.Product.Name}' thuộc loại '{productType}', không được phép xuất bán trực tiếp. Đơn bán chỉ chấp nhận 3 loại: Regular, Manufactured, Processed.");
                 }
 
                 if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
                 {
-                    throw new ArgumentException($"Số lượng xuất bán của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
+                    throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng xuất bán của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
                 }
 
                 if (detail.UnitPrice < 0 || detail.UnitPrice > MAX_PRICE)
                 {
-                    throw new ArgumentException($"Đơn giá xuất bán của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidUnitPrice, $"Đơn giá xuất bán của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
                 }
 
                 #region Đơn vị tính và UnitConversion
@@ -1156,12 +1358,12 @@ namespace MenuGoBE.Service.Document
                     var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
                     if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
                     {
-                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
                     }
 
                     if (unitConversion.ConversionPoint <= 0)
                     {
-                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
                     }
 
                     detail.ConversionRate = unitConversion.ConversionPoint;
@@ -1173,13 +1375,19 @@ namespace MenuGoBE.Service.Document
                 #endregion
 
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+
+                // Tự động gán UnitPrice theo giá bán (SellPrice) của sản phẩm nếu chưa truyền hoặc <= 0
+                if (detail.UnitPrice <= 0 && binventory.Product.SellPrice > 0)
+                {
+                    detail.UnitPrice = binventory.Product.SellPrice * detail.ConversionRate;
+                }
             }
             #endregion
 
             decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
             if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_TOTAL)
             {
-                throw new ArgumentException($"Tổng giá trị phiếu xuất bán ({calculatedTotalAmount:N0} VNĐ) vượt quá hạn mức tối đa 10 tỷ VNĐ.");
+                throw new MenuGoException(ErrorCodes.DocumentTotalAmountExceedsLimit, $"Tổng giá trị phiếu xuất bán ({calculatedTotalAmount:N0} VNĐ) vượt quá hạn mức tối đa 10 tỷ VNĐ.");
             }
 
             document.TotalAmount = calculatedTotalAmount;
@@ -1199,7 +1407,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -1225,7 +1433,7 @@ namespace MenuGoBE.Service.Document
         {
             if (ancestorPath.Contains(processedProductId))
             {
-                throw new InvalidOperationException($"Phát hiện VÒNG LẶP CÔNG THỨC (Circular Dependency) đối với sản phẩm Chế biến ID {processedProductId}. Công thức bị lặp đệ quy tự trỏ đến chính nó.");
+                throw new MenuGoException(ErrorCodes.DocumentCircularDependency, $"Phát hiện VÒNG LẶP CÔNG THỨC (Circular Dependency) đối với sản phẩm Chế biến ID {processedProductId}. Công thức bị lặp đệ quy tự trỏ đến chính nó.");
             }
 
             ancestorPath.Add(processedProductId);
@@ -1235,8 +1443,7 @@ namespace MenuGoBE.Service.Document
 
             foreach (var recipe in recipes)
             {
-                var binventoryIngredient = await _repo.GetBInventoryByBranchAndProductAsync(0, recipe.IngredientProductId);
-                var ingredientProduct = binventoryIngredient?.Product;
+                var ingredientProduct = recipe.IngredientProduct;
                 if (ingredientProduct != null && ingredientProduct.Type == ProductType.Processed)
                 {
                     await ValidateCircularDependencyAsync(recipe.IngredientProductId, new HashSet<long>(ancestorPath));
@@ -1255,30 +1462,24 @@ namespace MenuGoBE.Service.Document
             visitedProductIds ??= new HashSet<long>();
             if (!visitedProductIds.Add(processedProductId))
             {
-                throw new InvalidOperationException($"Phát hiện vòng lặp phụ thuộc (Circular Dependency) trong công thức của sản phẩm chế biến ID {processedProductId}.");
+                throw new MenuGoException(ErrorCodes.DocumentCircularDependency, $"Phát hiện vòng lặp phụ thuộc (Circular Dependency) trong công thức của sản phẩm chế biến ID {processedProductId}.");
             }
 
             var recipes = await _repo.GetRecipesByParentProductIdAsync(processedProductId);
             if (recipes == null || recipes.Count == 0)
             {
-                throw new InvalidOperationException($"Sản phẩm chế biến (Processed) ID {processedProductId} không có công thức chi tiết (Recipe).");
+                throw new MenuGoException(ErrorCodes.DocumentRecipeNotFound, $"Sản phẩm chế biến (Processed) ID {processedProductId} không có công thức chi tiết (Recipe).");
             }
 
             foreach (var recipe in recipes)
             {
                 decimal neededQty = recipe.Quantity * multiplierQty;
 
-                var binventoryIngredient = await _repo.GetBInventoryByBranchAndProductAsync(0, recipe.IngredientProductId);
-                var ingredientProduct = binventoryIngredient?.Product;
-                if (ingredientProduct == null)
-                {
-                    var tempBinventory = await _repo.GetBInventoryByIdAsync(recipe.IngredientProductId);
-                    ingredientProduct = tempBinventory?.Product;
-                }
+                var ingredientProduct = recipe.IngredientProduct;
 
                 if (ingredientProduct == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy sản phẩm nguyên liệu ID {recipe.IngredientProductId} trong công thức.");
+                    throw new MenuGoException(ErrorCodes.DocumentIngredientNotFound, $"Không tìm thấy sản phẩm nguyên liệu ID {recipe.IngredientProductId} trong công thức.");
                 }
 
                 if (ingredientProduct.Type == ProductType.Processed)
@@ -1367,12 +1568,12 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, item.ProductId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Mặt hàng '{item.Product.Name}' chưa có trong kho của Chi nhánh này.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Mặt hàng '{item.Product.Name}' chưa có trong kho của Chi nhánh này.");
                 }
 
                 if (binventory.Quantity < item.TotalRequiredQuantity)
                 {
-                    throw new InvalidOperationException($"Tồn kho chi nhánh không đủ để xuất bán sản phẩm '{item.Product.Name}'. Yêu cầu: {item.TotalRequiredQuantity:N3}, Tồn hiện tại: {binventory.Quantity:N3}.");
+                    throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Tồn kho chi nhánh không đủ để xuất bán sản phẩm '{item.Product.Name}'. Yêu cầu: {item.TotalRequiredQuantity:N3}, Tồn hiện tại: {binventory.Quantity:N3}.");
                 }
 
                 decimal leftover_old = binventory.LeftOver;
@@ -1400,7 +1601,8 @@ namespace MenuGoBE.Service.Document
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
                     SnapshotProductName = item.Product.Name,
-                    SnapshotUnitName = string.Empty,
+                    SnapshotUnitName = item.Product.Name,
+                    ConversionRateSnapshot = 1m,
                     QuantityDelta = -item.TotalRequiredQuantity,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventory.Quantity,
@@ -1441,7 +1643,7 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất bán không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ xuất bán không được để trống.");
             }
 
             document.Type = DocumentType.Sale;
@@ -1519,35 +1721,35 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ chuyển kho không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ chuyển kho không được để trống.");
             }
 
             #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Chi nhánh nhận (ToBranchId) phải khác Chi nhánh gửi (BranchId)
             if (!document.ToBranchId.HasValue || document.ToBranchId.Value <= 0)
             {
-                throw new ArgumentException("Phiếu chuyển kho bắt buộc phải chọn Chi nhánh nhận (ToBranchId).");
+                throw new MenuGoException(ErrorCodes.DocumentTransferBranchRequired, "Phiếu chuyển kho bắt buộc phải chọn Chi nhánh nhận (ToBranchId).");
             }
             if (document.ToBranchId.Value == document.BranchId)
             {
-                throw new ArgumentException("Chi nhánh nhận không được trùng với Chi nhánh gửi.");
+                throw new MenuGoException(ErrorCodes.DocumentTransferBranchSame, "Chi nhánh nhận không được trùng với Chi nhánh gửi.");
             }
             #endregion
 
             #region Quy tắc: Danh sách mặt hàng chuyển kho
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu chuyển kho bắt buộc phải có ít nhất 1 mặt hàng.");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu chuyển kho bắt buộc phải có ít nhất 1 mặt hàng.");
             }
 
             const decimal MIN_QTY = 0.001m;
@@ -1560,27 +1762,27 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 if (binventory.Product == null)
                 {
-                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
                 }
 
                 if (binventory.Product.Type == ProductType.Processed)
                 {
-                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không được phép thực hiện chuyển kho.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductTypeNotAllowed, $"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không được phép thực hiện chuyển kho.");
                 }
 
                 if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
                 {
-                    throw new ArgumentException($"Số lượng chuyển kho của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
+                    throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng chuyển kho của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ.");
                 }
 
                 if (detail.UnitPrice < 0 || detail.UnitPrice > MAX_PRICE)
                 {
-                    throw new ArgumentException($"Đơn giá chuyển của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInvalidUnitPrice, $"Đơn giá chuyển của mặt hàng '{binventory.Product.Name}' ({detail.UnitPrice:N0} VNĐ) không hợp lệ. Đơn giá phải từ 0 đến 10 tỷ VNĐ.");
                 }
 
                 #region Đơn vị tính và UnitConversion
@@ -1589,12 +1791,12 @@ namespace MenuGoBE.Service.Document
                     var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
                     if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
                     {
-                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
                     }
 
                     if (unitConversion.ConversionPoint <= 0)
                     {
-                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
                     }
 
                     detail.ConversionRate = unitConversion.ConversionPoint;
@@ -1614,7 +1816,7 @@ namespace MenuGoBE.Service.Document
             decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
             if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_TOTAL)
             {
-                throw new ArgumentException($"Tổng giá trị phiếu chuyển kho ({calculatedTotalAmount:N0} VNĐ) vượt quá hạn mức tối đa 10 tỷ VNĐ.");
+                throw new MenuGoException(ErrorCodes.DocumentTotalAmountExceedsLimit, $"Tổng giá trị phiếu chuyển kho ({calculatedTotalAmount:N0} VNĐ) vượt quá hạn mức tối đa 10 tỷ VNĐ.");
             }
 
             document.TotalAmount = calculatedTotalAmount;
@@ -1632,7 +1834,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -1664,7 +1866,7 @@ namespace MenuGoBE.Service.Document
                 var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventorySend == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy kho gửi BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho gửi BInventory ID: {detail.BInventoryId}");
                 }
 
                 string productName = detail.SnapshotProductName;
@@ -1675,7 +1877,7 @@ namespace MenuGoBE.Service.Document
 
                 if (detail.BaseQuantity > binventorySend.Quantity)
                 {
-                    throw new InvalidOperationException($"Sản phẩm '{productName}' tại chi nhánh gửi không đủ tồn kho để chuyển. Số lượng yêu cầu: {detail.BaseQuantity:N3}, Tồn hiện tại: {binventorySend.Quantity:N3}.");
+                    throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Sản phẩm '{productName}' tại chi nhánh gửi không đủ tồn kho để chuyển. Số lượng yêu cầu: {detail.BaseQuantity:N3}, Tồn hiện tại: {binventorySend.Quantity:N3}.");
                 }
 
                 decimal leftover_old = binventorySend.LeftOver;
@@ -1703,8 +1905,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.Transfer,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = productName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = -detail.BaseQuantity,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventorySend.Quantity,
@@ -1731,17 +1934,17 @@ namespace MenuGoBE.Service.Document
             var document = await _repo.GetByIdAsync(documentId);
             if (document == null || document.Type != DocumentType.Transfer)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Chuyển kho với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Chuyển kho với ID: {documentId}");
             }
 
             if (document.Status != DocumentStatus.Completed || document.TransferStatus != DocumentTransferStatus.InTransit)
             {
-                throw new InvalidOperationException("Chỉ được phép xử lý nhận hàng/từ chối khi chứng từ đã được chốt kho gửi và đang ở trạng thái InTransit.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép xử lý nhận hàng/từ chối khi chứng từ đã được chốt kho gửi và đang ở trạng thái InTransit.");
             }
 
             if (!document.ToBranchId.HasValue)
             {
-                throw new InvalidOperationException("Chứng từ chuyển kho chưa được thiết lập Chi nhánh nhận (ToBranchId).");
+                throw new MenuGoException(ErrorCodes.DocumentTransferBranchRequired, "Chứng từ chuyển kho chưa được thiết lập Chi nhánh nhận (ToBranchId).");
             }
 
             long receivingBranchId = document.ToBranchId.Value;
@@ -1751,15 +1954,17 @@ namespace MenuGoBE.Service.Document
             document.ReceiverAccountId = userId;
             document.SnapshotReceiverName = receiverAccount?.Name ?? string.Empty;
             document.SnapshotReceiverUsername = receiverAccount?.Email ?? string.Empty;
+            document.ResponseDate = DateTime.UtcNow;
+
+            // Bắt buộc phải có ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng
+            if (string.IsNullOrWhiteSpace(note))
+            {
+                throw new MenuGoException(ErrorCodes.DocumentTransferReceiptNoteRequired, "Bắt buộc phải nhập Lý do / Ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng.");
+            }
 
             if (status == DocumentTransferStatus.Rejected)
             {
                 #region Kịch bản 1: Từ Chối Nhận Hàng (Rejected)
-                if (string.IsNullOrWhiteSpace(note))
-                {
-                    throw new ArgumentException("Bắt buộc phải nhập Lý do / Ghi chú (Note) khi từ chối nhận hàng.");
-                }
-
                 document.Note = string.IsNullOrWhiteSpace(document.Note) ? $"[TỪ CHỐI]: {note}" : $"{document.Note} | [TỪ CHỐI]: {note}";
 
                 // Trả hàng về kho chi nhánh gửi
@@ -1798,8 +2003,9 @@ namespace MenuGoBE.Service.Document
                         DocumentType = DocumentType.Transfer,
                         SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                         SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                        SnapshotProductName = productName,
-                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
+                        ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                         QuantityDelta = +detail.BaseQuantity,
                         InventoryValueDelta = +ret_value,
                         RunningQuantity = b2,
@@ -1820,33 +2026,40 @@ namespace MenuGoBE.Service.Document
                 #region Kịch bản 2 & 3: Nhận Đủ (Received) hoặc Nhận Một Phần (PartialReceived)
                 foreach (var detail in document.DocumentDetails)
                 {
-                    decimal q_received = detail.BaseQuantity;
+                    // q_received_base: số lượng thực nhận theo đơn vị kho nhỏ nhất
+                    // Khi Received đầy đủ → lấy nguyên BaseQuantity đã lưu
+                    decimal q_received_base = detail.BaseQuantity;
 
                     if (status == DocumentTransferStatus.PartialReceived && receivedDetails != null)
                     {
                         var match = receivedDetails.FirstOrDefault(r => r.Id == detail.Id || r.BInventoryId == detail.BInventoryId);
                         if (match != null)
                         {
-                            q_received = match.ReceivedQuantity ?? match.Quantity;
+                            // ReceivedQuantity từ frontend là số lượng theo đơn vị UNIT (chưa quy đổi)
+                            // → Nhân với ConversionRate để ra đơn vị nhỏ nhất lưu kho
+                            decimal conversionRate = detail.ConversionRate > 0 ? detail.ConversionRate : 1m;
+                            decimal q_received_unit = match.ReceivedQuantity ?? match.Quantity;
+                            q_received_base = q_received_unit * conversionRate;
                         }
                     }
 
                     string productName = detail.SnapshotProductName;
 
                     // Quy tắc: Số lượng thực nhận không được âm và không được vượt quá số lượng gửi đi
-                    if (q_received < 0)
+                    if (q_received_base < 0)
                     {
-                        throw new ArgumentException($"Số lượng thực nhận của mặt hàng '{productName}' không được là số âm ({q_received}).");
+                        throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng thực nhận của mặt hàng '{productName}' không được là số âm ({q_received_base}).");
                     }
 
-                    if (q_received > detail.BaseQuantity)
+                    if (q_received_base > detail.BaseQuantity)
                     {
-                        throw new ArgumentException($"Số lượng thực nhận của mặt hàng '{productName}' ({q_received:N3}) vượt quá số lượng đã gửi đi ({detail.BaseQuantity:N3}). Phía bên nhận chỉ được nhận tối đa bằng số lượng phía bên gửi.");
+                        throw new MenuGoException(ErrorCodes.DocumentReturnQuantityExceeded, $"Số lượng thực nhận của mặt hàng '{productName}' ({q_received_base:N3}) vượt quá số lượng đã gửi đi ({detail.BaseQuantity:N3}). Phía bên nhận chỉ được nhận tối đa bằng số lượng phía bên gửi.");
                     }
 
-                    detail.ReceivedQuantity = q_received;
+                    // Lưu số lượng thực nhận theo đơn vị nhỏ nhất vào DB
+                    detail.ReceivedQuantity = q_received_base;
 
-                    if (q_received <= 0) continue;
+                    if (q_received_base <= 0) continue;
 
                     // Lấy hoặc tạo BInventory tại chi nhánh nhận
                     var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
@@ -1873,15 +2086,25 @@ namespace MenuGoBE.Service.Document
                     }
 
                     // Quy tắc: Đơn giá UnitPrice luôn được bảo lưu 100% theo bên gửi, bên nhận tuyệt đối không thể thay đổi đơn giá
+                    // UnitPrice đại diện cho giá của 1 đơn vị UNIT (ví dụ: 1 thùng = 24 lon → UnitPrice = giá/thùng)
                     decimal effectiveUnitPrice = detail.UnitPrice > 0 ? detail.UnitPrice : detail.SnapshotAvgCost;
-                    decimal transfer_value = q_received * effectiveUnitPrice;
+
+                    // Tính đơn giá theo đơn vị nhỏ nhất để dùng cho Avg cost
+                    decimal convRate = detail.ConversionRate > 0 ? detail.ConversionRate : 1m;
+                    decimal unitCostBase = effectiveUnitPrice / convRate;
+
+                    // Tổng tiền = số lượng thực nhận (đơn vị unit) × UnitPrice
+                    // = (q_received_base / convRate) × UnitPrice
+                    // = q_received_base × (UnitPrice / convRate)
+                    // = q_received_base × unitCostBase
+                    decimal transfer_value = q_received_base * unitCostBase;
 
                     decimal q_rec_old = binventoryRec.Quantity;
                     decimal avg_rec_old = binventoryRec.Avg;
                     decimal leftover_rec_old = binventoryRec.LeftOver;
 
                     decimal b1 = (q_rec_old * avg_rec_old) + leftover_rec_old + transfer_value;
-                    decimal b2 = q_rec_old + q_received;
+                    decimal b2 = q_rec_old + q_received_base;
                     decimal avg_rec_new = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
                     decimal c1 = avg_rec_new * b2;
                     decimal leftover_rec_new = b1 - c1;
@@ -1898,15 +2121,16 @@ namespace MenuGoBE.Service.Document
                         PostedBy = userId,
                         DocumentType = DocumentType.Transfer,
                         SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
-                        SnapshotBranchName = document.SnapshotToBranchName ?? string.Empty,
-                        SnapshotProductName = productName,
-                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
-                        QuantityDelta = +q_received,
+                        SnapshotBranchName = !string.IsNullOrWhiteSpace(document.SnapshotToBranchName) ? document.SnapshotToBranchName : (document.SnapshotBranchName ?? string.Empty),
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
+                        ConversionRateSnapshot = convRate,
+                        QuantityDelta = +q_received_base,
                         InventoryValueDelta = +transfer_value,
                         RunningQuantity = b2,
                         RunningInventoryValue = c1,
                         RunningAverageCost = avg_rec_new,
-                        UnitCost = effectiveUnitPrice,
+                        UnitCost = unitCostBase,
                         CreatedAt = DateTime.UtcNow
                     };
 
@@ -1923,7 +2147,7 @@ namespace MenuGoBE.Service.Document
             }
             else
             {
-                throw new ArgumentException("Trạng thái nhận hàng không hợp lệ. Chỉ chấp nhận Received, PartialReceived hoặc Rejected.");
+                throw new MenuGoException(ErrorCodes.DocumentTransferReceiptStatusInvalid, "Trạng thái nhận hàng không hợp lệ. Chỉ chấp nhận Received, PartialReceived hoặc Rejected.");
             }
 
             _repo.Update(document);
@@ -1977,14 +2201,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.Transfer)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Chuyển kho với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Chuyển kho với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
             }
 
             await ValidateTransferBaseRulesAsync(existing);
@@ -2034,7 +2258,7 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất dùng nội bộ không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ xuất dùng nội bộ không được để trống.");
             }
 
             document.Type = DocumentType.Export;
@@ -2064,7 +2288,7 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.Export)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Xuất dùng nội bộ với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Xuất dùng nội bộ với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
@@ -2115,24 +2339,24 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ xuất hủy không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ xuất hủy không được để trống.");
             }
 
             #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Tối thiểu 1 DocumentDetail
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu xuất hủy bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu xuất hủy bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
             }
             #endregion
 
@@ -2143,7 +2367,7 @@ namespace MenuGoBE.Service.Document
 
             if (duplicateBInventory != null)
             {
-                throw new ArgumentException($"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu xuất hủy. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
+                throw new MenuGoException(ErrorCodes.DocumentDuplicateDetail, $"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu xuất hủy. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
             }
             #endregion
 
@@ -2157,23 +2381,23 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 if (binventory.Product == null)
                 {
-                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
                 }
 
                 var productType = binventory.Product.Type;
                 if (productType == ProductType.Processed)
                 {
-                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép xuất hủy. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductTypeNotAllowed, $"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép xuất hủy. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
                 }
 
                 if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
                 {
-                    throw new ArgumentException($"Số lượng xuất hủy của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ (không cho phép số âm hoặc 0).");
+                    throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng xuất hủy của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Phải nằm trong khoảng từ 0.001 đến 10 tỷ (không cho phép số âm hoặc 0).");
                 }
 
                 #region Đơn vị tính và UnitConversion
@@ -2182,12 +2406,12 @@ namespace MenuGoBE.Service.Document
                     var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
                     if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
                     {
-                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
                     }
 
                     if (unitConversion.ConversionPoint <= 0)
                     {
-                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
                     }
 
                     detail.ConversionRate = unitConversion.ConversionPoint;
@@ -2199,16 +2423,23 @@ namespace MenuGoBE.Service.Document
                 #endregion
 
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                decimal avgCost = binventory.Avg > 0 
+                    ? binventory.Avg 
+                    : (detail.UnitPrice > 0 && detail.ConversionRate > 0 
+                        ? detail.UnitPrice / detail.ConversionRate 
+                        : 0m);
+                detail.SnapshotAvgCost = avgCost;
+                detail.UnitPrice = avgCost * detail.ConversionRate;
             }
             #endregion
 
             // Xuất hủy không liên kết tới Supplier (PartnerId = null)
             document.PartnerId = null;
 
-            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.Quantity * d.UnitPrice);
+            decimal calculatedTotalAmount = document.DocumentDetails.Sum(d => d.BaseQuantity * d.SnapshotAvgCost);
             if (calculatedTotalAmount < 0 || calculatedTotalAmount > MAX_AMOUNT)
             {
-                throw new ArgumentException($"Tổng giá trị phiếu xuất hủy ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
+                throw new MenuGoException(ErrorCodes.DocumentTotalAmountExceedsLimit, $"Tổng giá trị phiếu xuất hủy ({calculatedTotalAmount:N0} VNĐ) vượt quá 10 tỷ VNĐ.");
             }
             document.TotalAmount = calculatedTotalAmount;
             document.AmountPaid = 0;
@@ -2225,7 +2456,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -2257,14 +2488,28 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
                 }
+
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion != null && unitConversion.ConversionPoint > 0)
+                    {
+                        detail.ConversionRate = unitConversion.ConversionPoint;
+                    }
+                }
+                if (detail.ConversionRate <= 0) detail.ConversionRate = 1;
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                detail.SnapshotAvgCost = binventory.Avg;
+                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
 
                 decimal q_export = detail.BaseQuantity;
                 if (q_export > binventory.Quantity)
                 {
                     string productName = binventory.Product?.Name ?? $"BInventory ID {binventory.Id}";
-                    throw new InvalidOperationException($"Số lượng xuất hủy của mặt hàng '{productName}' ({q_export}) vượt quá số lượng tồn kho hiện tại ({binventory.Quantity}). Không cho phép xuất vượt quá tồn kho hoặc xuất âm.");
+                    throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Số lượng xuất hủy của mặt hàng '{productName}' ({q_export}) vượt quá số lượng tồn kho hiện tại ({binventory.Quantity}). Không cho phép xuất vượt quá tồn kho hoặc xuất âm.");
                 }
 
                 decimal leftover_old = binventory.LeftOver;
@@ -2272,7 +2517,6 @@ namespace MenuGoBE.Service.Document
 
                 // Trừ tồn kho
                 binventory.Quantity -= q_export;
-                detail.SnapshotAvgCost = binventory.Avg;
 
                 if (binventory.Quantity == 0)
                 {
@@ -2295,8 +2539,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = document.Type,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = -q_export,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventory.Quantity,
@@ -2308,6 +2553,8 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddInventoryLedgerAsync(ledger);
             }
+
+            document.TotalAmount = document.DocumentDetails.Sum(d => d.BaseQuantity * d.SnapshotAvgCost);
         }
         #endregion
 
@@ -2356,14 +2603,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.ExportDelete)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Xuất hủy với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Xuất hủy với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
             }
 
             await ValidateExportDeleteBaseRulesAsync(existing);
@@ -2409,24 +2656,24 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ sản xuất không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ sản xuất không được để trống.");
             }
 
             #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Phải có ít nhất 1 DocumentDetail cho thành phẩm chính
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu sản xuất bắt buộc phải có thông tin sản phẩm sản xuất.");
+                throw new MenuGoException(ErrorCodes.DocumentProductionInfoRequired, "Phiếu sản xuất bắt buộc phải có thông tin sản phẩm sản xuất.");
             }
 
             // Tìm dòng sản phẩm chính (FatherId == null)
@@ -2439,31 +2686,31 @@ namespace MenuGoBE.Service.Document
             var binventory = await _repo.GetBInventoryByIdAsync(parentDetail.BInventoryId);
             if (binventory == null)
             {
-                throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {parentDetail.BInventoryId}");
+                throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng BInventory ID: {parentDetail.BInventoryId}");
             }
 
             if (binventory.Product == null)
             {
-                throw new InvalidOperationException($"BInventory ID {parentDetail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {parentDetail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
             }
 
             if (binventory.Product.Type != ProductType.Manufactured)
             {
-                throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' có loại (ProductType = {binventory.Product.Type}) không phải là sản phẩm sản xuất (Manufactured). Phiếu sản xuất chỉ áp dụng cho sản phẩm loại Manufactured.");
+                throw new MenuGoException(ErrorCodes.DocumentProductTypeNotAllowed, $"Sản phẩm '{binventory.Product.Name}' có loại (ProductType = {binventory.Product.Type}) không phải là sản phẩm sản xuất (Manufactured). Phiếu sản xuất chỉ áp dụng cho sản phẩm loại Manufactured.");
             }
 
             // Kiểm tra công thức chi tiết của thành phẩm
             var recipeItems = await _repo.GetRecipesByParentProductIdAsync(binventory.ProductId);
             if (recipeItems == null || recipeItems.Count == 0)
             {
-                throw new ArgumentException($"Sản phẩm sản xuất '{binventory.Product.Name}' chưa có công thức chi tiết (Recipe). Không thể lập phiếu sản xuất.");
+                throw new MenuGoException(ErrorCodes.DocumentRecipeNotFound, $"Sản phẩm sản xuất '{binventory.Product.Name}' chưa có công thức chi tiết (Recipe). Không thể lập phiếu sản xuất.");
             }
 
             const decimal MIN_QTY = 0.001m;
             const decimal MAX_QTY = 10_000_000_000m;
             if (parentDetail.Quantity < MIN_QTY || parentDetail.Quantity > MAX_QTY)
             {
-                throw new ArgumentException($"Số lượng sản xuất của sản phẩm '{binventory.Product.Name}' ({parentDetail.Quantity}) không hợp lệ. Số lượng phải lớn hơn 0 và từ 0.001 đến 10 tỷ.");
+                throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng sản xuất của sản phẩm '{binventory.Product.Name}' ({parentDetail.Quantity}) không hợp lệ. Số lượng phải lớn hơn 0 và từ 0.001 đến 10 tỷ.");
             }
 
             // Luôn dùng đơn vị kho cơ sở nhỏ nhất (ConversionRate = 1)
@@ -2488,7 +2735,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -2519,14 +2766,14 @@ namespace MenuGoBE.Service.Document
             var parentBinventory = await _repo.GetBInventoryByIdAsync(parentDetail.BInventoryId);
             if (parentBinventory == null || parentBinventory.Product == null)
             {
-                throw new KeyNotFoundException($"Không tìm thấy kho thành phẩm BInventory ID: {parentDetail.BInventoryId}");
+                throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho thành phẩm BInventory ID: {parentDetail.BInventoryId}");
             }
 
             // Lấy danh sách công thức chi tiết
             var recipeItems = await _repo.GetRecipesByParentProductIdAsync(parentBinventory.ProductId);
             if (recipeItems == null || recipeItems.Count == 0)
             {
-                throw new ArgumentException($"Sản phẩm sản xuất '{parentBinventory.Product.Name}' chưa có công thức chi tiết (Recipe).");
+                throw new MenuGoException(ErrorCodes.DocumentRecipeNotFound, $"Sản phẩm sản xuất '{parentBinventory.Product.Name}' chưa có công thức chi tiết (Recipe).");
             }
 
             decimal producedQty = parentDetail.BaseQuantity;
@@ -2541,13 +2788,13 @@ namespace MenuGoBE.Service.Document
                 if (ingredientBinventory == null)
                 {
                     string ingredientName = recipeItem.IngredientProduct?.Name ?? $"ProductId {recipeItem.IngredientProductId}";
-                    throw new InvalidOperationException($"Không tìm thấy kho hàng của nguyên liệu '{ingredientName}' tại chi nhánh.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng của nguyên liệu '{ingredientName}' tại chi nhánh.");
                 }
 
                 if (requiredQty > ingredientBinventory.Quantity)
                 {
                     string ingredientName = ingredientBinventory.Product?.Name ?? recipeItem.IngredientProduct?.Name ?? $"ProductId {recipeItem.IngredientProductId}";
-                    throw new InvalidOperationException($"Nguyên liệu '{ingredientName}' không đủ tồn kho để sản xuất. Số lượng cần: {requiredQty:N3}, Tồn kho hiện tại: {ingredientBinventory.Quantity:N3}.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductionInsufficientRawMaterial, $"Nguyên liệu '{ingredientName}' không đủ tồn kho để sản xuất. Số lượng cần: {requiredQty:N3}, Tồn kho hiện tại: {ingredientBinventory.Quantity:N3}.");
                 }
 
                 ingredientRequirements.Add((recipeItem, ingredientBinventory, requiredQty));
@@ -2562,32 +2809,10 @@ namespace MenuGoBE.Service.Document
 
             decimal totalProductionCost = 0m;
 
-            // Bước 2 & 3: Xử lý trừ kho NVL, tạo chi tiết phụ và ghi Sổ kho NVL
+            // Bước 2 & 3: Xử lý trừ kho NVL và ghi Sổ kho NVL
             foreach (var (recipeItem, ingredientBinventory, requiredQty) in ingredientRequirements)
             {
                 string ingredientName = ingredientBinventory.Product?.Name ?? recipeItem.IngredientProduct?.Name ?? string.Empty;
-                string ingredientCode = ingredientBinventory.Product?.SKUCode ?? string.Empty;
-
-                // Tạo dòng DocumentDetail phụ cho nguyên liệu bị dùng
-                var childDetail = new DocumentDetail
-                {
-                    DocumentId = document.Id,
-                    BInventoryId = ingredientBinventory.Id,
-                    FatherId = parentDetail.Id,
-                    UnitConversionId = null,
-                    SnapshotProductName = ingredientName,
-                    SnapshotProductCode = ingredientCode,
-                    SnapshotUnitName = string.Empty,
-                    SnapshotBaseUnitName = string.Empty,
-                    ConversionRate = 1,
-                    Quantity = requiredQty,
-                    BaseQuantity = requiredQty,
-                    UnitPrice = ingredientBinventory.Avg,
-                    SnapshotAvgCost = ingredientBinventory.Avg,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                document.DocumentDetails.Add(childDetail);
 
                 decimal leftover_old = ingredientBinventory.LeftOver;
                 decimal val_delta;
@@ -2619,7 +2844,8 @@ namespace MenuGoBE.Service.Document
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
                     SnapshotProductName = ingredientName,
-                    SnapshotUnitName = string.Empty,
+                    SnapshotUnitName = ingredientName,
+                    ConversionRateSnapshot = 1m,
                     QuantityDelta = -requiredQty,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = ingredientBinventory.Quantity,
@@ -2661,8 +2887,9 @@ namespace MenuGoBE.Service.Document
                 DocumentType = DocumentType.Production,
                 SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                 SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                SnapshotProductName = string.IsNullOrWhiteSpace(parentDetail.SnapshotProductName) && parentBinventory.Product != null ? parentBinventory.Product.Name : parentDetail.SnapshotProductName,
-                SnapshotUnitName = parentDetail.SnapshotUnitName ?? string.Empty,
+                SnapshotProductName = !string.IsNullOrWhiteSpace(parentDetail.SnapshotProductName) ? parentDetail.SnapshotProductName : (parentBinventory.Product?.Name ?? string.Empty),
+                SnapshotUnitName = !string.IsNullOrWhiteSpace(parentDetail.SnapshotUnitName) ? parentDetail.SnapshotUnitName : (parentBinventory.Product?.Name ?? string.Empty),
+                ConversionRateSnapshot = parentDetail.ConversionRate > 0 ? parentDetail.ConversionRate : 1m,
                 QuantityDelta = +producedQty,
                 InventoryValueDelta = +totalProductionCost,
                 RunningQuantity = b2,
@@ -2721,14 +2948,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.Production)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Sản xuất với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Sản xuất với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
             }
 
             await ValidateProductionBaseRulesAsync(existing);
@@ -2774,24 +3001,24 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ kiểm kho không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ kiểm kho không được để trống.");
             }
 
             #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Tối thiểu 1 DocumentDetail
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu kiểm kho bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu kiểm kho bắt buộc phải có tối thiểu 1 mặt hàng chi tiết (DocumentDetail).");
             }
             #endregion
 
@@ -2802,7 +3029,7 @@ namespace MenuGoBE.Service.Document
 
             if (duplicateBInventory != null)
             {
-                throw new ArgumentException($"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu kiểm kho. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
+                throw new MenuGoException(ErrorCodes.DocumentDuplicateDetail, $"Mặt hàng BInventory ID {duplicateBInventory.Key} bị trùng lặp trong phiếu kiểm kho. Mỗi mặt hàng chỉ được xuất hiện 1 lần.");
             }
             #endregion
 
@@ -2815,23 +3042,28 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy mặt hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 if (binventory.Product == null)
                 {
-                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
                 }
 
                 var productType = binventory.Product.Type;
                 if (productType == ProductType.Processed)
                 {
-                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép kiểm kho. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductTypeNotAllowed, $"Sản phẩm '{binventory.Product.Name}' thuộc loại Processed (thành phẩm pha chế/chế biến) không được phép kiểm kho. Dạng phiếu này chỉ chấp nhận các loại sản phẩm ngoại trừ Processed.");
+                }
+
+                if (detail.Quantity == 0 && detail.ActualQuantity.HasValue && detail.ActualQuantity.Value > 0)
+                {
+                    detail.Quantity = detail.ActualQuantity.Value;
                 }
 
                 if (detail.Quantity < MIN_QTY || detail.Quantity > MAX_QTY)
                 {
-                    throw new ArgumentException($"Số lượng kiểm thực tế của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Số lượng phải nằm trong khoảng từ 0 đến 100 tỷ.");
+                    throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng kiểm thực tế của mặt hàng '{binventory.Product.Name}' ({detail.Quantity}) không hợp lệ. Số lượng phải nằm trong khoảng từ 0 đến 100 tỷ.");
                 }
 
                 #region Đơn vị tính và UnitConversion
@@ -2840,12 +3072,12 @@ namespace MenuGoBE.Service.Document
                     var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
                     if (unitConversion == null || unitConversion.ProductId != binventory.ProductId)
                     {
-                        throw new ArgumentException($"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Đơn vị quy đổi ID {detail.UnitConversionId.Value} không tồn tại hoặc không thuộc về sản phẩm '{binventory.Product.Name}'.");
                     }
 
                     if (unitConversion.ConversionPoint <= 0)
                     {
-                        throw new ArgumentException($"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
+                        throw new MenuGoException(ErrorCodes.DocumentUnitConversionNotFound, $"Tỷ lệ quy đổi của đơn vị tính ID {detail.UnitConversionId.Value} phải lớn hơn 0.");
                     }
 
                     detail.ConversionRate = unitConversion.ConversionPoint;
@@ -2859,11 +3091,13 @@ namespace MenuGoBE.Service.Document
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
                 detail.SystemQuantity = binventory.Quantity;
                 detail.ActualQuantity = detail.BaseQuantity;
+                detail.SnapshotAvgCost = binventory.Avg;
+                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
             }
             #endregion
 
             document.PartnerId = null;
-            document.TotalAmount = 0;
+            document.TotalAmount = document.DocumentDetails.Sum(d => (d.BaseQuantity - (d.SystemQuantity ?? 0m)) * d.SnapshotAvgCost);
             document.AmountPaid = 0;
             document.AmountDue = 0;
         }
@@ -2878,7 +3112,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -2909,11 +3143,32 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
                 }
 
-                decimal actual_q = detail.ActualQuantity ?? detail.BaseQuantity;
-                decimal system_q = detail.SystemQuantity ?? binventory.Quantity;
+                if (detail.UnitConversionId.HasValue && detail.UnitConversionId.Value > 0)
+                {
+                    var unitConversion = await _repo.GetUnitConversionByIdAsync(detail.UnitConversionId.Value);
+                    if (unitConversion != null && unitConversion.ConversionPoint > 0)
+                    {
+                        detail.ConversionRate = unitConversion.ConversionPoint;
+                    }
+                }
+                if (detail.ConversionRate <= 0) detail.ConversionRate = 1;
+
+                if (detail.Quantity == 0 && detail.ActualQuantity.HasValue && detail.ActualQuantity.Value > 0 && detail.ActualQuantity.Value != (detail.Quantity * detail.ConversionRate))
+                {
+                    detail.Quantity = detail.ActualQuantity.Value;
+                }
+
+                detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+                detail.ActualQuantity = detail.BaseQuantity;
+                detail.SystemQuantity = detail.SystemQuantity ?? binventory.Quantity;
+                detail.SnapshotAvgCost = binventory.Avg;
+                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
+
+                decimal actual_q = detail.BaseQuantity;
+                decimal system_q = detail.SystemQuantity.Value;
                 decimal q_delta = actual_q - system_q;
 
                 decimal leftover_old = binventory.LeftOver;
@@ -2932,8 +3187,6 @@ namespace MenuGoBE.Service.Document
                     val_delta = q_delta * binventory.Avg;
                 }
 
-                detail.SnapshotAvgCost = binventory.Avg;
-
                 var ledger = new InventoryLedger
                 {
                     BInventoryId = binventory.Id,
@@ -2943,8 +3196,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.Check,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = q_delta,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventory.Quantity,
@@ -2956,6 +3210,8 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddInventoryLedgerAsync(ledger);
             }
+
+            document.TotalAmount = document.DocumentDetails.Sum(d => (d.BaseQuantity - (d.SystemQuantity ?? 0m)) * d.SnapshotAvgCost);
         }
         #endregion
 
@@ -2976,6 +3232,11 @@ namespace MenuGoBE.Service.Document
             document.PostedBy = userId;
             document.CreatedAt = DateTime.UtcNow;
             document.PostedAt = DateTime.UtcNow;
+
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = string.Empty;
+            }
 
             await ValidateCheckBaseRulesAsync(document);
 
@@ -3004,14 +3265,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.Check)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Kiểm kho với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Kiểm kho với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
             }
 
             await ValidateCheckBaseRulesAsync(existing);
@@ -3056,24 +3317,24 @@ namespace MenuGoBE.Service.Document
         {
             if (document == null)
             {
-                throw new ArgumentNullException(nameof(document), "Thông tin chứng từ điều chỉnh giá vốn không được để trống.");
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ điều chỉnh giá vốn không được để trống.");
             }
 
             #region Quy tắc: Note & DeleteNote không vượt quá 255 ký tự
             if (!string.IsNullOrEmpty(document.Note) && document.Note.Length > 255)
             {
-                throw new ArgumentException("Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentNoteTooLong, "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.");
             }
             if (!string.IsNullOrEmpty(document.DeleteNote) && document.DeleteNote.Length > 255)
             {
-                throw new ArgumentException("Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
+                throw new MenuGoException(ErrorCodes.DocumentDeleteNoteTooLong, "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.");
             }
             #endregion
 
             #region Quy tắc: Danh sách mặt hàng điều chỉnh
             if (document.DocumentDetails == null || document.DocumentDetails.Count == 0)
             {
-                throw new ArgumentException("Phiếu điều chỉnh giá vốn bắt buộc phải có ít nhất 1 mặt hàng.");
+                throw new MenuGoException(ErrorCodes.DocumentMustHaveDetail, "Phiếu điều chỉnh giá vốn bắt buộc phải có ít nhất 1 mặt hàng.");
             }
 
             const decimal MIN_ADJ_VAL = -10_000_000_000m;
@@ -3084,35 +3345,56 @@ namespace MenuGoBE.Service.Document
                 var binventory = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventory == null)
                 {
-                    throw new KeyNotFoundException($"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng BInventory ID: {detail.BInventoryId}");
                 }
 
                 if (binventory.Product == null)
                 {
-                    throw new InvalidOperationException($"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
+                    throw new MenuGoException(ErrorCodes.DocumentInventoryNotLinked, $"BInventory ID {detail.BInventoryId} không liên kết với sản phẩm hợp lệ.");
                 }
 
                 if (binventory.Product.Type == ProductType.Processed)
                 {
-                    throw new ArgumentException($"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không quản lý tồn kho và không được phép điều chỉnh giá vốn.");
+                    throw new MenuGoException(ErrorCodes.DocumentProductTypeNotAllowed, $"Sản phẩm '{binventory.Product.Name}' là loại Chế biến (Processed), không quản lý tồn kho và không được phép điều chỉnh giá vốn.");
                 }
 
-                decimal adjVal = detail.AdjustedCostDelta ?? detail.UnitPrice;
-                if (adjVal == 0)
+                decimal newAvgCostVal = detail.NewAvgCost ?? 0m;
+
+                if (newAvgCostVal < 0 || newAvgCostVal > 10_000_000_000m)
                 {
-                    throw new ArgumentException($"Giá trị điều chỉnh của sản phẩm '{binventory.Product.Name}' phải khác 0.");
+                    throw new MenuGoException(ErrorCodes.DocumentNewAvgCostOutOfRange, $"Giá vốn mới của sản phẩm '{binventory.Product.Name}' ({newAvgCostVal:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến 10 tỷ VNĐ.");
                 }
 
-                if (adjVal < MIN_ADJ_VAL || adjVal > MAX_ADJ_VAL)
+                decimal q = binventory.Quantity;
+                if (q <= 0)
                 {
-                    throw new ArgumentException($"Giá trị điều chỉnh giá vốn của sản phẩm '{binventory.Product.Name}' ({adjVal:N0} VNĐ) không hợp lệ. Hạn mức quy định từ -10 tỷ đến +10 tỷ VNĐ.");
+                    throw new MenuGoException(ErrorCodes.DocumentZeroInventoryForAdjustment, $"Không thể điều chỉnh giá vốn cho sản phẩm '{binventory.Product.Name}' vì số lượng tồn kho hiện tại không lớn hơn 0 (Tồn kho: {q}).");
+                }
+
+                // Nếu NewAvgCost chưa có nhưng có AdjustedCostDelta/UnitPrice (gọi từ code cũ), tự tính NewAvgCost
+                if (!detail.NewAvgCost.HasValue || detail.NewAvgCost.Value == 0)
+                {
+                    if ((detail.AdjustedCostDelta.HasValue && detail.AdjustedCostDelta.Value != 0) || detail.UnitPrice != 0)
+                    {
+                        decimal oldVal = detail.AdjustedCostDelta ?? detail.UnitPrice;
+                        newAvgCostVal = binventory.Avg + (oldVal / q);
+                        detail.NewAvgCost = newAvgCostVal;
+                    }
+                }
+
+                decimal avg_old = binventory.Avg;
+                decimal v_adj = (newAvgCostVal - avg_old) * q;
+
+                if (v_adj < MIN_ADJ_VAL || v_adj > MAX_ADJ_VAL)
+                {
+                    throw new MenuGoException(ErrorCodes.DocumentAdjustmentValueOutOfRange, $"Giá trị điều chỉnh giá vốn của sản phẩm '{binventory.Product.Name}' ({v_adj:N0} VNĐ) không hợp lệ. Hạn mức quy định từ -10 tỷ đến +10 tỷ VNĐ.");
                 }
 
                 // Không sử dụng quy đổi đơn vị tính cho điều chỉnh giá vốn
                 detail.UnitConversionId = null;
                 detail.ConversionRate = 1;
-                detail.AdjustedCostDelta = adjVal;
-                detail.UnitPrice = adjVal;
+                detail.AdjustedCostDelta = v_adj;
+                detail.UnitPrice = v_adj;
             }
             #endregion
 
@@ -3132,7 +3414,7 @@ namespace MenuGoBE.Service.Document
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
-                    throw new InvalidOperationException($"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
+                    throw new MenuGoException(ErrorCodes.DocumentCodeDuplicate, $"Mã chứng từ '{document.Code}' đã tồn tại trong hệ thống. Vui lòng nhập mã khác.");
                 }
             }
             else
@@ -3150,12 +3432,11 @@ namespace MenuGoBE.Service.Document
 
         /// <summary>
         /// Thực thi chốt phiếu Điều chỉnh giá vốn Completed:
-        /// 1. Kiểm tra số lượng tồn kho hiện tại (q > 0). Báo lỗi nếu q == 0.
-        /// 2. Tính tổng giá trị kho hiện tại: V_old = (q * avg_old) + leftover_old.
-        /// 3. Tính tổng giá trị kho mới: V_new = V_old + V_adj.
-        /// 4. Nếu V_adj < 0 làm V_new < 0 (giá trị kho bị âm) -> Ngăn chặn tuyệt đối (Ném lỗi).
-        /// 5. Tính lại Avg_new = Math.Round(V_new / q, 6) và LeftOver_new = V_new - (Avg_new * q).
-        /// 6. Cập nhật BInventory, snapshot detail và tạo bản ghi InventoryLedger với QuantityDelta = 0 và InventoryValueDelta = V_adj.
+        /// 1. Kiểm tra số lượng tồn kho hiện tại (q > 0). Báo lỗi nếu q <= 0.
+        /// 2. Kiểm tra giá vốn mới (NewAvgCost >= 0).
+        /// 3. Tính chênh lệch tổng tiền kho theo yêu cầu: V_adj = (Giá mới - Giá cũ) * q.
+        /// 4. Cập nhật BInventory.Avg = NewAvgCost, BInventory.LeftOver = 0.
+        /// 5. Tạo bản ghi InventoryLedger với QuantityDelta = 0 và InventoryValueDelta = V_adj.
         /// </summary>
         private async Task ProcessCostAdjustmentCompletedAsync(Models.Document document, long userId)
         {
@@ -3175,29 +3456,26 @@ namespace MenuGoBE.Service.Document
                 decimal q = binventory.Quantity;
                 if (q <= 0)
                 {
-                    throw new InvalidOperationException($"Không thể điều chỉnh giá vốn cho sản phẩm '{productName}' vì số lượng tồn kho hiện tại bằng 0 ({q}).");
+                    throw new MenuGoException(ErrorCodes.DocumentZeroInventoryForAdjustment, $"Không thể điều chỉnh giá vốn cho sản phẩm '{productName}' vì số lượng tồn kho hiện tại không lớn hơn 0 (Tồn kho: {q}).");
+                }
+
+                decimal newAvgCostVal = detail.NewAvgCost ?? 0m;
+
+                if (newAvgCostVal < 0)
+                {
+                    throw new MenuGoException(ErrorCodes.DocumentCostAdjustmentNegative, $"Giá vốn mới của sản phẩm '{productName}' không được nhỏ hơn 0.");
                 }
 
                 decimal avg_old = binventory.Avg;
-                decimal leftover_old = binventory.LeftOver;
-                decimal v_adj = detail.AdjustedCostDelta ?? detail.UnitPrice;
-
-                decimal v_old_total = (q * avg_old) + leftover_old;
-                decimal v_new_total = v_old_total + v_adj;
-
-                if (v_new_total < 0)
-                {
-                    throw new InvalidOperationException($"Điều chỉnh giảm giá vốn ({v_adj:N0} VNĐ) khiến tổng giá trị tồn kho của sản phẩm '{productName}' bị âm ({v_new_total:N0} VNĐ). Hệ thống ngăn chặn tuyệt đối.");
-                }
-
-                decimal avg_new = Math.Round(v_new_total / q, 6);
-                decimal c1 = avg_new * q;
-                decimal leftover_new = v_new_total - c1;
+                decimal avg_new = newAvgCostVal;
+                decimal v_adj = (avg_new - avg_old) * q;
+                decimal v_new_total = avg_new * q;
 
                 binventory.Avg = avg_new;
-                binventory.LeftOver = leftover_new;
+                binventory.LeftOver = 0m;
 
                 detail.AdjustedCostDelta = v_adj;
+                detail.UnitPrice = v_adj;
                 detail.NewAvgCost = avg_new;
                 detail.SnapshotAvgCost = avg_new;
 
@@ -3210,12 +3488,13 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.CostAdjustment,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = productName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = 0m,
                     InventoryValueDelta = v_adj,
                     RunningQuantity = q,
-                    RunningInventoryValue = c1,
+                    RunningInventoryValue = v_new_total,
                     RunningAverageCost = avg_new,
                     UnitCost = avg_new,
                     CreatedAt = DateTime.UtcNow
@@ -3244,6 +3523,11 @@ namespace MenuGoBE.Service.Document
             document.CreatedAt = DateTime.UtcNow;
             document.PostedAt = DateTime.UtcNow;
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = string.Empty;
+            }
+
             await ValidateCostAdjustmentBaseRulesAsync(document);
 
             await _repo.AddAsync(document);
@@ -3271,14 +3555,14 @@ namespace MenuGoBE.Service.Document
             var existing = await _repo.GetByIdAsync(documentId);
             if (existing == null || existing.Type != DocumentType.CostAdjustment)
             {
-                throw new KeyNotFoundException($"Không tìm thấy chứng từ Điều chỉnh giá vốn với ID: {documentId}");
+                throw new MenuGoException(ErrorCodes.DocumentNotFound, $"Không tìm thấy chứng từ Điều chỉnh giá vốn với ID: {documentId}");
             }
 
             ValidateDocumentNotLocked(existing);
 
             if (existing.Status != DocumentStatus.Pending)
             {
-                throw new InvalidOperationException("Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
+                throw new MenuGoException(ErrorCodes.DocumentNotPending, "Chỉ được phép chốt chứng từ khi ở trạng thái Pending.");
             }
 
             await ValidateCostAdjustmentBaseRulesAsync(existing);

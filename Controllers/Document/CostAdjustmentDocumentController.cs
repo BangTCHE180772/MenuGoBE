@@ -86,6 +86,7 @@ namespace MenuGoBE.Controllers.Document
             var document = new Models.Document
             {
                 BranchId = dto.BranchId,
+                Code = dto.Code ?? string.Empty,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 Type = DocumentType.CostAdjustment,
@@ -125,6 +126,7 @@ namespace MenuGoBE.Controllers.Document
             var document = new Models.Document
             {
                 BranchId = dto.BranchId,
+                Code = dto.Code ?? string.Empty,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 Type = DocumentType.CostAdjustment,
@@ -171,6 +173,7 @@ namespace MenuGoBE.Controllers.Document
             {
                 Id = id,
                 BranchId = existingDoc.BranchId,
+                Code = dto.Code ?? string.Empty,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 Type = DocumentType.CostAdjustment,

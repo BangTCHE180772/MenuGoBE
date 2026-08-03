@@ -235,5 +235,30 @@ namespace MenuGoBE.Controllers.Document
             return Ok(new { success = result, message = "Đã hủy phiếu nhập nháp thành công." });
         }
         #endregion
+
+        #region GET api/importdocument/{id}/return-details (Lấy thông tin trả hàng cho phiếu Nhập)
+        /// <summary>
+        /// Lấy danh sách sản phẩm trong phiếu Nhập kho đã chốt kèm số lượng đã trả tích lũy,
+        /// phục vụ tạo phiếu Trả hàng NCC.
+        /// Toàn bộ dữ liệu sản phẩm lấy từ Snapshot (không phụ thuộc master data hiện tại).
+        /// </summary>
+        [HttpGet("{id:long}/return-details")]
+        [HttpGet("/api/document/import/{id:long}/return-details")]
+        public async Task<IActionResult> GetImportReturnDetails(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var result = await _documentService.GetImportReturnDetailsAsync(id);
+            if (result == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy phiếu Nhập kho với ID: {id}" });
+            }
+
+            return Ok(result);
+        }
+        #endregion
     }
 }

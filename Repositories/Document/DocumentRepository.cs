@@ -59,6 +59,8 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.Partner)
                     .ThenInclude(p => p.Address)
                 .Include(d => d.CashFlows)
+                .Include(d => d.InventoryLedgers)
+                .Include(d => d.ParentDocument)
                 .Include(d => d.Creator)
                 .Include(d => d.Poster)
                 .Include(d => d.Deleter)
@@ -165,6 +167,17 @@ namespace MenuGoBE.Repositories.Document
                 .Where(r => r.ParentProductId == parentProductId)
                 .ToListAsync();
         }
+
+        /// <summary>
+        /// Lấy thông tin Sản phẩm theo ID kèm đơn vị quy đổi.
+        /// </summary>
+        public async Task<Product?> GetProductByIdAsync(long productId)
+        {
+            return await _context.Products
+                .Include(p => p.UnitConversions)
+                    .ThenInclude(uc => uc.Unit)
+                .FirstOrDefaultAsync(p => p.Id == productId);
+        }
         #endregion
 
         #region Thêm mới CashFlow & InventoryLedger
@@ -260,6 +273,7 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.Partner)
                     .ThenInclude(p => p.Address)
                 .Include(d => d.CashFlows)
+                .Include(d => d.ParentDocument)
                 .Include(d => d.Creator)
                 .Where(d => d.BranchId == branchId);
 
@@ -380,12 +394,23 @@ namespace MenuGoBE.Repositories.Document
 
         #region Lấy danh sách phiếu Chuyển kho
         /// <summary>
-        /// Lấy danh sách chứng từ Chuyển kho thuộc chi nhánh gửi hoặc chi nhánh nhận.
+        /// Lấy danh sách chứng từ Chuyển kho thuộc chi nhánh gửi (hiển thị tất cả) hoặc chi nhánh nhận (chỉ hiển thị khi đã chốt Completed).
         /// </summary>
         public async Task<IEnumerable<Models.Document>> GetTransferDocumentsAsync(long branchId)
         {
             return await _context.Documents
-                .Where(d => (d.BranchId == branchId || d.ToBranchId == branchId) && d.Type == DocumentType.Transfer)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dt => dt.BInventory)
+                        .ThenInclude(b => b.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dt => dt.UnitConversion)
+                        .ThenInclude(uc => uc.Unit)
+                .Include(d => d.Branch)
+                .Include(d => d.ToBranch)
+                .Include(d => d.Creator)
+                .Where(d => d.Type == DocumentType.Transfer && (d.BranchId == branchId || (d.ToBranchId == branchId && d.Status == DocumentStatus.Completed)))
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
         }

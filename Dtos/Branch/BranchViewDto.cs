@@ -28,5 +28,9 @@ namespace MenuGoBE.Dtos.Branch
         public DateTime CreatedAt { get; set; }
 
         public string ManagerName { get; set; } = string.Empty;
+
+        public string Status { get; set; } = "Hoạt động";
+
+        public bool IsDeleted { get; set; } = false;
     }
 }

@@ -77,6 +77,12 @@ public class Document
     [MaxLength(100)] 
     public string? SnapshotReceiverUsername { get; set; }
 
+    /// <summary>
+    /// Thời điểm Chi nhánh nhận phản hồi (Chấp nhận / Từ chối / Nhận một phần)
+    /// Chỉ dùng cho phiếu Transfer
+    /// </summary>
+    public DateTime? ResponseDate { get; set; }
+
     // Navigation Property
     [ForeignKey("ReceiverAccountId")] 
     public Account? ReceiverAccount { get; set; }

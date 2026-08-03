@@ -215,6 +215,87 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.GetCheckListAsync(1);
             Assert.Single(result);
         }
+
+        [Fact]
+        public async Task CreateCheckCompletedAsync_WithUnitConversion_PositiveVariance_CalculatesBaseActualAndTotalVarianceAmount()
+        {
+            var doc = CreateValidCheckDocument();
+            doc.DocumentDetails.First().UnitConversionId = 10;
+            doc.DocumentDetails.First().Quantity = 12; // 12 thùng
+
+            var bInv = CreateValidBInventory(5, qty: 100); // System = 100 chai
+            bInv.Avg = 15000;
+
+            var unitConversion = new UnitConversion
+            {
+                Id = 10,
+                ProductId = 50,
+                ConversionPoint = 10 // 10 chai/thùng
+            };
+
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(5)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(10)).ReturnsAsync(unitConversion);
+            _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);
+
+            var result = await _service.CreateCheckCompletedAsync(doc, 1);
+
+            Assert.Equal(DocumentStatus.Completed, result.Status);
+            // 12 thùng * 10 chai/thùng = 120 chai thực tế
+            Assert.Equal(120, result.DocumentDetails.First().BaseQuantity);
+            Assert.Equal(120, result.DocumentDetails.First().ActualQuantity);
+            Assert.Equal(120, bInv.Quantity);
+
+            // Variance = 120 - 100 = +20 chai
+            // Total amount = +20 * 15,000 = 300,000
+            Assert.Equal(300000m, result.TotalAmount);
+
+            _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.Is<InventoryLedger>(l =>
+                l.QuantityDelta == 20 &&
+                l.InventoryValueDelta == 300000m &&
+                l.RunningQuantity == 120
+            )), Times.Once);
+        }
+
+        [Fact]
+        public async Task CompleteCheckAsync_WithUnitConversion_NegativeVariance_CalculatesBaseActualAndTotalVarianceAmount()
+        {
+            var doc = CreateValidCheckDocument();
+            doc.DocumentDetails.First().UnitConversionId = 10;
+            doc.DocumentDetails.First().Quantity = 8; // 8 thùng
+
+            var bInv = CreateValidBInventory(5, qty: 100); // System = 100 chai
+            bInv.Avg = 15000;
+
+            var unitConversion = new UnitConversion
+            {
+                Id = 10,
+                ProductId = 50,
+                ConversionPoint = 10 // 10 chai/thùng
+            };
+
+            _mockRepo.Setup(r => r.GetByIdAsync(80)).ReturnsAsync(doc);
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(5)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(10)).ReturnsAsync(unitConversion);
+            _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);
+
+            var result = await _service.CompleteCheckAsync(80, 1);
+
+            Assert.Equal(DocumentStatus.Completed, result.Status);
+            // 8 thùng * 10 chai/thùng = 80 chai thực tế
+            Assert.Equal(80, result.DocumentDetails.First().BaseQuantity);
+            Assert.Equal(80, result.DocumentDetails.First().ActualQuantity);
+            Assert.Equal(80, bInv.Quantity);
+
+            // Variance = 80 - 100 = -20 chai
+            // Total amount = -20 * 15,000 = -300,000
+            Assert.Equal(-300000m, result.TotalAmount);
+
+            _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.Is<InventoryLedger>(l =>
+                l.QuantityDelta == -20 &&
+                l.InventoryValueDelta == -300000m &&
+                l.RunningQuantity == 80
+            )), Times.Once);
+        }
         #endregion
     }
 }

@@ -223,6 +223,9 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -232,6 +235,10 @@ namespace MenuGoBE.Migrations
 
                     b.Property<DateTime?>("PostingLockDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -565,6 +572,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("ReceiverAccountId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ResponseDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("SnapshotBranchName")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -793,6 +803,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<long>("BInventoryId")
                         .HasColumnType("bigint");
+
+                    b.Property<decimal>("ConversionRateSnapshot")
+                        .HasColumnType("decimal(18,6)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
