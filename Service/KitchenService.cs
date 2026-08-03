@@ -144,34 +144,54 @@ public class KitchenService : IKitchenService
                 var bInventory = await _bInventoryRepo.GetByProductAndBranchAsync(recipe.IngredientProductId, branchId);
                 if (bInventory == null)
                 {
+                    var ingredientProduct = await _productRepo.GetByIdAsync(recipe.IngredientProductId);
                     bInventory = new BInventory
                     {
                         BranchId = branchId,
                         ProductId = recipe.IngredientProductId,
                         Quantity = 0,
                         Type = BInventoryType.RawMaterial,
-                        IsManageQuantity = true,
+                        IsManageQuantity = ingredientProduct?.IsManageQuantity ?? true,
                         ChainActive = true,
                         BranchActive = true
                     };
                     await _bInventoryRepo.CreateAsync(bInventory);
                 }
             }
+            try 
+            {
+                await _bInventoryRepo.SaveChangesAsync();
+            }
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+            {
+                // Bỏ qua lỗi xung đột tạo trùng do click nhiều lần
+            }
 
             var productInventory = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
             if (productInventory == null)
             {
+                var finishedProduct = await _productRepo.GetByIdAsync(detail.ProductId);
                 productInventory = new BInventory
                 {
                     BranchId = branchId,
                     ProductId = detail.ProductId,
                     Quantity = 0,
                     Type = BInventoryType.Finished,
-                    IsManageQuantity = true,
+                    IsManageQuantity = finishedProduct?.IsManageQuantity ?? true,
                     ChainActive = true,
                     BranchActive = true
                 };
-                await _bInventoryRepo.CreateAsync(productInventory);
+                try
+                {
+                    await _bInventoryRepo.CreateAsync(productInventory);
+                    await _bInventoryRepo.SaveChangesAsync();
+                }
+                catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+                {
+                    // Lỗi trùng lặp, query lại
+                    productInventory = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
+                    if (productInventory == null) return false;
+                }
             }
 
             var document = new DocumentEntity
@@ -195,10 +215,6 @@ public class KitchenService : IKitchenService
 
             await _documentService.CreateProductionCompletedAsync(document, order.CreatedBy ?? 1);
 
-            detail.CookingStatus = "Served";
-            await _orderDetailRepo.UpdateAsync(detail);
-            await _orderDetailRepo.SaveChangesAsync();
-            
             await _hubContext.Clients.All.SendAsync("ReceiveKitchenOrderUpdate", branchId);
             return true;
         }
