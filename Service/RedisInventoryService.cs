@@ -14,6 +14,8 @@ namespace MenuGoBE.Service
             _db = _redis.GetDatabase();
         }
 
+        private const string DirtyKeysSet = "inventory:dirty_keys";
+
         private string GetKey(int branchId, int productId)
         {
             return $"inventory:reserved:branch:{branchId}:product:{productId}";
@@ -21,12 +23,47 @@ namespace MenuGoBE.Service
 
         public async Task<long> IncrementReservedQuantityAsync(int branchId, int productId, int quantity)
         {
-            return await _db.StringIncrementAsync(GetKey(branchId, productId), quantity);
+            var result = await _db.StringIncrementAsync(GetKey(branchId, productId), quantity);
+            await _db.SetAddAsync(DirtyKeysSet, $"{branchId}:{productId}");
+            return result;
+        }
+
+        public async Task<bool> TryReserveInventoryAsync(int branchId, int productId, int quantity, decimal maxQuantity)
+        {
+            var script = @"
+                local reservedKey = KEYS[1]
+                local maxQty = tonumber(ARGV[1])
+                local orderQty = tonumber(ARGV[2])
+
+                local currentReserved = tonumber(redis.call('GET', reservedKey) or '0')
+
+                if (currentReserved + orderQty) <= maxQty then
+                    redis.call('INCRBY', reservedKey, orderQty)
+                    return 1
+                else
+                    return 0
+                end
+            ";
+
+            var result = await _db.ScriptEvaluateAsync(script, 
+                new RedisKey[] { GetKey(branchId, productId) }, 
+                new RedisValue[] { (double)maxQuantity, quantity });
+
+            bool success = (int)result == 1;
+
+            if (success)
+            {
+                await _db.SetAddAsync(DirtyKeysSet, $"{branchId}:{productId}");
+            }
+
+            return success;
         }
 
         public async Task<long> DecrementReservedQuantityAsync(int branchId, int productId, int quantity)
         {
-            return await _db.StringDecrementAsync(GetKey(branchId, productId), quantity);
+            var result = await _db.StringDecrementAsync(GetKey(branchId, productId), quantity);
+            await _db.SetAddAsync(DirtyKeysSet, $"{branchId}:{productId}");
+            return result;
         }
 
         public async Task<long> GetReservedQuantityAsync(int branchId, int productId)
@@ -53,6 +90,7 @@ namespace MenuGoBE.Service
         public async Task SetReservedQuantityAsync(int branchId, int productId, long quantity)
         {
             await _db.StringSetAsync(GetKey(branchId, productId), quantity);
+            await _db.SetAddAsync(DirtyKeysSet, $"{branchId}:{productId}");
         }
 
         public async Task<Dictionary<string, long>> GetAllReservedQuantitiesAsync()
@@ -82,6 +120,42 @@ namespace MenuGoBE.Service
                         var productId = parts[5];
                         result[$"{branchId}:{productId}"] = (long)values[i];
                     }
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<Dictionary<string, long>> GetAndClearDirtyReservedQuantitiesAsync()
+        {
+            var result = new Dictionary<string, long>();
+
+            var script = @"
+                local members = redis.call('SMEMBERS', KEYS[1])
+                if #members > 0 then
+                    redis.call('DEL', KEYS[1])
+                end
+                return members
+            ";
+
+            var scriptResult = await _db.ScriptEvaluateAsync(script, new RedisKey[] { DirtyKeysSet });
+            var dirtyKeysStr = (string[]?)scriptResult;
+
+            if (dirtyKeysStr == null || dirtyKeysStr.Length == 0)
+                return result;
+
+            var redisKeys = dirtyKeysStr.Select(k => {
+                var parts = k.Split(':');
+                return (RedisKey)GetKey(int.Parse(parts[0]), int.Parse(parts[1]));
+            }).ToArray();
+
+            var values = await _db.StringGetAsync(redisKeys);
+
+            for (int i = 0; i < dirtyKeysStr.Length; i++)
+            {
+                if (values[i].HasValue)
+                {
+                    result[dirtyKeysStr[i]] = (long)values[i];
                 }
             }
 
