@@ -8,5 +8,6 @@ namespace MenuGoBE.Interface.Services
         Task<Dictionary<int, long>> GetReservedQuantitiesAsync(int branchId, IEnumerable<int> productIds);
         Task SetReservedQuantityAsync(int branchId, int productId, long quantity);
         Task<Dictionary<string, long>> GetAllReservedQuantitiesAsync();
+        Task<Dictionary<string, long>> GetAndClearDirtyReservedQuantitiesAsync();
     }
 }
