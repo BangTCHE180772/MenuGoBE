@@ -30,18 +30,47 @@ namespace MenuGoBE.Controllers
         [EnableQuery]
         public async Task<IActionResult> GetAll([FromQuery] string? branchIds)
         {
+            var idList = new List<long>();
             if (!string.IsNullOrEmpty(branchIds))
             {
-                var idList = branchIds.Split(',')
+                idList = branchIds.Split(',')
                     .Select(v => long.TryParse(v.Trim(), out var id) ? id : 0L)
                     .Where(id => id > 0)
                     .ToList();
+            }
 
-                if (idList.Any())
+            if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                      User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                      User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                                      
+                bool isManager = User.IsInRole("Manager") || User.HasClaim(ClaimTypes.Role, "Manager") || User.HasClaim("role", "Manager");
+
+                if (isManager && !isAdminOrOwner)
                 {
-                    var filteredResult = await _service.GetByBranchIdsAsync(idList);
-                    return Ok(filteredResult);
+                    var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                    
+                    if (!idList.Any())
+                    {
+                        idList = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                    }
+                    else
+                    {
+                        idList = idList.Where(id => branchClaims.Contains(id.ToString())).ToList();
+                    }
+
+                    if (!idList.Any())
+                    {
+                        return Ok(new List<object>());
+                    }
                 }
+            }
+
+            if (idList.Any())
+            {
+                var filteredResult = await _service.GetByBranchIdsAsync(idList);
+                return Ok(filteredResult);
             }
 
             var result = await _service.GetAllAsync();
