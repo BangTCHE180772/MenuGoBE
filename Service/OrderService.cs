@@ -640,9 +640,11 @@ namespace MenuGoBE.Service
                             {
                                 BInventoryId = binv.Id,
                                 DocumentType = DocumentType.Sales,
+                                SnapshotProductName = product.Name,
+                                SnapshotUnitName = product.Name,
+                                ConversionRateSnapshot = 1m,
                                 QuantityDelta = -group.Quantity,
                                 RunningQuantity = binv.Quantity,
-                                BusinessDate = DateTime.UtcNow,
                                 CreatedAt = DateTime.UtcNow
                             });
                         }
@@ -673,9 +675,11 @@ namespace MenuGoBE.Service
                                     {
                                         BInventoryId = binv.Id,
                                         DocumentType = DocumentType.Sales,
+                                        SnapshotProductName = recipeItem.IngredientProduct?.Name ?? string.Empty,
+                                        SnapshotUnitName = recipeItem.IngredientProduct?.Name ?? string.Empty,
+                                        ConversionRateSnapshot = 1m,
                                         QuantityDelta = -ingredientQty,
                                         RunningQuantity = binv.Quantity,
-                                        BusinessDate = DateTime.UtcNow,
                                         CreatedAt = DateTime.UtcNow
                                     });
                                 }
