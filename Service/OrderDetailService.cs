@@ -286,12 +286,12 @@ namespace MenuGoBE.Service
             var result = await _detailRepo.UpdateCookingStatusAsync(orderDetailId, cookingStatus);
             if (result)
             {
-                await _detailRepo.SaveChangesAsync();
-                
-                if (cookingStatus == "Ready")
+                if (cookingStatus == "Served")
                 {
                     await _kitchenService.HandleInternalRestockCompletionAsync(orderDetailId);
                 }
+
+                await _detailRepo.SaveChangesAsync();
             }
             return result;
         }
