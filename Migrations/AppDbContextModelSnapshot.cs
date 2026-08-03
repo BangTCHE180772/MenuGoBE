@@ -572,6 +572,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("ReceiverAccountId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ResponseDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("SnapshotBranchName")
                         .IsRequired()
                         .HasMaxLength(255)

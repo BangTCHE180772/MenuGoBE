@@ -1934,6 +1934,7 @@ namespace MenuGoBE.Service.Document
             document.ReceiverAccountId = userId;
             document.SnapshotReceiverName = receiverAccount?.Name ?? string.Empty;
             document.SnapshotReceiverUsername = receiverAccount?.Email ?? string.Empty;
+            document.ResponseDate = DateTime.UtcNow;
 
             if (status == DocumentTransferStatus.Rejected)
             {
@@ -2770,32 +2771,10 @@ namespace MenuGoBE.Service.Document
 
             decimal totalProductionCost = 0m;
 
-            // Bước 2 & 3: Xử lý trừ kho NVL, tạo chi tiết phụ và ghi Sổ kho NVL
+            // Bước 2 & 3: Xử lý trừ kho NVL và ghi Sổ kho NVL
             foreach (var (recipeItem, ingredientBinventory, requiredQty) in ingredientRequirements)
             {
                 string ingredientName = ingredientBinventory.Product?.Name ?? recipeItem.IngredientProduct?.Name ?? string.Empty;
-                string ingredientCode = ingredientBinventory.Product?.SKUCode ?? string.Empty;
-
-                // Tạo dòng DocumentDetail phụ cho nguyên liệu bị dùng
-                var childDetail = new DocumentDetail
-                {
-                    DocumentId = document.Id,
-                    BInventoryId = ingredientBinventory.Id,
-                    FatherId = parentDetail.Id,
-                    UnitConversionId = null,
-                    SnapshotProductName = ingredientName,
-                    SnapshotProductCode = ingredientCode,
-                    SnapshotUnitName = ingredientName,
-                    SnapshotBaseUnitName = ingredientName,
-                    ConversionRate = 1,
-                    Quantity = requiredQty,
-                    BaseQuantity = requiredQty,
-                    UnitPrice = ingredientBinventory.Avg,
-                    SnapshotAvgCost = ingredientBinventory.Avg,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                document.DocumentDetails.Add(childDetail);
 
                 decimal leftover_old = ingredientBinventory.LeftOver;
                 decimal val_delta;

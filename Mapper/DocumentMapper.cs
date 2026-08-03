@@ -36,6 +36,7 @@ namespace MenuGoBE.Mapper
                 TransferStatus = document.TransferStatus,
                 OrderDate = document.OrderDate,
                 CreatedAt = document.CreatedAt,
+                ResponseDate = document.ResponseDate,
 
                 CreatedBy = document.CreatedBy,
                 SnapshotCreatedByName = document.SnapshotCreatedByName,
@@ -106,6 +107,7 @@ namespace MenuGoBE.Mapper
                 ReceiverAccountId = document.ReceiverAccountId,
                 SnapshotReceiverName = document.SnapshotReceiverName,
                 SnapshotReceiverUsername = document.SnapshotReceiverUsername,
+                ResponseDate = document.ResponseDate,
 
                 TotalAmount = document.TotalAmount,
                 AmountDue = document.AmountDue,
@@ -153,6 +155,35 @@ namespace MenuGoBE.Mapper
                         TotalAmount = cf.TotalAmount,
                         Note = cf.Note,
                         CreatedAt = cf.CreatedAt
+                    })
+                    .ToList();
+            }
+
+            // Mapping InventoryLedgers liên quan
+            if (document.InventoryLedgers != null && document.InventoryLedgers.Any())
+            {
+                dto.InventoryLedgers = document.InventoryLedgers
+                    .Select(il => new DocumentInventoryLedgerResponseDto
+                    {
+                        Id = il.Id,
+                        BInventoryId = il.BInventoryId,
+                        DocumentId = il.DocumentId,
+                        PostingSequence = il.PostingSequence,
+                        PostedAt = il.PostedAt,
+                        DocumentType = il.DocumentType,
+                        PostedBy = il.PostedBy,
+                        SnapshotPostedByName = il.SnapshotPostedByName,
+                        SnapshotBranchName = il.SnapshotBranchName,
+                        SnapshotProductName = il.SnapshotProductName,
+                        SnapshotUnitName = il.SnapshotUnitName,
+                        ConversionRateSnapshot = il.ConversionRateSnapshot,
+                        QuantityDelta = il.QuantityDelta,
+                        InventoryValueDelta = il.InventoryValueDelta,
+                        RunningQuantity = il.RunningQuantity,
+                        RunningInventoryValue = il.RunningInventoryValue,
+                        RunningAverageCost = il.RunningAverageCost,
+                        UnitCost = il.UnitCost,
+                        CreatedAt = il.CreatedAt
                     })
                     .ToList();
             }
