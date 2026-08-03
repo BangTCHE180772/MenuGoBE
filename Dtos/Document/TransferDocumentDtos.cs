@@ -90,6 +90,7 @@ namespace MenuGoBE.Dtos.Document
 
         public List<TransferReceiptDetailDto>? ReceivedDetails { get; set; }
 
+        [Required(ErrorMessage = "Bắt buộc phải nhập Ghi chú (Note) khi xác nhận nhận hàng.")]
         [MaxLength(255)]
         public string? Note { get; set; }
     }

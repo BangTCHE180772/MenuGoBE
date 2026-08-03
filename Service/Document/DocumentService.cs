@@ -119,7 +119,20 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         public async Task<IEnumerable<DocumentListResponseDto>> GetDocumentListDtosAsync(long branchId, DocumentType? type = null, DocumentStatus? status = null)
         {
-            var documents = await _repo.GetDocumentsAsync(branchId, type, status);
+            IEnumerable<Models.Document> documents;
+            if (type == DocumentType.Transfer)
+            {
+                documents = await _repo.GetTransferDocumentsAsync(branchId);
+                if (status.HasValue)
+                {
+                    documents = documents.Where(d => d.Status == status.Value);
+                }
+            }
+            else
+            {
+                documents = await _repo.GetDocumentsAsync(branchId, type, status);
+            }
+
             return _mapper.Map<IEnumerable<DocumentListResponseDto>>(documents);
         }
         #endregion
@@ -1361,6 +1374,12 @@ namespace MenuGoBE.Service.Document
                 #endregion
 
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
+
+                // Tự động gán UnitPrice theo giá bán (SellPrice) của sản phẩm nếu chưa truyền hoặc <= 0
+                if (detail.UnitPrice <= 0 && binventory.Product.SellPrice > 0)
+                {
+                    detail.UnitPrice = binventory.Product.SellPrice * detail.ConversionRate;
+                }
             }
             #endregion
 
@@ -1936,14 +1955,15 @@ namespace MenuGoBE.Service.Document
             document.SnapshotReceiverUsername = receiverAccount?.Email ?? string.Empty;
             document.ResponseDate = DateTime.UtcNow;
 
+            // Bắt buộc phải có ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng
+            if (string.IsNullOrWhiteSpace(note))
+            {
+                throw new ArgumentException("Bắt buộc phải nhập Lý do / Ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng.");
+            }
+
             if (status == DocumentTransferStatus.Rejected)
             {
                 #region Kịch bản 1: Từ Chối Nhận Hàng (Rejected)
-                if (string.IsNullOrWhiteSpace(note))
-                {
-                    throw new ArgumentException("Bắt buộc phải nhập Lý do / Ghi chú (Note) khi từ chối nhận hàng.");
-                }
-
                 document.Note = string.IsNullOrWhiteSpace(document.Note) ? $"[TỪ CHỐI]: {note}" : $"{document.Note} | [TỪ CHỐI]: {note}";
 
                 // Trả hàng về kho chi nhánh gửi

@@ -123,13 +123,10 @@ namespace MenuGoBE.Interface.Services.Document
         Task<Models.Document> CreateSaleCompletedAsync(Models.Document document, long userId);
         #endregion
 
-        #region Lấy danh sách phiếu Xuất bán hàng
         /// <summary>
         /// Lấy danh sách phiếu Xuất bán hàng thuộc chi nhánh.
         /// </summary>
         Task<IEnumerable<Models.Document>> GetSaleListAsync(long branchId);
-        #endregion
-
         #endregion
 
         #region 4. Nghiệp vụ Chứng từ Khách trả hàng (CustomerReturn)

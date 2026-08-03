@@ -42,6 +42,12 @@ namespace MenuGoBE.Mapper
                 SnapshotCreatedByName = document.SnapshotCreatedByName,
                 CurrentCreatedByName = document.Creator?.Name,
 
+                SnapshotBranchName = document.SnapshotBranchName,
+                CurrentBranchName = document.Branch?.Name,
+
+                SnapshotToBranchName = document.SnapshotToBranchName,
+                CurrentToBranchName = document.ToBranch?.Name,
+
                 SnapshotPartnerName = document.SnapshotPartnerName,
                 CurrentPartnerName = document.Partner?.Name,
 
