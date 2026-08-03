@@ -801,6 +801,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("BInventoryId")
                         .HasColumnType("bigint");
 
+                    b.Property<decimal>("ConversionRateSnapshot")
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 

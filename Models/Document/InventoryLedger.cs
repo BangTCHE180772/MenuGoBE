@@ -32,6 +32,9 @@ public class InventoryLedger
     [MaxLength(255)] public string SnapshotProductName { get; set; } = string.Empty;
     [MaxLength(100)] public string SnapshotUnitName { get; set; } = string.Empty;
 
+    [Column(TypeName = "decimal(18,6)")]
+    public decimal ConversionRateSnapshot { get; set; } = 1;
+
     // ==========================================
     // 📊 BIẾN ĐỘNG & TỔN KHO TỨC THÌ (RUNNING TOTALS)
     // ==========================================

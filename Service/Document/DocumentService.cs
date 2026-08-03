@@ -522,8 +522,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.Import,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = q_import,
                     InventoryValueDelta = val_import,
                     RunningQuantity = b2,
@@ -852,9 +853,9 @@ namespace MenuGoBE.Service.Document
             existing.PostedAt = DateTime.UtcNow;
 
             await GenerateOrValidateImportCodeAsync(existing);
+            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
             await ProcessWeightedAvgCostAndLedgerAsync(existing, userId);
             await CreateImportCashFlowAsync(existing);
-            await FreezeDocumentSnapshotsAsync(existing, userId, isSoftDelete: false);
 
             _repo.Update(existing);
             await _repo.SaveChangesAsync();
@@ -878,9 +879,9 @@ namespace MenuGoBE.Service.Document
             await _repo.SaveChangesAsync();
 
             await GenerateOrValidateImportCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
             await ProcessWeightedAvgCostAndLedgerAsync(document, userId);
             await CreateImportCashFlowAsync(document);
-            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
 
             _repo.Update(document);
             await _repo.SaveChangesAsync();
@@ -1113,8 +1114,9 @@ namespace MenuGoBE.Service.Document
                         DocumentType = DocumentType.Return,
                         SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                         SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                        SnapshotProductName = detail.SnapshotProductName,
-                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                        ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                         QuantityDelta = -q_return,
                         InventoryValueDelta = val_delta,
                         RunningQuantity = binventory.Quantity,
@@ -1579,7 +1581,8 @@ namespace MenuGoBE.Service.Document
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
                     SnapshotProductName = item.Product.Name,
-                    SnapshotUnitName = string.Empty,
+                    SnapshotUnitName = item.Product.Name,
+                    ConversionRateSnapshot = 1m,
                     QuantityDelta = -item.TotalRequiredQuantity,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventory.Quantity,
@@ -1882,8 +1885,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.Transfer,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = productName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = -detail.BaseQuantity,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventorySend.Quantity,
@@ -1977,8 +1981,9 @@ namespace MenuGoBE.Service.Document
                         DocumentType = DocumentType.Transfer,
                         SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                         SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                        SnapshotProductName = productName,
-                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
+                        ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                         QuantityDelta = +detail.BaseQuantity,
                         InventoryValueDelta = +ret_value,
                         RunningQuantity = b2,
@@ -2077,9 +2082,10 @@ namespace MenuGoBE.Service.Document
                         PostedBy = userId,
                         DocumentType = DocumentType.Transfer,
                         SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
-                        SnapshotBranchName = document.SnapshotToBranchName ?? string.Empty,
-                        SnapshotProductName = productName,
-                        SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                        SnapshotBranchName = !string.IsNullOrWhiteSpace(document.SnapshotToBranchName) ? document.SnapshotToBranchName : (document.SnapshotBranchName ?? string.Empty),
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
+                        ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                         QuantityDelta = +q_received,
                         InventoryValueDelta = +transfer_value,
                         RunningQuantity = b2,
@@ -2494,8 +2500,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = document.Type,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = -q_export,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventory.Quantity,
@@ -2778,8 +2785,8 @@ namespace MenuGoBE.Service.Document
                     UnitConversionId = null,
                     SnapshotProductName = ingredientName,
                     SnapshotProductCode = ingredientCode,
-                    SnapshotUnitName = string.Empty,
-                    SnapshotBaseUnitName = string.Empty,
+                    SnapshotUnitName = ingredientName,
+                    SnapshotBaseUnitName = ingredientName,
                     ConversionRate = 1,
                     Quantity = requiredQty,
                     BaseQuantity = requiredQty,
@@ -2820,7 +2827,8 @@ namespace MenuGoBE.Service.Document
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
                     SnapshotProductName = ingredientName,
-                    SnapshotUnitName = string.Empty,
+                    SnapshotUnitName = ingredientName,
+                    ConversionRateSnapshot = 1m,
                     QuantityDelta = -requiredQty,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = ingredientBinventory.Quantity,
@@ -2862,8 +2870,9 @@ namespace MenuGoBE.Service.Document
                 DocumentType = DocumentType.Production,
                 SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                 SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                SnapshotProductName = string.IsNullOrWhiteSpace(parentDetail.SnapshotProductName) && parentBinventory.Product != null ? parentBinventory.Product.Name : parentDetail.SnapshotProductName,
-                SnapshotUnitName = parentDetail.SnapshotUnitName ?? string.Empty,
+                SnapshotProductName = !string.IsNullOrWhiteSpace(parentDetail.SnapshotProductName) ? parentDetail.SnapshotProductName : (parentBinventory.Product?.Name ?? string.Empty),
+                SnapshotUnitName = !string.IsNullOrWhiteSpace(parentDetail.SnapshotUnitName) ? parentDetail.SnapshotUnitName : (parentBinventory.Product?.Name ?? string.Empty),
+                ConversionRateSnapshot = parentDetail.ConversionRate > 0 ? parentDetail.ConversionRate : 1m,
                 QuantityDelta = +producedQty,
                 InventoryValueDelta = +totalProductionCost,
                 RunningQuantity = b2,
@@ -3170,8 +3179,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.Check,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = string.IsNullOrWhiteSpace(detail.SnapshotProductName) && binventory.Product != null ? binventory.Product.Name : detail.SnapshotProductName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = q_delta,
                     InventoryValueDelta = val_delta,
                     RunningQuantity = binventory.Quantity,
@@ -3461,8 +3471,9 @@ namespace MenuGoBE.Service.Document
                     DocumentType = DocumentType.CostAdjustment,
                     SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
                     SnapshotBranchName = document.SnapshotBranchName ?? string.Empty,
-                    SnapshotProductName = productName,
-                    SnapshotUnitName = detail.SnapshotUnitName ?? string.Empty,
+                    SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventory.Product?.Name ?? string.Empty),
+                    SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventory.Product?.Name ?? string.Empty),
+                    ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
                     QuantityDelta = 0m,
                     InventoryValueDelta = v_adj,
                     RunningQuantity = q,
