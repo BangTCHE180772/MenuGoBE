@@ -34,6 +34,7 @@ namespace MenuGoBE.Dtos.Document
 
         public DateTime OrderDate { get; set; }
         public DateTime CreatedAt { get; set; }
+        public DateTime? ResponseDate { get; set; }
 
         public long? CreatedBy { get; set; }
         public string? SnapshotCreatedByName { get; set; }
@@ -124,6 +125,7 @@ namespace MenuGoBE.Dtos.Document
         public long? ReceiverAccountId { get; set; }
         public string? SnapshotReceiverName { get; set; }
         public string? SnapshotReceiverUsername { get; set; }
+        public DateTime? ResponseDate { get; set; }
         #endregion
 
         #region Thông tin Tài chính & Ghi chú
@@ -143,6 +145,13 @@ namespace MenuGoBE.Dtos.Document
 
         #region Danh sách Dòng chi tiết Chứng từ
         public List<DocumentDetailResponseDto> Details { get; set; } = new List<DocumentDetailResponseDto>();
+        #endregion
+
+        #region Lịch sử Thẻ Sổ kho (InventoryLedgers)
+        /// <summary>
+        /// Danh sách các bản ghi Sổ kho (InventoryLedgers) phát sinh từ chứng từ này
+        /// </summary>
+        public List<DocumentInventoryLedgerResponseDto> InventoryLedgers { get; set; } = new List<DocumentInventoryLedgerResponseDto>();
         #endregion
     }
     #endregion
@@ -260,6 +269,38 @@ namespace MenuGoBE.Dtos.Document
 
         public decimal TotalAmount { get; set; }
         public string? Note { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+    #endregion
+
+    #region 5.5 Document InventoryLedger Sub-DTO (Lịch sử Biến động Kho - Sổ kho)
+    /// <summary>
+    /// DTO lịch sử các bản ghi sổ kho (InventoryLedgers) gắn liền với chứng từ
+    /// </summary>
+    public class DocumentInventoryLedgerResponseDto
+    {
+        public long Id { get; set; }
+        public long BInventoryId { get; set; }
+        public long? DocumentId { get; set; }
+        public long PostingSequence { get; set; }
+        public DateTime PostedAt { get; set; }
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public DocumentType DocumentType { get; set; }
+
+        public long PostedBy { get; set; }
+        public string SnapshotPostedByName { get; set; } = string.Empty;
+        public string SnapshotBranchName { get; set; } = string.Empty;
+        public string SnapshotProductName { get; set; } = string.Empty;
+        public string SnapshotUnitName { get; set; } = string.Empty;
+        public decimal ConversionRateSnapshot { get; set; }
+
+        public decimal QuantityDelta { get; set; }
+        public decimal InventoryValueDelta { get; set; }
+        public decimal RunningQuantity { get; set; }
+        public decimal RunningInventoryValue { get; set; }
+        public decimal RunningAverageCost { get; set; }
+        public decimal UnitCost { get; set; }
         public DateTime CreatedAt { get; set; }
     }
     #endregion

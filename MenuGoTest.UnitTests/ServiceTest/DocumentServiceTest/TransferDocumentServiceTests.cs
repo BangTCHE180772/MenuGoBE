@@ -219,6 +219,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Nhận đủ hàng", 2);
 
             Assert.Equal(DocumentTransferStatus.Received, result.TransferStatus);
+            Assert.NotNull(result.ResponseDate);
             Assert.Equal(40, bInvReceiver.Quantity); // 30 + 10 = 40
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()), Times.Once);
         }
@@ -319,6 +320,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Rejected, null, "Hàng vỡ hỏng do vận chuyển", 2);
 
             Assert.Equal(DocumentTransferStatus.Rejected, result.TransferStatus);
+            Assert.NotNull(result.ResponseDate);
             Assert.Equal(100, bInvSender.Quantity); // 90 + 10 = 100 (Restored to sender)
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()), Times.Once);
         }
