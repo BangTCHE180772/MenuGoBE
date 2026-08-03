@@ -974,5 +974,50 @@ namespace MenuGoBE.Service
 
             return candidate;
         }
+
+        /// <summary>
+        /// Cập nhật giá bán hàng loạt cho sản phẩm Regular, Manufactured, Processed.
+        /// Trả về số lượng sản phẩm đã cập nhật thành công.
+        /// </summary>
+        public async Task<int> BulkUpdateSellPriceAsync(List<SellPriceBulkUpdateItemDto> items)
+        {
+            if (items == null || items.Count == 0)
+                return 0;
+
+            var allowedTypes = new[] { ProductType.Regular, ProductType.Manufactured, ProductType.Processed };
+            var ids = items.Select(x => x.Id).Distinct().ToList();
+
+            var products = await _context.Products
+                .Where(p => ids.Contains(p.Id))
+                .ToListAsync();
+
+            int updatedCount = 0;
+
+            foreach (var item in items)
+            {
+                var product = products.FirstOrDefault(p => p.Id == item.Id);
+                if (product == null)
+                    continue;
+
+                // Chỉ cho phép cập nhật loại Regular, Manufactured, Processed
+                if (!allowedTypes.Contains(product.Type))
+                    throw new MenuGoException(ErrorCodes.SellPriceNotAllowedForIngredientOrTool);
+
+                // Validate giá
+                if (item.SellPrice <= 0)
+                    throw new MenuGoException(ErrorCodes.SellPriceRequired);
+
+                if (item.SellPrice > 10000000000m)
+                    throw new MenuGoException(ErrorCodes.SellPriceExceedsLimit);
+
+                product.SellPrice = item.SellPrice;
+                updatedCount++;
+            }
+
+            if (updatedCount > 0)
+                await _context.SaveChangesAsync();
+
+            return updatedCount;
+        }
     }
 }

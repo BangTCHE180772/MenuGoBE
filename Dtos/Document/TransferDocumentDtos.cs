@@ -39,6 +39,12 @@ namespace MenuGoBE.Dtos.Document
         [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng chuyển phải lớn hơn 0.")]
         public decimal Quantity { get; set; }
 
+        /// <summary>
+        /// Đơn giá chuyển kho (theo đơn vị tính đã chọn). Nếu = 0 thì hệ thống tự dùng giá vốn trung bình snapshot.
+        /// </summary>
+        [Range(0, 10_000_000_000, ErrorMessage = "Đơn giá chuyển phải từ 0 đến 10 tỷ VNĐ.")]
+        public decimal UnitPrice { get; set; } = 0;
+
         [MaxLength(255)]
         public string? Note { get; set; }
     }
@@ -74,6 +80,12 @@ namespace MenuGoBE.Dtos.Document
 
         [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng chuyển phải lớn hơn 0.")]
         public decimal Quantity { get; set; }
+
+        /// <summary>
+        /// Đơn giá chuyển kho (theo đơn vị tính đã chọn). Nếu = 0 thì hệ thống tự dùng giá vốn trung bình snapshot.
+        /// </summary>
+        [Range(0, 10_000_000_000, ErrorMessage = "Đơn giá chuyển phải từ 0 đến 10 tỷ VNĐ.")]
+        public decimal UnitPrice { get; set; } = 0;
 
         [MaxLength(255)]
         public string? Note { get; set; }
