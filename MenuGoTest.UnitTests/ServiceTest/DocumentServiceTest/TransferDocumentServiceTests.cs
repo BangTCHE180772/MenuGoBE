@@ -202,6 +202,19 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
+        public async Task ProcessTransferReceiptAsync_FullReceiveWithoutNote_ThrowsArgumentException()
+        {
+            var doc = CreateValidTransferDocument();
+            doc.Status = DocumentStatus.Completed;
+            doc.TransferStatus = DocumentTransferStatus.InTransit;
+
+            _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
+
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "   ", 2)); // Empty note
+        }
+
+        [Fact]
         public async Task ProcessTransferReceiptAsync_FullReceive_IncreasesReceiverStockAndSetsReceivedStatus()
         {
             var doc = CreateValidTransferDocument();
@@ -219,6 +232,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Nhận đủ hàng", 2);
 
             Assert.Equal(DocumentTransferStatus.Received, result.TransferStatus);
+            Assert.NotNull(result.ResponseDate);
             Assert.Equal(40, bInvReceiver.Quantity); // 30 + 10 = 40
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()), Times.Once);
         }
@@ -319,6 +333,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Rejected, null, "Hàng vỡ hỏng do vận chuyển", 2);
 
             Assert.Equal(DocumentTransferStatus.Rejected, result.TransferStatus);
+            Assert.NotNull(result.ResponseDate);
             Assert.Equal(100, bInvSender.Quantity); // 90 + 10 = 100 (Restored to sender)
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()), Times.Once);
         }

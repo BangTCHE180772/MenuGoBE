@@ -200,6 +200,37 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.GetExportDeleteListAsync(1);
             Assert.Single(result);
         }
+
+        [Fact]
+        public async Task CreateExportDeleteCompletedAsync_WithUnitConversion_CalculatesTotalAmountFromConversionRateAndAvgCost()
+        {
+            var doc = CreateValidExportDocument(DocumentType.ExportDelete);
+            doc.DocumentDetails.First().UnitConversionId = 10;
+            doc.DocumentDetails.First().Quantity = 3; // 3 thùng
+
+            var bInv = CreateValidBInventory(15, qty: 100);
+            bInv.Avg = 15000;
+
+            var unitConversion = new UnitConversion
+            {
+                Id = 10,
+                ProductId = 600,
+                ConversionPoint = 10 // 10 chai/thùng
+            };
+
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(15)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(10)).ReturnsAsync(unitConversion);
+            _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);
+
+            var result = await _service.CreateExportDeleteCompletedAsync(doc, 1);
+
+            Assert.Equal(DocumentStatus.Completed, result.Status);
+            // 3 thùng * 10 chai/thùng = 30 chai cơ sở
+            Assert.Equal(30, result.DocumentDetails.First().BaseQuantity);
+            // 30 chai * 15,000 avg = 450,000 total amount
+            Assert.Equal(450000m, result.TotalAmount);
+            Assert.Equal(70, bInv.Quantity); // 100 - 30 = 70
+        }
         #endregion
     }
 }

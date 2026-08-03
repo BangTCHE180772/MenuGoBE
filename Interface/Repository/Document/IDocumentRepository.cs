@@ -78,6 +78,11 @@ namespace MenuGoBE.Interface.Repository.Document
         /// Lấy danh sách công thức chi tiết theo Sản phẩm sản xuất (ParentProductId).
         /// </summary>
         Task<List<RecipesDetailed>> GetRecipesByParentProductIdAsync(long parentProductId);
+
+        /// <summary>
+        /// Lấy thông tin Sản phẩm theo ID kèm đơn vị quy đổi.
+        /// </summary>
+        Task<Product?> GetProductByIdAsync(long productId);
         #endregion
 
         #region Thêm mới CashFlow & InventoryLedger

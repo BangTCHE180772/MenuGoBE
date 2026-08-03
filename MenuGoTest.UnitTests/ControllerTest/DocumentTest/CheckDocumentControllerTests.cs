@@ -92,7 +92,7 @@ namespace MenuGoTest.UnitTests.ControllerTest.DocumentTest
             var completedDoc = new Document { Id = 1000, Code = "KK001000", BranchId = 10, Type = DocumentType.Check, Status = DocumentStatus.Completed };
             var responseDto = new DocumentResponseDto { Id = 1000, Code = "KK001000", BranchId = 10, Type = DocumentType.Check, Status = DocumentStatus.Completed };
 
-            _serviceMock.Setup(s => s.CreateCheckCompletedAsync(It.IsAny<Document>(), 1)).ReturnsAsync(completedDoc);
+            _serviceMock.Setup(s => s.CreateCheckCompletedAsync(It.Is<Document>(doc => doc.DocumentDetails.First().Quantity == 45 && doc.DocumentDetails.First().ActualQuantity == 45), 1)).ReturnsAsync(completedDoc);
             _serviceMock.Setup(s => s.GetDocumentByIdDtoAsync(1000)).ReturnsAsync(responseDto);
 
             var result = await _controller.CreateCheckCompleted(dto);

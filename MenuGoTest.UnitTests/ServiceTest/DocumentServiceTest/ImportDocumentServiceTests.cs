@@ -297,6 +297,31 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
+        public async Task CompleteImportAsync_ZeroPriorInventory_RefreshesAverageCostToNewImportBatch()
+        {
+            var doc = CreateValidImportDocument();
+            // Quantity = 10, UnitPrice = 50000 -> UnitCost = 50000
+            doc.DocumentDetails.First().Quantity = 10;
+            doc.DocumentDetails.First().UnitPrice = 50000;
+            
+            // Prior inventory is 0, old Avg was 100000, old LeftOver was 0.5
+            var bInv = CreateValidBInventory(qty: 0, avg: 100000, leftOver: 0.5m);
+            var unitConv = new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 };
+
+            _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(unitConv);
+            _mockRepo.Setup(r => r.IsCodeExistsAsync(It.IsAny<string>(), It.IsAny<long>())).ReturnsAsync(false);
+
+            var result = await _service.CompleteImportAsync(1, 1);
+
+            Assert.Equal(DocumentStatus.Completed, result.Status);
+            Assert.Equal(50000m, bInv.Avg); // Avg refreshed to 50,000 (new import unit cost)
+            Assert.Equal(0m, bInv.LeftOver); // LeftOver reset to 0
+            Assert.Equal(10m, bInv.Quantity); // Quantity = 10
+        }
+
+        [Fact]
         public async Task CreateImportCompletedAsync_ValidDocument_DirectPostsSuccessfully()
         {
             var doc = CreateValidImportDocument();
@@ -404,7 +429,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
-        public async Task CreateImportCompletedAsync_ZeroAmountPaid_DoesNotCreateCashFlow()
+        public async Task CreateImportCompletedAsync_ZeroAmountPaid_DoesNotCreatePaymentCashFlow()
         {
             var doc = CreateValidImportDocument();
             doc.AmountPaid = 0;
@@ -414,7 +439,41 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             await _service.CreateImportCompletedAsync(doc, 1);
 
-            _mockRepo.Verify(r => r.AddCashFlowAsync(It.IsAny<CashFlow>()), Times.Never);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.Is<CashFlow>(cf => cf.Type == CashFlowDetailType.Payment)), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(100.4, 100.0, 0.4)]
+        [InlineData(100.5, 101.0, -0.5)]
+        [InlineData(100.499, 100.0, 0.499)]
+        [InlineData(100.0, 100.0, 0.0)]
+        public void CalculateDocumentRounding_ValidRawTotal_ReturnsExpectedRounding(decimal rawTotal, decimal expectedRounded, decimal expectedRoundingVal)
+        {
+            var (roundedTotal, roundingVal) = DocumentService.CalculateDocumentRounding(rawTotal);
+            Assert.Equal(expectedRounded, roundedTotal);
+            Assert.Equal(expectedRoundingVal, roundingVal);
+        }
+
+        [Fact]
+        public async Task CreateImportCompletedAsync_DecimalQuantityWithRoundingRemainder_CreatesCashFlowRounding()
+        {
+            var doc = CreateValidImportDocument();
+            // Quantity = 0.001, UnitPrice = 12345 -> RawTotal = 12.345. Remainder = 0.345 < 0.5 -> Rounded = 12. RoundingValue = 0.345
+            doc.DocumentDetails = new List<DocumentDetail>
+            {
+                new DocumentDetail { BInventoryId = 1, UnitConversionId = 1, ConversionRate = 1, Quantity = 0.001m, UnitPrice = 12345m }
+            };
+            doc.AmountPaid = 12m;
+
+            var bInv = CreateValidBInventory();
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 });
+
+            await _service.CreateImportCompletedAsync(doc, 1);
+
+            Assert.Equal(12.345m, doc.TotalAmount);
+            Assert.Equal(0m, doc.AmountDue);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.Is<CashFlow>(cf => cf.Type == CashFlowDetailType.Rounding && cf.TotalAmount == 0.345m)), Times.Once);
         }
         #endregion
     }

@@ -22,13 +22,26 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet("{branchId}")]
-        public async Task<IActionResult> GetBInventoriesByBranchOnly(long branchId)
+        public async Task<IActionResult> GetBInventoriesByBranchOnly(long branchId, [FromQuery] int? mode)
         {
             try
             {
-                var list = await _context.BInventories
-                    .AsNoTracking()
-                    .Where(b => b.BranchId == branchId)
+                var query = _context.BInventories.AsNoTracking().Where(b => b.BranchId == branchId);
+
+                if (mode.HasValue)
+                {
+                    query = mode.Value switch
+                    {
+                        1 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        2 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
+                        4 => query.Where(b => b.Product.Type == ProductType.Processed),
+                        0 => query,
+                        _ => query.Where(b => b.Product.Type != ProductType.Processed)
+                    };
+                }
+
+                var list = await query
                     .Select(b => new
                     {
                         id = b.Id,
@@ -89,22 +102,24 @@ namespace MenuGoBE.Controllers
                     query = query.Where(b => b.BranchId == branchId.Value);
                 }
 
-                // 2. Xác định Mode (Mặc định mode = 1)
-                int effectiveMode = mode ?? 1;
-
-                query = effectiveMode switch
+                // 2. Xác định Mode
+                if (mode.HasValue)
                 {
-                    // Mode 1: Lấy tất cả loại trừ Processed và Manufactured
-                    1 => query.Where(b => b.Product.Type != ProductType.Processed && b.Product.Type != ProductType.Manufactured),
-
-                    // Mode 2: Lấy tất cả loại trừ Processed
-                    2 => query.Where(b => b.Product.Type != ProductType.Processed),
-
-                    // Mode 3: Chỉ lấy Manufactured
-                    3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
-
-                    _ => query
-                };
+                    query = mode.Value switch
+                    {
+                        1 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        2 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
+                        4 => query.Where(b => b.Product.Type == ProductType.Processed),
+                        0 => query,
+                        _ => query.Where(b => b.Product.Type != ProductType.Processed)
+                    };
+                }
+                else
+                {
+                    // Mặc định cho Inventory: Lấy toàn bộ sản phẩm loại trừ Processed
+                    query = query.Where(b => b.Product.Type != ProductType.Processed);
+                }
 
                 // 3. Lọc Search text
                 if (!string.IsNullOrWhiteSpace(search))
@@ -185,6 +200,7 @@ namespace MenuGoBE.Controllers
                         businessDate = l.PostedAt,
                         unitCost = l.RunningAverageCost,
                         runningAverageCost = l.RunningAverageCost,
+                        inventoryValueDelta = l.InventoryValueDelta,
                         quantityDelta = l.QuantityDelta,
                         runningQuantity = l.RunningQuantity
                     })
@@ -227,7 +243,8 @@ namespace MenuGoBE.Controllers
             [FromQuery] DateTime? date,
             [FromQuery] string? search,
             [FromQuery] string? productType,
-            [FromQuery] bool? onlyManufactured)
+            [FromQuery] bool? onlyManufactured,
+            [FromQuery] int? mode)
         {
             try
             {
@@ -235,11 +252,31 @@ namespace MenuGoBE.Controllers
 
                 var query = _context.BInventories
                     .AsNoTracking()
-                    .Where(b => b.BranchId == branchId && b.Product.Type != ProductType.Processed);
+                    .Where(b => b.BranchId == branchId);
 
-                if (onlyManufactured == true || string.Equals(productType, "Manufactured", StringComparison.OrdinalIgnoreCase) || productType == "2")
+                if (mode.HasValue)
+                {
+                    query = mode.Value switch
+                    {
+                        1 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        2 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
+                        4 => query.Where(b => b.Product.Type == ProductType.Processed),
+                        0 => query,
+                        _ => query.Where(b => b.Product.Type != ProductType.Processed)
+                    };
+                }
+                else if (onlyManufactured == true || string.Equals(productType, "Manufactured", StringComparison.OrdinalIgnoreCase) || productType == "3")
                 {
                     query = query.Where(b => b.Product.Type == ProductType.Manufactured);
+                }
+                else if (string.Equals(productType, "Processed", StringComparison.OrdinalIgnoreCase) || productType == "4" || productType == "1")
+                {
+                    query = query.Where(b => b.Product.Type == ProductType.Processed);
+                }
+                else
+                {
+                    query = query.Where(b => b.Product.Type != ProductType.Processed);
                 }
 
                 if (!string.IsNullOrWhiteSpace(search))
@@ -262,6 +299,8 @@ namespace MenuGoBE.Controllers
                         minStorage = b.Product.MinStorage,
                         maxStorage = b.Product.MaxStorage,
                         sellPrice = b.Product.SellPrice,
+                        avg = b.Avg,
+                        quantity = b.Quantity,
                         baseUnit = b.Product.UnitConversions
                             .Where(uc => uc.BaseId == null)
                             .Select(uc => new
@@ -289,7 +328,7 @@ namespace MenuGoBE.Controllers
 
                 var ledgers = await _context.InventoryLedgers
                     .AsNoTracking()
-                    .Where(l => bInvIds.Contains(l.BInventoryId) && l.PostedAt < targetDate)
+                    .Where(l => bInvIds.Contains(l.BInventoryId) && l.PostedAt <= targetDate)
                     .GroupBy(l => l.BInventoryId)
                     .Select(g => g
                         .OrderByDescending(l => l.PostedAt)
@@ -309,13 +348,16 @@ namespace MenuGoBE.Controllers
 
                 var list = bInventories.Select(b =>
                 {
-                    decimal runningQty = 0;
-                    decimal runningAvgCost = 0;
+                    decimal runningQty = b.quantity;
+                    decimal runningAvgCost = b.avg > 0 ? b.avg : b.sellPrice;
 
                     if (ledgerDict.TryGetValue(b.id, out var l) && l != null)
                     {
                         runningQty = l.RunningQuantity;
-                        runningAvgCost = l.RunningAverageCost;
+                        if (l.RunningAverageCost > 0)
+                        {
+                            runningAvgCost = l.RunningAverageCost;
+                        }
                     }
 
                     return new
@@ -337,7 +379,7 @@ namespace MenuGoBE.Controllers
                         quantity = runningQty,
                         stockQuantity = runningQty,
                         avg = runningAvgCost,
-                        purchasePrice = runningAvgCost > 0 ? runningAvgCost : b.sellPrice
+                        purchasePrice = runningAvgCost > 0 ? runningAvgCost : (b.avg > 0 ? b.avg : b.sellPrice)
                     };
                 }).ToList();
 

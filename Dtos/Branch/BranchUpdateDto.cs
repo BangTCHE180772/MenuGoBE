@@ -19,5 +19,9 @@ namespace MenuGoBE.Dtos.Branch
         public TimeOnly OpenTime { get; set; }
 
         public TimeOnly CloseTime { get; set; }
+
+        public string? Status { get; set; }
+
+        public bool? IsDeleted { get; set; }
     }
 }

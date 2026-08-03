@@ -27,6 +27,8 @@ namespace MenuGoBE.Mapper
                 BranchId = document.BranchId,
                 ToBranchId = document.ToBranchId,
                 PartnerId = document.PartnerId,
+                ParentDocumentId = document.ParentDocumentId,
+                ParentDocumentCode = document.ParentDocument?.Code,
                 PostingSequence = document.PostingSequence,
                 Code = document.Code,
                 Type = document.Type,
@@ -34,16 +36,28 @@ namespace MenuGoBE.Mapper
                 TransferStatus = document.TransferStatus,
                 OrderDate = document.OrderDate,
                 CreatedAt = document.CreatedAt,
+                ResponseDate = document.ResponseDate,
 
                 CreatedBy = document.CreatedBy,
                 SnapshotCreatedByName = document.SnapshotCreatedByName,
                 CurrentCreatedByName = document.Creator?.Name,
 
+                SnapshotBranchName = document.SnapshotBranchName,
+                CurrentBranchName = document.Branch?.Name,
+
+                SnapshotToBranchName = document.SnapshotToBranchName,
+                CurrentToBranchName = document.ToBranch?.Name,
+
                 SnapshotPartnerName = document.SnapshotPartnerName,
                 CurrentPartnerName = document.Partner?.Name,
 
                 TotalQuantity = validDetails.Sum(dt => dt.Quantity),
-                TotalAmount = document.TotalAmount,
+                TotalAmount = document.TotalAmount > 0
+                    ? document.TotalAmount
+                    : validDetails.Sum(dt => dt.Quantity * (dt.UnitPrice > 0
+                        ? dt.UnitPrice
+                        : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
+                    )),
                 AmountPaid = document.AmountPaid,
                 AmountDue = document.AmountDue,
                 Note = document.Note
@@ -66,6 +80,7 @@ namespace MenuGoBE.Mapper
                 ToBranchId = document.ToBranchId,
                 PartnerId = document.PartnerId,
                 ParentDocumentId = document.ParentDocumentId,
+                ParentDocumentCode = document.ParentDocument?.Code,
                 PostingSequence = document.PostingSequence,
 
                 Code = document.Code,
@@ -98,6 +113,7 @@ namespace MenuGoBE.Mapper
                 ReceiverAccountId = document.ReceiverAccountId,
                 SnapshotReceiverName = document.SnapshotReceiverName,
                 SnapshotReceiverUsername = document.SnapshotReceiverUsername,
+                ResponseDate = document.ResponseDate,
 
                 TotalAmount = document.TotalAmount,
                 AmountDue = document.AmountDue,
@@ -149,6 +165,35 @@ namespace MenuGoBE.Mapper
                     .ToList();
             }
 
+            // Mapping InventoryLedgers liên quan
+            if (document.InventoryLedgers != null && document.InventoryLedgers.Any())
+            {
+                dto.InventoryLedgers = document.InventoryLedgers
+                    .Select(il => new DocumentInventoryLedgerResponseDto
+                    {
+                        Id = il.Id,
+                        BInventoryId = il.BInventoryId,
+                        DocumentId = il.DocumentId,
+                        PostingSequence = il.PostingSequence,
+                        PostedAt = il.PostedAt,
+                        DocumentType = il.DocumentType,
+                        PostedBy = il.PostedBy,
+                        SnapshotPostedByName = il.SnapshotPostedByName,
+                        SnapshotBranchName = il.SnapshotBranchName,
+                        SnapshotProductName = il.SnapshotProductName,
+                        SnapshotUnitName = il.SnapshotUnitName,
+                        ConversionRateSnapshot = il.ConversionRateSnapshot,
+                        QuantityDelta = il.QuantityDelta,
+                        InventoryValueDelta = il.InventoryValueDelta,
+                        RunningQuantity = il.RunningQuantity,
+                        RunningInventoryValue = il.RunningInventoryValue,
+                        RunningAverageCost = il.RunningAverageCost,
+                        UnitCost = il.UnitCost,
+                        CreatedAt = il.CreatedAt
+                    })
+                    .ToList();
+            }
+
             // Mapping DocumentDetails
             if (document.DocumentDetails != null && document.DocumentDetails.Any())
             {
@@ -172,11 +217,26 @@ namespace MenuGoBE.Mapper
                             SnapshotBaseUnitName = dt.SnapshotBaseUnitName,
                             SnapshotAvgCost = dt.SnapshotAvgCost,
 
+                            // Fallback Display Names (Đảm bảo FE luôn nhận được tên/mã/đơn vị tính dù là phiếu đã chốt hay phiếu nháp)
+                            ProductName = !string.IsNullOrWhiteSpace(dt.SnapshotProductName) 
+                                ? dt.SnapshotProductName 
+                                : (dt.BInventory?.Product?.Name ?? string.Empty),
+                            ProductCode = !string.IsNullOrWhiteSpace(dt.SnapshotProductCode) 
+                                ? dt.SnapshotProductCode 
+                                : (dt.BInventory?.Product?.SKUCode ?? string.Empty),
+                            UnitName = !string.IsNullOrWhiteSpace(dt.SnapshotUnitName) 
+                                ? dt.SnapshotUnitName 
+                                : (dt.UnitConversion?.Unit?.Name ?? dt.BInventory?.Product?.UnitConversions?.FirstOrDefault(uc => uc.BaseId == null)?.Unit?.Name ?? string.Empty),
+                            BaseUnitName = !string.IsNullOrWhiteSpace(dt.SnapshotBaseUnitName) 
+                                ? dt.SnapshotBaseUnitName 
+                                : (dt.BInventory?.Product?.UnitConversions?.FirstOrDefault(uc => uc.BaseId == null)?.Unit?.Name ?? string.Empty),
+
                             // Quantities & Prices
                             ConversionRate = dt.ConversionRate,
                             Quantity = dt.Quantity,
                             BaseQuantity = dt.BaseQuantity,
                             UnitPrice = dt.UnitPrice,
+                            TotalPrice = dt.Quantity * dt.UnitPrice,
 
                             // Special quantities
                             SystemQuantity = dt.SystemQuantity,
@@ -190,8 +250,8 @@ namespace MenuGoBE.Mapper
                             CreatedAt = dt.CreatedAt
                         };
 
-                        // Nếu là phiếu Pending, bổ sung thêm dữ liệu Current Live Data từ BInventory & Product & UnitConversion
-                        if (isPending && dt.BInventory != null)
+                        // Bổ sung dữ liệu Current Live Data từ BInventory & Product & UnitConversion nếu có
+                        if (dt.BInventory != null)
                         {
                             var baseUnitConv = dt.BInventory.Product?.UnitConversions?.FirstOrDefault(uc => uc.BaseId == null);
 

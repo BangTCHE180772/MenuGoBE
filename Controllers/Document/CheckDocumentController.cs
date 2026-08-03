@@ -93,6 +93,7 @@ namespace MenuGoBE.Controllers.Document
                 {
                     BInventoryId = d.BInventoryId,
                     UnitConversionId = d.UnitConversionId,
+                    Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
                 }).ToList()
@@ -132,6 +133,7 @@ namespace MenuGoBE.Controllers.Document
                 {
                     BInventoryId = d.BInventoryId,
                     UnitConversionId = d.UnitConversionId,
+                    Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
                 }).ToList()
@@ -179,6 +181,7 @@ namespace MenuGoBE.Controllers.Document
                     Id = d.Id ?? 0,
                     BInventoryId = d.BInventoryId,
                     UnitConversionId = d.UnitConversionId,
+                    Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
                 }).ToList()
