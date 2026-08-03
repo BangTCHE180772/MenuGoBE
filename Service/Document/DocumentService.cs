@@ -380,14 +380,16 @@ namespace MenuGoBE.Service.Document
             }
             document.TotalAmount = calculatedTotalAmount;
 
-            // 2. Validate AmountPaid
-            if (document.AmountPaid < 0 || document.AmountPaid > document.TotalAmount)
+            var (roundedTotal, roundingValue) = CalculateDocumentRounding(calculatedTotalAmount);
+
+            // 2. Validate AmountPaid đối với giá trị phải trả đã làm tròn
+            if (document.AmountPaid < 0 || document.AmountPaid > roundedTotal)
             {
-                throw new ArgumentException($"Số tiền đã trả (AmountPaid: {document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền chứng từ ({document.TotalAmount:N0} VNĐ).");
+                throw new ArgumentException($"Số tiền đã trả (AmountPaid: {document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền chứng từ sau làm tròn ({roundedTotal:N0} VNĐ).");
             }
 
-            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = TotalAmount - AmountPaid
-            document.AmountDue = document.TotalAmount - document.AmountPaid;
+            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = RoundedTotal - AmountPaid
+            document.AmountDue = Math.Max(0, roundedTotal - document.AmountPaid);
 
             // 4. Quy tắc: Nếu phát sinh tiền đã trả (AmountPaid > 0) -> Ngay cả phiếu Pending cũng BẮT BUỘC chỉ định Nhà cung cấp (PartnerId)
             if (document.AmountPaid > 0 && (!document.PartnerId.HasValue || document.PartnerId.Value <= 0))
@@ -536,14 +538,32 @@ namespace MenuGoBE.Service.Document
         }
         #endregion
 
-        #region Xử lý Phát Sinh Phiếu CashFlow Khi Thanh Toán (Rule a7)
+        #region Xử lý Phát Sinh Phiếu CashFlow Khi Thanh Toán (Rule a7 & Rounding)
 
         /// <summary>
-        /// Tạo phiếu chi CashFlow thanh toán cho Nhà cung cấp nếu AmountPaid > 0 khi chốt phiếu.
+        /// Tính toán làm tròn giá tiền theo quy tắc:
+        /// - phần dư < 0.5 thì làm tròn về hàng đơn vị (tròn xuống)
+        /// - phần dư >= 0.5 thì làm tròn lên hàng đơn vị
+        /// RoundingValue = RawTotal - RoundedTotal (có thể dương, âm hoặc 0).
+        /// EffectivePayable = RawTotal - RoundingValue = RoundedTotal.
+        /// </summary>
+        public static (decimal roundedTotal, decimal roundingValue) CalculateDocumentRounding(decimal rawTotal)
+        {
+            decimal remainder = rawTotal - Math.Floor(rawTotal);
+            decimal roundedTotal = remainder < 0.5m ? Math.Floor(rawTotal) : Math.Floor(rawTotal) + 1m;
+            decimal roundingValue = rawTotal - roundedTotal;
+            return (roundedTotal, roundingValue);
+        }
+
+        /// <summary>
+        /// Tạo phiếu chi CashFlow thanh toán cho Nhà cung cấp nếu AmountPaid > 0 khi chốt phiếu,
+        /// và tự động sinh phiếu CashFlow Rounding nếu có chênh lệch làm tròn.
         /// </summary>
         private async Task CreateImportCashFlowAsync(Models.Document document)
         {
-            #region Quy tắc a7: Nếu AmountPaid > 0 khi chốt phiếu -> Tạo CashFlow
+            var (roundedTotal, roundingValue) = CalculateDocumentRounding(document.TotalAmount);
+
+            #region Quy tắc a7: Nếu AmountPaid > 0 khi chốt phiếu -> Tạo CashFlow Thanh Toán
             if (document.AmountPaid > 0)
             {
                 var cashFlow = new CashFlow
@@ -563,6 +583,29 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddCashFlowAsync(cashFlow);
+            }
+            #endregion
+
+            #region Quy tắc sinh CashFlow Rounding nếu có phần dư làm tròn
+            if (roundingValue != 0)
+            {
+                var roundingCashFlow = new CashFlow
+                {
+                    BranchId = document.BranchId,
+                    DocumentId = document.Id,
+                    PartnerId = document.PartnerId,
+                    Code = $"CF_RND_{document.Code}",
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = CashFlowDirection.Outflow,
+                    Type = CashFlowDetailType.Rounding,
+                    PaymentMethod = PaymentMethod.Cash,
+                    Status = CashFlowStatus.Completed,
+                    TotalAmount = roundingValue,
+                    Note = $"Điều chỉnh làm tròn (Rounding) phiếu nhập kho #{document.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddCashFlowAsync(roundingCashFlow);
             }
             #endregion
         }
@@ -1006,6 +1049,15 @@ namespace MenuGoBE.Service.Document
 
             document.TotalAmount = totalDocumentAmount;
             document.DocumentDetails = validDetails;
+
+            var (roundedReturnTotal, roundingReturnValue) = CalculateDocumentRounding(totalDocumentAmount);
+
+            if (document.AmountPaid < 0 || document.AmountPaid > roundedReturnTotal)
+            {
+                throw new ArgumentException($"Số tiền nhà cung cấp đã trả ({document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền hoàn trả sau làm tròn ({roundedReturnTotal:N0} VNĐ).");
+            }
+
+            document.AmountDue = Math.Max(0, roundedReturnTotal - document.AmountPaid);
             #endregion
 
             await _repo.AddAsync(document);
@@ -1096,6 +1148,28 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddCashFlowAsync(cashFlow);
+            }
+
+            // Sinh phiếu CashFlow Rounding nếu có phần dư làm tròn
+            if (roundingReturnValue != 0 && document.PartnerId.HasValue)
+            {
+                var roundingCashFlow = new CashFlow
+                {
+                    BranchId = document.BranchId,
+                    DocumentId = document.Id,
+                    PartnerId = document.PartnerId,
+                    Code = $"CF_RND_{document.Code}",
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = CashFlowDirection.Inflow,
+                    Type = CashFlowDetailType.Rounding,
+                    PaymentMethod = PaymentMethod.Cash,
+                    Status = CashFlowStatus.Completed,
+                    TotalAmount = roundingReturnValue,
+                    Note = $"Điều chỉnh làm tròn (Rounding) phiếu trả hàng #{document.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddCashFlowAsync(roundingCashFlow);
             }
             #endregion
 
@@ -3259,9 +3333,9 @@ namespace MenuGoBE.Service.Document
 
                 decimal newAvgCostVal = detail.NewAvgCost ?? 0m;
 
-                if (newAvgCostVal < 0)
+                if (newAvgCostVal < 0 || newAvgCostVal > 10_000_000_000m)
                 {
-                    throw new ArgumentException($"Giá vốn mới của sản phẩm '{binventory.Product.Name}' không được nhỏ hơn 0.");
+                    throw new ArgumentException($"Giá vốn mới của sản phẩm '{binventory.Product.Name}' ({newAvgCostVal:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến 10 tỷ VNĐ.");
                 }
 
                 decimal q = binventory.Quantity;

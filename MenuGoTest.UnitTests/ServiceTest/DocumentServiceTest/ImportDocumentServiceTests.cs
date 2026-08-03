@@ -429,7 +429,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
-        public async Task CreateImportCompletedAsync_ZeroAmountPaid_DoesNotCreateCashFlow()
+        public async Task CreateImportCompletedAsync_ZeroAmountPaid_DoesNotCreatePaymentCashFlow()
         {
             var doc = CreateValidImportDocument();
             doc.AmountPaid = 0;
@@ -439,7 +439,41 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             await _service.CreateImportCompletedAsync(doc, 1);
 
-            _mockRepo.Verify(r => r.AddCashFlowAsync(It.IsAny<CashFlow>()), Times.Never);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.Is<CashFlow>(cf => cf.Type == CashFlowDetailType.Payment)), Times.Never);
+        }
+
+        [Theory]
+        [InlineData(100.4, 100.0, 0.4)]
+        [InlineData(100.5, 101.0, -0.5)]
+        [InlineData(100.499, 100.0, 0.499)]
+        [InlineData(100.0, 100.0, 0.0)]
+        public void CalculateDocumentRounding_ValidRawTotal_ReturnsExpectedRounding(decimal rawTotal, decimal expectedRounded, decimal expectedRoundingVal)
+        {
+            var (roundedTotal, roundingVal) = DocumentService.CalculateDocumentRounding(rawTotal);
+            Assert.Equal(expectedRounded, roundedTotal);
+            Assert.Equal(expectedRoundingVal, roundingVal);
+        }
+
+        [Fact]
+        public async Task CreateImportCompletedAsync_DecimalQuantityWithRoundingRemainder_CreatesCashFlowRounding()
+        {
+            var doc = CreateValidImportDocument();
+            // Quantity = 0.001, UnitPrice = 12345 -> RawTotal = 12.345. Remainder = 0.345 < 0.5 -> Rounded = 12. RoundingValue = 0.345
+            doc.DocumentDetails = new List<DocumentDetail>
+            {
+                new DocumentDetail { BInventoryId = 1, UnitConversionId = 1, ConversionRate = 1, Quantity = 0.001m, UnitPrice = 12345m }
+            };
+            doc.AmountPaid = 12m;
+
+            var bInv = CreateValidBInventory();
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(bInv);
+            _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 });
+
+            await _service.CreateImportCompletedAsync(doc, 1);
+
+            Assert.Equal(12.345m, doc.TotalAmount);
+            Assert.Equal(0m, doc.AmountDue);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.Is<CashFlow>(cf => cf.Type == CashFlowDetailType.Rounding && cf.TotalAmount == 0.345m)), Times.Once);
         }
         #endregion
     }
