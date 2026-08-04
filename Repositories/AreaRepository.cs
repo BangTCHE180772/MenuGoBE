@@ -16,20 +16,20 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Area>> GetAllAsync()
         {
-            return await _context.Areas.Where(a => a.Status != "Deleted").ToListAsync();
+            return await _context.Areas.Where(a => a.IsActive).ToListAsync();
         }
 
         public async Task<Area?> GetByIdAsync(long id)
         {
             var entity = await _context.Areas.FindAsync(id);
-            if (entity != null && entity.Status == "Deleted") return null;
+            if (entity != null && !entity.IsActive) return null;
             return entity;
         }
 
         public async Task<List<Area>> GetByBranchIdAsync(long branchId)
         {
             return await _context.Areas
-                .Where(a => a.BranchId == branchId && a.Status != "Deleted")
+                .Where(a => a.BranchId == branchId && a.IsActive)
                 .ToListAsync();
         }
 
