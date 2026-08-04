@@ -23,9 +23,9 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet("sellable")]
-        public async Task<IActionResult> GetSellable()
+        public async Task<IActionResult> GetSellable([FromQuery] long? branchId = null)
         {
-            var result = await _service.GetSellableAsync();
+            var result = await _service.GetSellableAsync(branchId);
             return Ok(result);
         }
 

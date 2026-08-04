@@ -32,10 +32,12 @@ namespace MenuGoBE.Controllers
                 {
                     query = mode.Value switch
                     {
-                        1 => query.Where(b => b.Product.Type != ProductType.Processed && b.Product.Type != ProductType.Manufactured),
+                        1 => query.Where(b => b.Product.Type != ProductType.Processed),
                         2 => query.Where(b => b.Product.Type != ProductType.Processed),
                         3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
-                        _ => query
+                        4 => query.Where(b => b.Product.Type == ProductType.Processed),
+                        0 => query,
+                        _ => query.Where(b => b.Product.Type != ProductType.Processed)
                     };
                 }
 
@@ -100,22 +102,24 @@ namespace MenuGoBE.Controllers
                     query = query.Where(b => b.BranchId == branchId.Value);
                 }
 
-                // 2. Xác định Mode (Mặc định mode = 1)
-                int effectiveMode = mode ?? 1;
-
-                query = effectiveMode switch
+                // 2. Xác định Mode
+                if (mode.HasValue)
                 {
-                    // Mode 1: Lấy tất cả loại trừ Processed và Manufactured
-                    1 => query.Where(b => b.Product.Type != ProductType.Processed && b.Product.Type != ProductType.Manufactured),
-
-                    // Mode 2: Lấy tất cả loại trừ Processed
-                    2 => query.Where(b => b.Product.Type != ProductType.Processed),
-
-                    // Mode 3: Chỉ lấy Manufactured
-                    3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
-
-                    _ => query
-                };
+                    query = mode.Value switch
+                    {
+                        1 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        2 => query.Where(b => b.Product.Type != ProductType.Processed),
+                        3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
+                        4 => query.Where(b => b.Product.Type == ProductType.Processed),
+                        0 => query,
+                        _ => query.Where(b => b.Product.Type != ProductType.Processed)
+                    };
+                }
+                else
+                {
+                    // Mặc định cho Inventory: Lấy toàn bộ sản phẩm loại trừ Processed
+                    query = query.Where(b => b.Product.Type != ProductType.Processed);
+                }
 
                 // 3. Lọc Search text
                 if (!string.IsNullOrWhiteSpace(search))
@@ -256,15 +260,21 @@ namespace MenuGoBE.Controllers
                 {
                     query = mode.Value switch
                     {
-                        1 => query.Where(b => b.Product.Type != ProductType.Processed && b.Product.Type != ProductType.Manufactured),
+                        1 => query.Where(b => b.Product.Type != ProductType.Processed),
                         2 => query.Where(b => b.Product.Type != ProductType.Processed),
                         3 => query.Where(b => b.Product.Type == ProductType.Manufactured),
+                        4 => query.Where(b => b.Product.Type == ProductType.Processed),
+                        0 => query,
                         _ => query.Where(b => b.Product.Type != ProductType.Processed)
                     };
                 }
                 else if (onlyManufactured == true || string.Equals(productType, "Manufactured", StringComparison.OrdinalIgnoreCase) || productType == "3")
                 {
                     query = query.Where(b => b.Product.Type == ProductType.Manufactured);
+                }
+                else if (string.Equals(productType, "Processed", StringComparison.OrdinalIgnoreCase) || productType == "4" || productType == "1")
+                {
+                    query = query.Where(b => b.Product.Type == ProductType.Processed);
                 }
                 else
                 {

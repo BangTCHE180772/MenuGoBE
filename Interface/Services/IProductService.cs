@@ -27,5 +27,11 @@ namespace MenuGoBE.Interface.Services
         Task<bool> UpdateToolAsync(ToolProductUpdateDto dto);
         Task<bool> DeleteAsync(long id, ProductType? expectedType = null);
         Task<bool> DeleteWithTypeAsync(long id, string type);
+
+        /// <summary>
+        /// Cập nhật giá bán hàng loạt. Chỉ hỗ trợ Regular, Manufactured, Processed.
+        /// Trả về số lượng sản phẩm đã cập nhật thành công.
+        /// </summary>
+        Task<int> BulkUpdateSellPriceAsync(List<SellPriceBulkUpdateItemDto> items);
     }
 }

@@ -208,6 +208,8 @@ namespace MenuGoBE.Mapper
 
             CreateMap<CashFlow, DocumentCashFlowResponseDto>();
 
+            CreateMap<InventoryLedger, DocumentInventoryLedgerResponseDto>();
+
             CreateMap<UnitConversion, DocumentUnitConversionResponseDto>()
                 .ForMember(dest => dest.UnitName, opt => opt.MapFrom(src => src.Unit != null ? src.Unit.Name : string.Empty));
 
@@ -240,7 +242,8 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.CurrentBranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : null))
                 .ForMember(dest => dest.Partner, opt => opt.MapFrom(src => src.Partner))
                 .ForMember(dest => dest.CashFlows, opt => opt.MapFrom(src => src.CashFlows != null ? src.CashFlows.Where(cf => !cf.IsDeleted).ToList() : new System.Collections.Generic.List<CashFlow>()))
-                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).ToList() : new System.Collections.Generic.List<DocumentDetail>()));
+                .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).ToList() : new System.Collections.Generic.List<DocumentDetail>()))
+                .ForMember(dest => dest.InventoryLedgers, opt => opt.MapFrom(src => src.InventoryLedgers != null ? src.InventoryLedgers.ToList() : new System.Collections.Generic.List<InventoryLedger>()));
 
             CreateMap<Models.Document, DocumentListResponseDto>()
                 .ForMember(dest => dest.CurrentCreatedByName, opt => opt.MapFrom(src => src.Creator != null ? src.Creator.Name : null))
