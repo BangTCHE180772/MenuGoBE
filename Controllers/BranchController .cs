@@ -27,6 +27,22 @@ namespace MenuGoBE.Controllers
             try
             {
                 var result = await _service.GetAllAsync();
+
+                if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+                {
+                    bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                          User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                          User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                                          
+                    bool isManager = User.IsInRole("Manager") || User.HasClaim(ClaimTypes.Role, "Manager") || User.HasClaim("role", "Manager");
+
+                    if (isManager && !isAdminOrOwner)
+                    {
+                        var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                        result = result.Where(b => branchClaims.Contains(b.Id.ToString())).ToList();
+                    }
+                }
+
                 //200
                 return Ok(result);
             }

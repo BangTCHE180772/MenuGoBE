@@ -7,6 +7,8 @@ using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Models.Enums;
+using MenuGoBE.Exceptions;
+using MenuGoBE.Interface.Services.Document;
 
 namespace MenuGoBE.Service
 {
@@ -24,6 +26,7 @@ namespace MenuGoBE.Service
         private readonly IRedisInventoryService _redisInventoryService;
         private readonly IBInventoryRepository _bInventoryRepo;
         private readonly IDocumentRepository _documentRepo;
+        private readonly IDocumentService _documentService;
         private readonly IPartnerRepository _partnerRepo;
         private readonly AppDbContext _context;
 
@@ -41,7 +44,8 @@ namespace MenuGoBE.Service
             IBInventoryRepository bInventoryRepo,
             IDocumentRepository documentRepo,
             IPartnerRepository partnerRepo,
-            AppDbContext context)
+            AppDbContext context,
+            IDocumentService documentService)
         {
             _repo = repo;
             _mapper = mapper;
@@ -55,6 +59,7 @@ namespace MenuGoBE.Service
             _redisInventoryService = redisInventoryService;
             _bInventoryRepo = bInventoryRepo;
             _documentRepo = documentRepo;
+            _documentService = documentService;
             _partnerRepo = partnerRepo;
             _context = context;
         }
@@ -80,13 +85,13 @@ namespace MenuGoBE.Service
                 var table = await _tableRepo.GetByIdAsync(dto.TableId);
                 if (table != null && (table.Status == "Internal" || table.Status == "Deleted"))
                 {
-                    throw new Exception("Không thể tạo hóa đơn mới trên bàn hệ thống nội bộ.");
+                    throw new MenuGoException(new ErrorResult(400, "Không thể tạo hóa đơn mới trên bàn hệ thống nội bộ.", 400));
                 }
 
                 var existingActiveOrder = await _repo.GetActiveOrderByTableIdAsync(dto.TableId);
                 if (existingActiveOrder != null)
                 {
-                    throw new Exception("Bàn này đã có hóa đơn chưa thanh toán. Không thể tạo hóa đơn mới.");
+                    throw new MenuGoException(new ErrorResult(400, "Bàn này đã có hóa đơn chưa thanh toán. Không thể tạo hóa đơn mới.", 400));
                 }
             }
 
@@ -353,7 +358,7 @@ namespace MenuGoBE.Service
         public async Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto)
         {
             var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
-            if (orderWithDetails == null) throw new Exception("Không tìm thấy đơn hàng hoặc đơn hàng đã thanh toán");
+            if (orderWithDetails == null) throw new MenuGoException(new ErrorResult(404, "Không tìm thấy đơn hàng hoặc đơn hàng đã thanh toán", 404));
             var order = orderWithDetails;
             var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
 
@@ -437,113 +442,112 @@ namespace MenuGoBE.Service
 
         public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash")
         {
-            var paidTableIds = new List<long>();
-            var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
-            if (orderWithDetails == null) return paidTableIds;
-
-            var order = orderWithDetails;
-            
-            if (paymentMethod == "Cash" || dto != null)
+            using var transaction = await _repo.BeginTransactionAsync();
+            try
             {
-                await PreparePaymentAsync(orderId, dto);
-                order = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
-                if (order == null) return paidTableIds;
-            }
+                var paidTableIds = new List<long>();
+                var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
+                if (orderWithDetails == null) return paidTableIds;
 
-            var finalAmount = order.TotalAmount;
-            int pointsEarned = (int)(finalAmount / 100000) * 100;
+                var order = orderWithDetails;
 
-            if (order.CustomerId.HasValue)
-            {
-                var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
-                if (customer != null)
+                if (paymentMethod == "Cash" || dto != null)
                 {
-                    customer.Point = customer.Point - order.PointsUsed + pointsEarned;
-                    await _customerRepo.UpdateAsync(customer);
+                    await PreparePaymentAsync(orderId, dto);
+                    order = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
+                    if (order == null) return paidTableIds;
                 }
-            }
 
-            if (order.VoucherId.HasValue)
-            {
-                var voucher = await _voucherRepo.GetByIdAsync(order.VoucherId.Value);
-                if (voucher != null)
-                {
-                    voucher.UsedCount += 1;
-                    await _voucherRepo.UpdateAsync(voucher);
-                }
-            }
+                var finalAmount = order.TotalAmount;
+                int pointsEarned = (int)(finalAmount / 100000) * 100;
 
-            order.Status = "Paid";
-            
-            var hasSuccessPayment = await _paymentRepo.HasSuccessPaymentAsync(order.Id);
-            if (!hasSuccessPayment && paymentMethod == "Cash")
-            {
-                var payment = new Payment
+                if (order.CustomerId.HasValue)
                 {
-                    OrderId = order.Id,
-                    Amount = finalAmount,
-                    Method = "Cash",
-                    Status = "Success",
-                    CreatedAt = DateTime.UtcNow,
-                    CompletedAt = DateTime.UtcNow
-                };
-                await _paymentRepo.CreateAsync(payment);
-            }
-            
-            if (order.TableId > 0)
-            {
-                var table = await _tableRepo.GetByIdAsync(order.TableId);
-                if (table != null)
-                {
-                    table.Status = "Cleaning";
-                    paidTableIds.Add(table.Id);
-                }
-            }
-
-            var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
-            foreach (var child in childOrders)
-            {
-                if (child.Status == "Active")
-                {
-                    child.Status = "Paid";
-                    if (child.TableId > 0)
+                    var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
+                    if (customer != null)
                     {
-                        var childTable = await _tableRepo.GetByIdAsync(child.TableId);
-                        if (childTable != null)
+                        customer.Point = customer.Point - order.PointsUsed + pointsEarned;
+                        await _customerRepo.UpdateAsync(customer);
+                    }
+                }
+
+                if (order.VoucherId.HasValue)
+                {
+                    var voucher = await _voucherRepo.GetByIdAsync(order.VoucherId.Value);
+                    if (voucher != null)
+                    {
+                        voucher.UsedCount += 1;
+                        await _voucherRepo.UpdateAsync(voucher);
+                    }
+                }
+
+                order.Status = "Paid";
+
+                var hasSuccessPayment = await _paymentRepo.HasSuccessPaymentAsync(order.Id);
+                if (!hasSuccessPayment && paymentMethod == "Cash")
+                {
+                    var payment = new Payment
+                    {
+                        OrderId = order.Id,
+                        Amount = finalAmount,
+                        Method = "Cash",
+                        Status = "Success",
+                        CreatedAt = DateTime.UtcNow,
+                        CompletedAt = DateTime.UtcNow
+                    };
+                    await _paymentRepo.CreateAsync(payment);
+                }
+
+                if (order.TableId > 0)
+                {
+                    var table = await _tableRepo.GetByIdAsync(order.TableId);
+                    if (table != null)
+                    {
+                        table.Status = "Cleaning";
+                        paidTableIds.Add(table.Id);
+                    }
+                }
+
+                var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
+                foreach (var child in childOrders)
+                {
+                    if (child.Status == "Active")
+                    {
+                        child.Status = "Paid";
+                        if (child.TableId > 0)
                         {
-                            childTable.Status = "Cleaning";
-                            paidTableIds.Add(childTable.Id);
+                            var childTable = await _tableRepo.GetByIdAsync(child.TableId);
+                            if (childTable != null)
+                            {
+                                childTable.Status = "Cleaning";
+                                paidTableIds.Add(childTable.Id);
+                            }
                         }
                     }
                 }
-            }
 
-            // Tích hợp Redis & PostgreSQL: Trừ kho thực tế và giải phóng tạm giữ khi thanh toán
-            var tableForInventory = await _tableRepo.GetByIdAsync(order.TableId);
-            long? branchId = null;
-            if (tableForInventory != null)
-            {
-                var area = await _areaRepo.GetByIdAsync(tableForInventory.AreaId);
-                if (area != null) branchId = area.BranchId;
-            }
-
-            if (branchId.HasValue)
-            {
-                var allDetails = order.OrderDetails.Where(od => od.Status != "Cancelled").ToList();
-                foreach (var child in childOrders)
+                // Tích hợp Redis & PostgreSQL: Trừ kho thực tế và giải phóng tạm giữ khi thanh toán
+                var tableForInventory = await _tableRepo.GetByIdAsync(order.TableId);
+                long? branchId = null;
+                if (tableForInventory != null)
                 {
-                    allDetails.AddRange(child.OrderDetails.Where(od => od.Status != "Cancelled"));
+                    var area = await _areaRepo.GetByIdAsync(tableForInventory.AreaId);
+                    if (area != null) branchId = area.BranchId;
                 }
 
-                var productGroups = allDetails.GroupBy(d => d.ProductId)
-                                           .Select(g => new { ProductId = g.Key, Quantity = g.Sum(d => d.Quantity), Price = g.First().Price })
-                                           .ToList();
-
-
-                using var dbTransaction = await _context.Database.BeginTransactionAsync();
-                try
+                if (branchId.HasValue)
                 {
-                    // 1. Đồng bộ Customer -> Partner
+                    var allDetails = order.OrderDetails.Where(od => od.Status != "Cancelled").ToList();
+                    foreach (var child in childOrders)
+                    {
+                        allDetails.AddRange(child.OrderDetails.Where(od => od.Status != "Cancelled"));
+                    }
+
+                    var productGroups = allDetails.GroupBy(d => d.ProductId)
+                                               .Select(g => new { ProductId = g.Key, Quantity = g.Sum(d => d.Quantity), Price = g.First().Price })
+                                               .ToList();
+
+                    // 1. Tìm hoặc tạo Partner
                     Partner? targetPartner = null;
                     string searchPhone = "";
                     string partnerName = "Khách vãng lai";
@@ -558,7 +562,6 @@ namespace MenuGoBE.Service
                         }
                     }
 
-                    // Tìm Partner có sẵn
                     var partnerQuery = new MenuGoBE.Dtos.Partner.PartnerQueryDto
                     {
                         BranchId = branchId.Value,
@@ -568,6 +571,7 @@ namespace MenuGoBE.Service
                     };
 
                     var (partners, _) = await _partnerRepo.GetPagedPartnersAsync(partnerQuery);
+
                     if (!string.IsNullOrEmpty(searchPhone))
                     {
                         targetPartner = partners.FirstOrDefault(p => p.Phone == searchPhone);
@@ -579,7 +583,6 @@ namespace MenuGoBE.Service
 
                     if (targetPartner == null)
                     {
-                        // Tạo mới
                         targetPartner = new Partner
                         {
                             BranchId = branchId.Value,
@@ -593,108 +596,66 @@ namespace MenuGoBE.Service
                         targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
                     }
 
-                    // 2. Tạo Document
+                    // 2. Tạo Document và xử lý tồn kho qua DocumentService
                     var document = new MenuGoBE.Models.Document
                     {
                         BranchId = branchId.Value,
                         OrderDate = DateTime.UtcNow,
                         PostedAt = DateTime.UtcNow,
-                        Code = "PXBH-" + order.Id, // Phiếu Xuất Bán Hàng
+                        Code = "PXBH-" + order.Id,
                         Type = DocumentType.Sale,
                         Status = DocumentStatus.Completed,
                         TotalAmount = finalAmount,
                         PartnerId = targetPartner?.Id,
                         CreatedAt = DateTime.UtcNow
                     };
-                    await _context.Documents.AddAsync(document);
-                    await _context.SaveChangesAsync();
 
-                    // 3. Xử lý tồn kho và tạo chi tiết chứng từ
+                    document.DocumentDetails = new List<DocumentDetail>();
                     foreach (var group in productGroups)
                     {
                         var product = await _productRepo.GetByIdAsync(group.ProductId);
-                        if (product == null) continue;
-
-                        var productTypeStr = product.Type.ToString();
-                        if (productTypeStr == "Regular" || productTypeStr == "Manufactured")
+                        if (product == null)
                         {
-                            var binv = await _bInventoryRepo.GetByProductAndBranchAsync(group.ProductId, branchId.Value);
-                            if (binv != null)
-                            {
-                                binv.Quantity -= group.Quantity;
-                                _context.BInventories.Update(binv);
-
-                                var docDetail = new DocumentDetail
-                                {
-                                    DocumentId = document.Id,
-                                    BInventoryId = binv.Id,
-                                    Quantity = group.Quantity,
-                                    UnitPrice = group.Price,
-                                    CreatedAt = DateTime.UtcNow
-                                };
-                                await _context.DocumentDetails.AddAsync(docDetail);
-
-                                var ledger = new InventoryLedger
-                                {
-                                    DocumentId = document.Id,
-                                    BInventoryId = binv.Id,
-                                    DocumentType = DocumentType.Sale,
-                                    SnapshotProductName = product.Name,
-                                    SnapshotUnitName = product.Name,
-                                    ConversionRateSnapshot = 1m,
-                                    QuantityDelta = -group.Quantity,
-                                    RunningQuantity = binv.Quantity,
-                                    PostedAt = DateTime.UtcNow,
-                                    CreatedAt = DateTime.UtcNow
-                                };
-                                await _context.InventoryLedgers.AddAsync(ledger);
-                            }
-                            await _redisInventoryService.DecrementReservedQuantityAsync((int)branchId.Value, (int)group.ProductId, group.Quantity);
+                            Console.WriteLine($"Product {group.ProductId} is null");
+                            continue;
                         }
-                        else if (productTypeStr == "Processed")
+
+                        var binv = await _bInventoryRepo.GetByProductAndBranchAsync(group.ProductId, branchId.Value);
+                        if (binv != null)
                         {
-                            if (product.RecipeItems != null)
+                            Console.WriteLine($"Adding binv for product {group.ProductId}");
+                            document.DocumentDetails.Add(new DocumentDetail
                             {
-                                foreach (var recipeItem in product.RecipeItems)
-                                {
-                                    var ingredientQty = recipeItem.Quantity * group.Quantity;
-                                    var binv = await _bInventoryRepo.GetByProductAndBranchAsync(recipeItem.IngredientProductId, branchId.Value);
-                                    if (binv != null)
-                                    {
-                                        binv.Quantity -= ingredientQty;
-                                        _context.BInventories.Update(binv);
+                                BInventoryId = binv.Id,
+                                BaseQuantity = group.Quantity,
+                                Quantity = group.Quantity,
+                                UnitPrice = group.Price,
+                                CreatedAt = DateTime.UtcNow
+                            });
 
-                                        var docDetail = new DocumentDetail
-                                        {
-                                            DocumentId = document.Id,
-                                            BInventoryId = binv.Id,
-                                            Quantity = ingredientQty,
-                                            UnitPrice = 0,
-                                            CreatedAt = DateTime.UtcNow
-                                        };
-                                        await _context.DocumentDetails.AddAsync(docDetail);
-
-                                        var ledger = new InventoryLedger
-                                        {
-                                            DocumentId = document.Id,
-                                            BInventoryId = binv.Id,
-                                            DocumentType = DocumentType.Sale,
-                                            SnapshotProductName = recipeItem.IngredientProduct?.Name ?? string.Empty,
-                                            SnapshotUnitName = recipeItem.IngredientProduct?.Name ?? string.Empty,
-                                            ConversionRateSnapshot = 1m,
-                                            QuantityDelta = -ingredientQty,
-                                            RunningQuantity = binv.Quantity,
-                                            PostedAt = DateTime.UtcNow,
-                                            CreatedAt = DateTime.UtcNow
-                                        };
-                                        await _context.InventoryLedgers.AddAsync(ledger);
-                                    }
-                                }
+                            var productTypeStr = product.Type.ToString();
+                            if (productTypeStr == "Regular" || productTypeStr == "Manufactured")
+                            {
+                                await _redisInventoryService.DecrementReservedQuantityAsync((int)branchId.Value, (int)group.ProductId, group.Quantity);
                             }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"binv is null for product {group.ProductId}");
                         }
                     }
 
-                    // 4. Tạo CashFlow
+                    if (document.DocumentDetails.Any())
+                    {
+                        Console.WriteLine($"Calling CreateSaleCompletedAsync");
+                        await _documentService.CreateSaleCompletedAsync(document, order.CreatedBy ?? 1);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"No document details");
+                    }
+
+                    // 3. Tạo CashFlow
                     if (finalAmount > 0)
                     {
                         var methodEnum = MenuGoBE.Models.Enums.PaymentMethod.Cash;
@@ -706,34 +667,37 @@ namespace MenuGoBE.Service
                         var cashFlow = new CashFlow
                         {
                             BranchId = branchId.Value,
-                            DocumentId = document.Id,
-                            PartnerId = targetPartner?.Id,
-                            Code = "PTBH-" + order.Id, // Phiếu Thu Bán Hàng
+                            DocumentId = document.Id > 0 ? document.Id : null,
+                            PartnerId = document.PartnerId,
+                            Code = "PTBH-" + order.Id,
                             BusinessDate = DateTime.UtcNow,
                             Direction = MenuGoBE.Models.Enums.CashFlowDirection.Inflow,
-                            Type = MenuGoBE.Models.Enums.CashFlowDetailType.Payment,
-                            PaymentMethod = methodEnum,
                             Status = MenuGoBE.Models.Enums.CashFlowStatus.Completed,
                             TotalAmount = finalAmount,
+                            Type = MenuGoBE.Models.Enums.CashFlowDetailType.Payment,
+                            PaymentMethod = methodEnum,
                             Note = $"Thanh toán đơn {order.Id}",
                             CreatedAt = DateTime.UtcNow
                         };
-                        await _context.CashFlows.AddAsync(cashFlow);
+
+                        await _documentRepo.AddCashFlowAsync(cashFlow);
                     }
+                }
 
-                    await _context.SaveChangesAsync();
-                    await dbTransaction.CommitAsync();
-                }
-                catch (Exception)
-                {
-                    await dbTransaction.RollbackAsync();
-                    throw;
-                }
+                await _repo.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return paidTableIds;
             }
-
-            await _repo.SaveChangesAsync();
-            return paidTableIds;
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
+
+
+
 
         public async Task<bool> CancelOrderAsync(long orderId)
         {
