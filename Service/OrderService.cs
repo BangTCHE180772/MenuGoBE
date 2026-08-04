@@ -80,7 +80,7 @@ namespace MenuGoBE.Service
             if (dto.TableId > 0)
             {
                 var table = await _tableRepo.GetByIdAsync(dto.TableId);
-                if (table != null && (table.Status == "Internal" || table.Status == "Deleted"))
+                if (table != null && (table.Status == "Internal" || !table.IsActive))
                 {
                     throw new MenuGoException(new ErrorResult(400, "Không thể tạo hóa đơn mới trên bàn hệ thống nội bộ.", 400));
                 }
