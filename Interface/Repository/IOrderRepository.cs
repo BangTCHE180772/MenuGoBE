@@ -17,5 +17,6 @@ namespace MenuGoBE.Interface.Repository
         Task UpdateAsync(Order entity);
         Task DeleteAsync(long id);
         Task SaveChangesAsync();
+        Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync();
     }
 }

@@ -36,7 +36,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
             var entity = new Branch { Id = 1, Name = "Branch" };
 
             _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(entity);
-            _repoMock.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
+            _repoMock.Setup(r => r.UpdateAsync(It.IsAny<Branch>())).Returns(Task.CompletedTask);
             _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
             // Act
@@ -44,8 +44,10 @@ namespace MenuGoTest.UnitTests.ServiceTest.BranchTest
 
             // Assert
             Assert.True(result);
+            Assert.True(entity.IsDeleted);
+            Assert.Equal("Ngừng kinh doanh", entity.Status);
 
-            _repoMock.Verify(r => r.DeleteAsync(1), Times.Once);
+            _repoMock.Verify(r => r.UpdateAsync(entity), Times.Once);
             _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
         }
 

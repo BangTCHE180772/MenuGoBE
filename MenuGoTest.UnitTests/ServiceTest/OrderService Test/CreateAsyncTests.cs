@@ -27,7 +27,7 @@ public class CreateAsyncTests : OrderServiceTestBase
         var dto = new OrderCreateDto { TableId = 1, Status = "Active" };
         _orderRepoMock.Setup(r => r.GetActiveOrderByTableIdAsync(1)).ReturnsAsync(new Order { Id = 99, TableId = 1, Status = "Active" });
 
-        var ex = await Assert.ThrowsAsync<Exception>(() => _service.CreateAsync(dto));
+        var ex = await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateAsync(dto));
         Assert.Contains("đã có hóa đơn", ex.Message);
     }
 

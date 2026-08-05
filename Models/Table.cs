@@ -14,7 +14,7 @@ public class Table
     [Required]
     public string Name { get; set; } = string.Empty;
 
-    public string Status { get; set; } = string.Empty;
+    public string Status { get; set; } = "Empty";
 
     public bool IsActive { get; set; }
 

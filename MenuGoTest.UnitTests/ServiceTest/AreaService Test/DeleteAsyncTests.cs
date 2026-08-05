@@ -1,4 +1,5 @@
 using AutoMapper;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Dtos.Area;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Mapper;
@@ -23,7 +24,7 @@ public class DeleteAsyncTests
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
-        _service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper);
+        _service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper, new Mock<MenuGoBE.Interface.Repository.IOrderRepository>().Object, new Mock<MenuGoBE.Interface.Repository.IReservationRepository>().Object);
     }
 
     [Fact]
@@ -32,7 +33,8 @@ public class DeleteAsyncTests
         // Arrange
         var existing = new Area { Id = 1, BranchId = 1, Name = "Tầng 1", Status = "Active", IsActive = true };
         _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
-        _repoMock.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
+        _tableRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Table>());
+        _repoMock.Setup(r => r.UpdateAsync(It.IsAny<Area>())).Returns(Task.CompletedTask);
         _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
         // Act
@@ -40,6 +42,7 @@ public class DeleteAsyncTests
 
         // Assert
         Assert.True(result);
+        Assert.Equal("Deleted", existing.Status);
     }
 
     [Fact]
@@ -56,19 +59,64 @@ public class DeleteAsyncTests
     }
 
     [Fact]
-    public async Task CallsRepoDeleteAndSave_WhenExists()
+    public async Task CallsRepoUpdateAndSave_WhenExists()
     {
         // Arrange
         var existing = new Area { Id = 1, BranchId = 1, Name = "Tầng 1", Status = "Active", IsActive = true };
         _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
-        _repoMock.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
+        _tableRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<Table>());
+        _repoMock.Setup(r => r.UpdateAsync(It.IsAny<Area>())).Returns(Task.CompletedTask);
         _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
         // Act
         await _service.DeleteAsync(1);
 
         // Assert
-        _repoMock.Verify(r => r.DeleteAsync(1), Times.Once);
+        _repoMock.Verify(r => r.UpdateAsync(existing), Times.Once);
         _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ThrowsException_WhenAreaHasOccupiedTables()
+    {
+        var existing = new Area { Id = 1, BranchId = 1, Name = "Tầng 1", Status = "Active", IsActive = true };
+        _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        
+        var tables = new List<Table>
+        {
+            new Table { Id = 1, AreaId = 1, Status = "Empty", Name = "Bàn 1" }
+        };
+        _tableRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(tables);
+        
+        var activeOrder = new Order { Id = 1, TableId = 1, Status = "Active" };
+        var orderRepoMock = new Mock<IOrderRepository>();
+        orderRepoMock.Setup(r => r.GetActiveOrderByTableIdAsync(1)).ReturnsAsync(activeOrder);
+        
+        var service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper, orderRepoMock.Object, new Mock<IReservationRepository>().Object);
+
+        var exception = await Assert.ThrowsAsync<MenuGoException>(() => service.DeleteAsync(1));
+        Assert.Contains("đang có hóa đơn chưa thanh toán", exception.Message);
+    }
+    
+    [Fact]
+    public async Task ThrowsException_WhenAreaHasReservedTables()
+    {
+        var existing = new Area { Id = 1, BranchId = 1, Name = "Tầng 1", Status = "Active", IsActive = true };
+        _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        
+        var tables = new List<Table>
+        {
+            new Table { Id = 1, AreaId = 1, Status = "Empty", Name = "Bàn 1" }
+        };
+        _tableRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(tables);
+        
+        var activeOrder = new Order { Id = 1, TableId = 1, Status = "Reserved" };
+        var orderRepoMock = new Mock<IOrderRepository>();
+        orderRepoMock.Setup(r => r.GetActiveOrderByTableIdAsync(1)).ReturnsAsync(activeOrder);
+        
+        var service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper, orderRepoMock.Object, new Mock<IReservationRepository>().Object);
+
+        var exception = await Assert.ThrowsAsync<MenuGoException>(() => service.DeleteAsync(1));
+        Assert.Contains("đang được đặt trước", exception.Message);
     }
 }
