@@ -568,6 +568,39 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             _payrollRepoMock.Verify(r => r.UpdateAsync(existingPayroll), Times.Once);
         }
 
+        [Fact]
+        public async Task GenerateEmployeePayrollAsync_WhenContractExpired_ShouldThrowInvalidOperationException()
+        {
+            // Arrange
+            long accountId = 45;
+            var dto = new PayrollGenerateDto { AccountId = accountId, Month = 8, Year = 2026 };
+
+            var account = new Account
+            {
+                Id = accountId,
+                Name = "Expired Contract Worker",
+                Contracts = new List<Contract>
+                {
+                    new Contract
+                    {
+                        Id = 13,
+                        BranchId = 1,
+                        SalaryType = "Monthly",
+                        BaseSalary = 10000000,
+                        StartDate = new DateOnly(2026, 1, 1),
+                        EndDate = new DateOnly(2026, 7, 29),
+                        Status = "Expired"
+                    }
+                }
+            };
+            await _context.Accounts.AddAsync(account);
+            await _context.SaveChangesAsync();
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.GenerateEmployeePayrollAsync(dto));
+            Assert.Contains("không có hợp đồng hợp lệ trong tháng 8/2026", ex.Message);
+        }
+
         #endregion
 
         #region GenerateBatchPayrollAsync
