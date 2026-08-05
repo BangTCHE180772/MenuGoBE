@@ -53,6 +53,11 @@ namespace MenuGoBE.Service
 
         public async Task<ContractViewDto> CreateAsync(ContractCreateDto dto)
         {
+            if (dto.Status == "Expired")
+            {
+                throw new Exception("Không thể chọn trạng thái 'Hết hiệu lực' khi tạo hợp đồng. Trạng thái này do hệ thống tự động cập nhật khi hợp đồng hết hạn.");
+            }
+
             if (await _repo.HasActiveContractByAccountAsync(dto.AccountId))
             {
                 throw new Exception("Tài khoản này hiện đã có hợp đồng đang có hiệu lực. Không thể tạo thêm hợp đồng mới khi hợp đồng cũ còn hiệu lực.");
@@ -79,6 +84,11 @@ namespace MenuGoBE.Service
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
+
+            if (dto.Status == "Expired")
+            {
+                throw new Exception("Không thể chuyển sang trạng thái 'Hết hiệu lực' thủ công. Trạng thái này do hệ thống tự động cập nhật khi hợp đồng hết hạn.");
+            }
 
             if (dto.Status == "Active" && await _repo.HasActiveContractByAccountAsync(dto.AccountId, dto.Id))
             {
