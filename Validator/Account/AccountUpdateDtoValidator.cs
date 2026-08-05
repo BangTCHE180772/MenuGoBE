@@ -13,7 +13,10 @@ namespace MenuGoBE.Validator.Account
 
             RuleFor(x => x.Name)
                 .NotEmpty().WithMessage("Tên người dùng không được để trống.")
-                .MaximumLength(100).WithMessage("Tên người dùng không được vượt quá 100 ký tự.");
+                .MinimumLength(2).WithMessage("Tên người dùng phải có ít nhất 2 ký tự.")
+                .MaximumLength(100).WithMessage("Tên người dùng không được vượt quá 100 ký tự.")
+                .Matches(@"^[a-zA-ZàáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđÀÁẢÃẠÂẦẤẨẪẬĂẰẮẲẴẶÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴĐ\s]+$")
+                .WithMessage("Tên người dùng chỉ được chứa chữ cái và khoảng trắng.");
 
             RuleFor(x => x.Email)
                 .NotEmpty().WithMessage("Email không được để trống.")
@@ -33,7 +36,8 @@ namespace MenuGoBE.Validator.Account
                 .MaximumLength(20).WithMessage("Giới tính không được vượt quá 20 ký tự.");
 
             RuleFor(x => x.DateOfBirth)
-                .Must(dob => dob == null || dob <= DateOnly.FromDateTime(DateTime.Today.AddYears(-18)))
+                .NotEmpty().WithMessage("Ngày sinh không được để trống.")
+                .LessThanOrEqualTo(DateOnly.FromDateTime(DateTime.Today.AddYears(-18)))
                 .WithMessage("Người dùng phải đủ 18 tuổi.");
         }
     }
