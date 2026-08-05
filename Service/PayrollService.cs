@@ -56,14 +56,24 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Payroll>(dto);
             entity.CreatedAt = DateTime.UtcNow;
 
+            var monthStart = new DateOnly(dto.Year, dto.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
             var account = await _context.Accounts
                 .Include(a => a.Contracts)
                 .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
 
-            var contract = account?.Contracts.FirstOrDefault(c => c.Status == "Active")
-                           ?? account?.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+            var contract = account?.Contracts
+                .Where(c => c.StartDate <= monthEnd && (!c.EndDate.HasValue || c.EndDate.Value >= monthStart))
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefault();
 
-            if (contract != null && contract.BranchId > 0)
+            if (contract == null)
+            {
+                throw new InvalidOperationException($"Nhân viên {(account != null ? account.Name : "ID " + dto.AccountId)} không có hợp đồng hợp lệ trong tháng {dto.Month}/{dto.Year}.");
+            }
+
+            if (contract.BranchId > 0)
             {
                 entity.BranchId = contract.BranchId;
                 entity.ContractId = contract.Id;
@@ -88,12 +98,17 @@ namespace MenuGoBE.Service
                 throw new InvalidOperationException("Không thể cập nhật bảng lương đã thanh toán (Paid)");
             }
 
+            var monthStart = new DateOnly(dto.Year, dto.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
             var account = await _context.Accounts
                 .Include(a => a.Contracts)
                 .FirstOrDefaultAsync(a => a.Id == entity.AccountId);
 
-            var contract = account?.Contracts.FirstOrDefault(c => c.Status == "Active")
-                           ?? account?.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+            var contract = account?.Contracts
+                .Where(c => c.StartDate <= monthEnd && (!c.EndDate.HasValue || c.EndDate.Value >= monthStart))
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefault();
 
             if (contract != null && contract.BranchId > 0)
             {
@@ -185,6 +200,9 @@ namespace MenuGoBE.Service
 
         public async Task<PayrollViewDto> GenerateEmployeePayrollAsync(PayrollGenerateDto dto)
         {
+            var startDate = new DateOnly(dto.Year, dto.Month, 1);
+            var endDate = startDate.AddMonths(1).AddDays(-1);
+
             var account = await _context.Accounts
                 .Include(a => a.Contracts)
                 .FirstOrDefaultAsync(a => a.Id == dto.AccountId);
@@ -194,12 +212,15 @@ namespace MenuGoBE.Service
                 throw new KeyNotFoundException($"Không tìm thấy nhân viên với ID {dto.AccountId}");
             }
 
-            var contract = account.Contracts.FirstOrDefault(c => c.Status == "Active")
-                           ?? account.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+            var contract = account.Contracts
+                .Where(c => c.StartDate <= endDate && (!c.EndDate.HasValue || c.EndDate.Value >= startDate))
+                .OrderByDescending(c => c.CreatedAt)
+                .FirstOrDefault();
 
-            // Fetch work schedules for account in Month/Year
-            var startDate = new DateOnly(dto.Year, dto.Month, 1);
-            var endDate = startDate.AddMonths(1).AddDays(-1);
+            if (contract == null)
+            {
+                throw new InvalidOperationException($"Nhân viên {account.Name} không có hợp đồng hợp lệ trong tháng {dto.Month}/{dto.Year}.");
+            }
 
             var schedules = await _context.WorkSchedules
                 .Where(w => w.AccountId == dto.AccountId 
@@ -313,10 +334,15 @@ namespace MenuGoBE.Service
 
             var eligibleAccounts = await accountsQuery.ToListAsync();
 
+            var monthStart = new DateOnly(dto.Year, dto.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
             foreach (var acc in eligibleAccounts)
             {
-                var contract = acc.Contracts.FirstOrDefault(c => c.Status == "Active")
-                               ?? acc.Contracts.OrderByDescending(c => c.CreatedAt).FirstOrDefault();
+                var contract = acc.Contracts
+                    .Where(c => c.StartDate <= monthEnd && (!c.EndDate.HasValue || c.EndDate.Value >= monthStart))
+                    .OrderByDescending(c => c.CreatedAt)
+                    .FirstOrDefault();
 
                 if (contract == null) continue;
 
