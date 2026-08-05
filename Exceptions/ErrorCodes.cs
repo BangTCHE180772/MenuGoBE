@@ -78,7 +78,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult SellPriceRequired = new(
         1017,
-        "Giá bán phải lớn hơn 0 khi sản phẩm có thể bán (IsSellable là true).",
+        "Giá bán phải lớn hơn 0 đối với sản phẩm loại Processed, Manufactured và Regular.",
         400
     );
 
@@ -144,7 +144,7 @@ public static class ErrorCodes
 
     public static readonly ErrorResult ProcessedUnitConversionsNotAllowed = new(
         1028,
-        "Sản phẩm loại processed và manufactured chỉ được cấu hình duy nhất 1 đơn vị cơ sở (base unit), không được thêm các đơn vị chuyển đổi khác.",
+        "Sản phẩm loại Processed không được phép cấu hình đơn vị quy đổi.",
         400
     );
 
@@ -187,6 +187,42 @@ public static class ErrorCodes
     public static readonly ErrorResult IngredientOrRegularRequired = new(
         1035,
         "Cần có ít nhất một sản phẩm loại Hàng thường hoặc Nguyên liệu để tạo công thức món.",
+        400
+    );
+
+    public static readonly ErrorResult SellPriceNotAllowedForIngredientOrTool = new(
+        1036,
+        "Sản phẩm loại Nguyên liệu và Dụng cụ không được phép có giá bán.",
+        400
+    );
+
+    public static readonly ErrorResult IngredientOrToolIsSellableNotAllowed = new(
+        1037,
+        "Sản phẩm loại Nguyên liệu và Dụng cụ không được phép đặt thuộc tính có thể bán.",
+        400
+    );
+
+    public static readonly ErrorResult IngredientOrToolMenuNotAllowed = new(
+        1038,
+        "Sản phẩm loại Nguyên liệu và Dụng cụ không được phép thuộc về bất kỳ thực đơn nào.",
+        400
+    );
+
+    public static readonly ErrorResult SellPriceExceedsLimit = new(
+        1039,
+        "Giá bán không được vượt quá 10 tỷ đồng.",
+        400
+    );
+
+    public static readonly ErrorResult CategoryRequired = new(
+        1040,
+        "Sản phẩm bắt buộc phải thuộc về một nhóm sản phẩm (GroupId).",
+        400
+    );
+
+    public static readonly ErrorResult DuplicateRecipeIngredient = new(
+        1041,
+        "Thành phần trong công thức không được trùng lặp.",
         400
     );
 
@@ -266,6 +302,12 @@ public static class ErrorCodes
         2019,
         "Tài khoản quản lý không có thông tin chi nhánh liên kết hợp lệ.",
         404
+    );
+
+    public static readonly ErrorResult BranchAlreadyDeleted = new(
+        2020,
+        "Chi nhánh đã ngừng kinh doanh (đã xóa), không thể thay đổi hoặc cập nhật.",
+        400
     );
     
     public static readonly ErrorResult DocumentBranchNotFound = new(
@@ -419,6 +461,232 @@ public static class ErrorCodes
     public static readonly ErrorResult DocumentDuplicatePartner = new(
         2125,
         "Mỗi đối tác chỉ được xuất hiện một lần trong chứng từ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentBusinessDateInFutureError = new(
+        2126,
+        "Ngày chứng từ không được lớn hơn thời gian hiện tại.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentCannotUpdateAlreadyCompleted = new(
+        2127,
+        "Chỉ có thể cập nhật phiếu ở trạng thái Chờ (Pending).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentOtherCostMustBeInteger = new(
+        2128,
+        "Chi phí khác phải là số nguyên lớn hơn hoặc bằng 0.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentOtherCostNoteRequired = new(
+        2129,
+        "Khi có chi phí khác, ghi chú không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentOtherCostExceedsLimit = new(
+        2130,
+        "Chi phí khác không được vượt quá 10 tỷ đồng.",
+        400
+    );
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Document Service Exceptions (2131–2162)
+    // ──────────────────────────────────────────────────────────────────────
+
+    public static readonly ErrorResult DocumentNullInfo = new(
+        2131,
+        "Thông tin chứng từ không được để trống.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentNoteTooLong = new(
+        2132,
+        "Ghi chú chứng từ (Note) không được vượt quá 255 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentDeleteNoteTooLong = new(
+        2133,
+        "Lý do xóa chứng từ (DeleteNote) không được vượt quá 255 ký tự.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentMustHaveDetail = new(
+        2134,
+        "Chứng từ phải có tối thiểu 1 mặt hàng chi tiết.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentDuplicateDetail = new(
+        2135,
+        "Mặt hàng bị trùng lặp trong chứng từ. Mỗi mặt hàng chỉ được xuất hiện 1 lần.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentParentRequired = new(
+        2136,
+        "Chứng từ này bắt buộc phải liên kết với chứng từ gốc.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentParentNotCompleted = new(
+        2137,
+        "Chứng từ gốc chưa ở trạng thái chốt kho (Completed).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentInsufficientInventory = new(
+        2138,
+        "Tồn kho không đủ để thực hiện thao tác này.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentLockedCompleted = new(
+        2139,
+        "Chứng từ đã CHỐT (Completed). Không được phép chỉnh sửa hoặc xóa.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentLockedCancelled = new(
+        2140,
+        "Chứng từ đã bị HỦY (Canceled). Không được phép thao tác.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentNotPending = new(
+        2141,
+        "Chỉ được phép thao tác khi chứng từ ở trạng thái Pending.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentCodeDuplicate = new(
+        2142,
+        "Mã chứng từ đã tồn tại trong hệ thống. Vui lòng nhập mã khác.",
+        409
+    );
+
+    public static readonly ErrorResult DocumentInventoryNotLinked = new(
+        2143,
+        "BInventory không liên kết với sản phẩm hợp lệ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentProductTypeNotAllowed = new(
+        2144,
+        "Loại sản phẩm này không được phép trong loại chứng từ này.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferBranchRequired = new(
+        2145,
+        "Phiếu chuyển kho phải chỉ định chi nhánh nhận (ToBranchId).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferBranchSame = new(
+        2146,
+        "Chi nhánh nhận không được trùng với chi nhánh gửi.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentParentDetailNotFound = new(
+        2147,
+        "Không tìm thấy dòng chi tiết của chứng từ gốc.",
+        404
+    );
+
+    public static readonly ErrorResult DocumentReturnAllAlreadyReturned = new(
+        2148,
+        "Mặt hàng trong chứng từ gốc đã được trả hết toàn bộ số lượng.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentFatherIdRequired = new(
+        2149,
+        "Mỗi dòng chi tiết phải chỉ định FatherId trỏ đến chứng từ gốc.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentRecipeNotFound = new(
+        2150,
+        "Sản phẩm chế biến (Processed) hoặc sản xuất (Manufactured) không có công thức chi tiết (Recipe).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentIngredientNotFound = new(
+        2151,
+        "Không tìm thấy sản phẩm nguyên liệu trong công thức.",
+        404
+    );
+
+    public static readonly ErrorResult DocumentCircularDependency = new(
+        2152,
+        "Phát hiện vòng lặp công thức (Circular Dependency) trong sản phẩm.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentZeroInventoryForAdjustment = new(
+        2153,
+        "Không thể điều chỉnh giá vốn cho sản phẩm có tồn kho bằng 0 hoặc âm.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentNewAvgCostOutOfRange = new(
+        2154,
+        "Giá vốn mới không hợp lệ. Phải nằm trong khoảng từ 0 đến 10 tỷ VNĐ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentAdjustmentValueOutOfRange = new(
+        2155,
+        "Giá trị điều chỉnh giá vốn vượt ngoài hạn mức (±10 tỷ VNĐ).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentCostAdjustmentNegative = new(
+        2156,
+        "Giá vốn mới không được nhỏ hơn 0.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentAmountPaidInvalid = new(
+        2157,
+        "Số tiền đã trả không hợp lệ.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentSupplierRequiredForPayment = new(
+        2158,
+        "Khi phát sinh tiền đã trả (AmountPaid > 0), bắt buộc phải chọn Nhà cung cấp.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentSupplierRequiredForComplete = new(
+        2159,
+        "Khi chốt phiếu nhập kho, bắt buộc phải chọn Nhà cung cấp (Supplier).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentProductionInfoRequired = new(
+        2160,
+        "Phiếu sản xuất phải có thông tin sản phẩm sản xuất (Manufactured).",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferReceiptStatusInvalid = new(
+        2161,
+        "Trạng thái nhận hàng không hợp lệ. Chỉ chấp nhận Received, PartialReceived hoặc Rejected.",
+        400
+    );
+
+    public static readonly ErrorResult DocumentTransferReceiptNoteRequired = new(
+        2162,
+        "Bắt buộc phải nhập Lý do / Ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng.",
         400
     );
 }

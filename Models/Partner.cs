@@ -40,5 +40,6 @@ public class Partner
     [ForeignKey("CreatedBy")]
     public Account? Creator { get; set; }
 
-    public ICollection<DocumentPartner> DocumentPartners { get; set; } = new List<DocumentPartner>();
+    public ICollection<Document> Documents { get; set; } = new List<Document>();
+    public ICollection<CashFlow> CashFlows { get; set; } = new List<CashFlow>();
 }

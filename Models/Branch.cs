@@ -26,6 +26,10 @@ public class Branch
 
     public DateTime? PostingLockDate { get; set; }
 
+    public string Status { get; set; } = "Hoạt động";
+
+    public bool IsDeleted { get; set; } = false;
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;

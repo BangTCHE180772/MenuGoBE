@@ -10,59 +10,57 @@ public class DocumentDetail
     public long Id { get; set; }
 
     public long DocumentId { get; set; }
-
     public long BInventoryId { get; set; }
-
-    /// <summary>
-    /// Self-reference: Id của DocumentDetail cha (null nếu là bản ghi gốc)
-    /// Quan hệ: 1 DocumentDetail cha có thể có nhiều DocumentDetail con
-    /// </summary>
-    public long? FatherId { get; set; }
-
-    /// <summary>
-    /// Quan hệ 1-1 với UnitConversion (null nếu không quy đổi đơn vị)
-    /// </summary>
+    public long? FatherId { get; set; } // Liên kết Dòng gốc (Trả hàng) hoặc Cây NVL-Thành phẩm (Sản xuất)
     public long? UnitConversionId { get; set; }
 
-    [Column(TypeName = "decimal(51,3)")]
-    public decimal Quantity { get; set; }
+    // ==========================================
+    // 📸 SNAPSHOT MẶT HÀNG & ĐƠN VỊ TÍNH
+    // ==========================================
+    [MaxLength(255)] public string SnapshotProductName { get; set; } = string.Empty;
+    [MaxLength(100)] public string SnapshotProductCode { get; set; } = string.Empty;
+    [MaxLength(100)] public string SnapshotUnitName { get; set; } = string.Empty; // Đơn vị giao dịch (thùng/chai)
+    [MaxLength(100)] public string SnapshotBaseUnitName { get; set; } = string.Empty; // Đơn vị kho cơ sở
 
-    [Column(TypeName = "decimal(51,3)")]
-    public decimal? SystemQuantity { get; set; }
+    // ==========================================
+    // 📸 SNAPSHOT SỐ LƯỢNG & GIÁ TRỊ (KHI POST)
+    // ==========================================
+    [Column(TypeName = "decimal(18,6)")] 
+    public decimal ConversionRate { get; set; } = 1; // Tỷ lệ quy đổi chốt cố định
 
-    [Column(TypeName = "decimal(108,12)")]
-    public decimal UnitPrice { get; set; }
+    [Column(TypeName = "decimal(51,3)")] 
+    public decimal Quantity { get; set; } // Số lượng theo đơn vị chọn
+
+    [Column(TypeName = "decimal(51,3)")] 
+    public decimal BaseQuantity { get; set; } // Số lượng kho cơ sở = Quantity * ConversionRate
+
+    [Column(TypeName = "decimal(108,12)")] 
+    public decimal UnitPrice { get; set; } // Đơn giá mua/bán thỏa thuận
+
+    /// <summary>
+    /// SNAPSHOT Giá vốn bình quân (Avg Cost) tại đúng mốc PostedAt.
+    /// Căn cứ tính giá vốn cho Xuất hủy, Trả hàng, Sản xuất, Kiểm kho.
+    /// </summary>
+    [Column(TypeName = "decimal(108,12)")] 
+    public decimal SnapshotAvgCost { get; set; }
+
+    // --- SNAPSHOT CHO NGHIỆP VỤ ĐẶC THÙ ---
+    [Column(TypeName = "decimal(51,3)")] public decimal? SystemQuantity { get; set; } // [Kiểm kho] Tồn hệ thống lúc post
+    [Column(TypeName = "decimal(51,3)")] public decimal? ActualQuantity { get; set; } // [Kiểm kho] Tồn thực tế
+
+    [Column(TypeName = "decimal(108,12)")] public decimal? AdjustedCostDelta { get; set; } // [Điều chỉnh GV] Chênh lệch giá trị kho (+/-)
+    [Column(TypeName = "decimal(108,12)")] public decimal? NewAvgCost { get; set; } // [Điều chỉnh GV] Giá vốn mới áp dụng
+    [Column(TypeName = "decimal(51,3)")] public decimal? ReceivedQuantity { get; set; } // [Chuyển kho] Số lượng thực nhận
 
     public bool IsDeleted { get; set; } = false;
-
     public string? Note { get; set; }
-
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
-    [ForeignKey("DocumentId")]
-    public Document Document { get; set; } = null!;
+    [ForeignKey("DocumentId")] public Document Document { get; set; } = null!;
+    [ForeignKey("BInventoryId")] public BInventory BInventory { get; set; } = null!;
+    [ForeignKey("FatherId")] public DocumentDetail? Father { get; set; }
 
-    [ForeignKey("BInventoryId")]
-    public BInventory BInventory { get; set; } = null!;
-
-    /// <summary>
-    /// DocumentDetail cha (self-reference)
-    /// </summary>
-    [ForeignKey("FatherId")]
-    public DocumentDetail? Father { get; set; }
-
-    /// <summary>
-    /// Danh sách các DocumentDetail con
-    /// </summary>
-    [InverseProperty("Father")]
-    public ICollection<DocumentDetail> Children { get; set; } = new List<DocumentDetail>();
-
-    /// <summary>
-    /// Quan hệ 1-1: quy đổi đơn vị áp dụng cho dòng này
-    /// </summary>
-    [ForeignKey("UnitConversionId")]
-    public UnitConversion? UnitConversion { get; set; }
-
-    public ICollection<InventoryLedger> InventoryLedgers { get; set; } = new List<InventoryLedger>();
+    [InverseProperty("Father")] public ICollection<DocumentDetail> Children { get; set; } = new List<DocumentDetail>();
+    [ForeignKey("UnitConversionId")] public UnitConversion? UnitConversion { get; set; }
 }
