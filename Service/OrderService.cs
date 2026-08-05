@@ -229,6 +229,14 @@ namespace MenuGoBE.Service
             bool isMerged = childOrders.Any();
             summary.IsMerged = isChild || isMerged;
 
+            if (isMerged || isChild)
+            {
+                var allTableNames = new List<string>();
+                if (order.Table != null) allTableNames.Add(order.Table.Name);
+                allTableNames.AddRange(childOrders.Where(c => c.Table != null).Select(c => c.Table.Name));
+                summary.TableName = string.Join(", ", allTableNames);
+            }
+
             var items = order.OrderDetails
                 .Where(od => od.Status != "Cancelled")
                 .Select(od => new OrderItemDto

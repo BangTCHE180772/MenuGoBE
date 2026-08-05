@@ -13,9 +13,10 @@ namespace MenuGoBE.Dtos.Document
         public DateTime BusinessDate { get; set; }
 
         /// <summary>
-        /// Tùy chọn: Id tài khoản người tạo truyền trực tiếp từ Frontend (nếu có).
+        /// Bắt buộc: Id tài khoản người tạo phiếu (truyền từ Frontend).
         /// </summary>
-        public long? AccountId { get; set; }
+        [Required]
+        public long CreatedByAccountId { get; set; }
 
         public string? Note { get; set; }
 

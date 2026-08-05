@@ -19,6 +19,55 @@ namespace MenuGoBE.Controllers
             _context = context;
         }
 
+        [HttpGet("{branchId}")]
+        public async Task<IActionResult> GetBInventoriesByBranchOnly(long branchId)
+        {
+            try
+            {
+                var list = await _context.BInventories
+                    .AsNoTracking()
+                    .Where(b => b.BranchId == branchId)
+                    .Select(b => new
+                    {
+                        id = b.Id,
+                        bInventoryId = b.Id,
+                        productId = b.ProductId,
+                        branchId = b.BranchId,
+                        name = b.Product.Name,
+                        code = b.Product.SKUCode ?? $"SP{b.ProductId}",
+                        type = b.Product.Type.ToString(),
+                        sellPrice = b.Product.SellPrice,
+                        purchasePrice = b.Avg > 0 ? b.Avg : b.Product.SellPrice,
+                        quantity = b.Quantity,
+                        avg = b.Avg,
+                        stockQuantity = b.Quantity,
+                        unitConversions = b.Product.UnitConversions
+                            .Where(uc => uc.BaseId == null)
+                            .Select(uc => new
+                            {
+                                id = uc.Id,
+                                unitId = uc.UnitId,
+                                unitName = uc.Unit != null ? uc.Unit.Name : string.Empty,
+                                conversionPoint = uc.ConversionPoint,
+                                isBaseUnit = uc.BaseId == null
+                            }).ToList(),
+                        recipeDetailes = b.Product.RecipeItems
+                            .Select(rd => new
+                            {
+                                id = rd.Id,
+                                productId = rd.Id,
+                                ingredientId = rd.Id,
+                                quantity = rd.Quantity
+                            }).ToList()
+                    }).ToListAsync();
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy danh sách BInventory theo chi nhánh.", error = ex.Message });
+            }
+        }
+
         [HttpGet("branch/{branchId}")]
         public async Task<IActionResult> GetBInventories(
             long? branchId,

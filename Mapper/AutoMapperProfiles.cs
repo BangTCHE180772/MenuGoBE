@@ -65,7 +65,7 @@ namespace MenuGoBE.Mapper
                     dest => dest.ManagerName,
                     opt => opt.MapFrom(src =>
                         src.Contracts
-                            .Where(c => c.Role != null && c.Role.Name == "MANAGER" && c.Status == "Active" && c.Account != null)
+                            .Where(c => c.Role != null && c.Role.Name.ToLower() == "Manager".ToLower() && c.Status.ToLower() == "Active".ToLower() && c.Account != null)
                             .Select(c => c.Account.Name)
                             .FirstOrDefault() ?? "Chưa phân công"
                     ));
@@ -84,7 +84,9 @@ namespace MenuGoBE.Mapper
             CreateMap<AreaUpdateDto, Area>();
 
             //order
-            CreateMap<Order, OrderViewDto>();
+            CreateMap<Order, OrderViewDto>()
+                .ForMember(dest => dest.TableName, opt => opt.MapFrom(src => src.Table != null ? (src.ChildOrders.Any() ? src.Table.Name + ", " + string.Join(", ", src.ChildOrders.Select(c => c.Table.Name)) : src.Table.Name) : null))
+                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.Payments.OrderByDescending(p => p.CreatedAt).Select(p => p.Method).FirstOrDefault()));
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
             CreateMap<OrderDetail, OrderDetailViewDto>()
