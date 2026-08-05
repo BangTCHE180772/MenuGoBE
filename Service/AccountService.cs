@@ -102,12 +102,12 @@ namespace MenuGoBE.Service
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
 
-            // Validate uniqueness (exclude current account)
-            if (await _repo.ExistsByEmailAsync(dto.Email, dto.Id))
+            // Validate uniqueness only if values have changed (and exclude current account ID)
+            if (!string.Equals(entity.Email, dto.Email, StringComparison.OrdinalIgnoreCase) && await _repo.ExistsByEmailAsync(dto.Email, dto.Id))
                 throw new InvalidOperationException("Email đã được sử dụng.");
-            if (await _repo.ExistsByPhoneAsync(dto.Phone, dto.Id))
+            if (entity.Phone != dto.Phone && await _repo.ExistsByPhoneAsync(dto.Phone, dto.Id))
                 throw new InvalidOperationException("Số điện thoại đã được sử dụng.");
-            if (await _repo.ExistsByCitizenIdCodeAsync(dto.CitizenIdCode, dto.Id))
+            if (!string.IsNullOrWhiteSpace(dto.CitizenIdCode) && entity.CitizenIdCode != dto.CitizenIdCode && await _repo.ExistsByCitizenIdCodeAsync(dto.CitizenIdCode, dto.Id))
                 throw new InvalidOperationException("Số CCCD đã được sử dụng.");
 
             _mapper.Map(dto, entity);

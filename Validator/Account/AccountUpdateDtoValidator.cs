@@ -25,18 +25,16 @@ namespace MenuGoBE.Validator.Account
                 .Matches(@"^0\d{9}$").WithMessage("Số điện thoại phải bắt đầu bằng số 0 và có đúng 10 chữ số.");
 
             RuleFor(x => x.CitizenIdCode)
-                .NotEmpty().WithMessage("Số CCCD không được để trống.")
-                .Matches(@"^\d{12}$").WithMessage("Số CCCD phải bao gồm đúng 12 chữ số.");
+                .Matches(@"^\d{12}$")
+                .When(x => !string.IsNullOrWhiteSpace(x.CitizenIdCode))
+                .WithMessage("Số CCCD phải bao gồm đúng 12 chữ số.");
 
             RuleFor(x => x.Gender)
                 .MaximumLength(20).WithMessage("Giới tính không được vượt quá 20 ký tự.");
 
             RuleFor(x => x.DateOfBirth)
-                .Must(dob => dob == null || dob < DateOnly.FromDateTime(DateTime.Today))
-                .WithMessage("Ngày sinh phải là một ngày trong quá khứ.");
-
-            RuleFor(x => x.AvatarImage)
-                .NotEmpty().WithMessage("Ảnh đại diện không được để trống.");
+                .Must(dob => dob == null || dob <= DateOnly.FromDateTime(DateTime.Today.AddYears(-18)))
+                .WithMessage("Người dùng phải đủ 18 tuổi.");
         }
     }
 }
