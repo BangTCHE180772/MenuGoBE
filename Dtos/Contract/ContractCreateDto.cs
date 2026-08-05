@@ -31,8 +31,7 @@ namespace MenuGoBE.Dtos.Contract
         [Required]
         public decimal BaseSalary { get; set; }
 
-        [Required]
-        public int BaseWorkDay { get; set; }
+        public int? BaseWorkDay { get; set; }
 
         [Required]
         public long CreatedBy { get; set; }

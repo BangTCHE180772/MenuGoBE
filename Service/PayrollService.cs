@@ -212,7 +212,7 @@ namespace MenuGoBE.Service
             decimal actualWorkHours = schedules.Sum(s => s.ActualHours ?? 0);
 
             decimal baseSalary = contract?.BaseSalary ?? 0;
-            int baseWorkDays = contract?.BaseWorkDay > 0 ? contract.BaseWorkDay : 26;
+            int baseWorkDays = (contract?.BaseWorkDay.HasValue == true && contract.BaseWorkDay.Value > 0) ? contract.BaseWorkDay.Value : 26;
             string salaryType = contract?.SalaryType ?? "Monthly";
 
             decimal calculatedSalary = 0;
