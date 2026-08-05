@@ -13,9 +13,10 @@ namespace MenuGoBE.Dtos.Document
         public DateTime ReceivedDate { get; set; }
 
         /// <summary>
-        /// Tùy chọn: Id tài khoản người nhận truyền trực tiếp từ Frontend (nếu có).
+        /// Bắt buộc: Id tài khoản người nhận (truyền từ Frontend).
         /// </summary>
-        public long? AccountId { get; set; }
+        [Required]
+        public long CreatedByAccountId { get; set; }
 
         public string? Note { get; set; }
 

@@ -175,18 +175,23 @@ namespace MenuGoBE.Controllers
             {
                 return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
             }
-            if (!isManager)
-            {
-                return StatusCode(403, new { message = "Chỉ Quản lý mới được cập nhật lịch làm việc." });
-            }
-
             var existing = await _service.GetByIdAsync(dto.Id);
             if (existing == null)
                 return NotFound(new { message = "Không tìm thấy lịch làm việc để cập nhật" });
 
-            if (!branchIds.Contains(existing.BranchId) || !branchIds.Contains(dto.BranchId))
+            if (isManager)
             {
-                return StatusCode(403, new { message = "Bạn chỉ có quyền sửa lịch làm việc thuộc chi nhánh của mình." });
+                if (!branchIds.Contains(existing.BranchId) || !branchIds.Contains(dto.BranchId))
+                {
+                    return StatusCode(403, new { message = "Bạn chỉ có quyền sửa lịch làm việc thuộc chi nhánh của mình." });
+                }
+            }
+            else
+            {
+                if (existing.AccountId != currentUserId.Value && dto.AccountId != currentUserId.Value)
+                {
+                    return StatusCode(403, new { message = "Bạn chỉ có quyền điều chuyển hoặc cập nhật ca làm việc của chính mình." });
+                }
             }
 
             try

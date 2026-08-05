@@ -1,10 +1,13 @@
 using System.Reflection;
+using MenuGoBE.Hubs;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Xunit;
 
 namespace MenuGoTest.UnitTests.ServiceTest.AutoCheckoutServiceTest;
 
@@ -13,11 +16,13 @@ public class ProcessAutoCheckoutsTests
     private readonly Mock<IWorkScheduleRepository> _workScheduleRepoMock;
     private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
     private readonly Mock<ILogger<AutoCheckoutService>> _loggerMock;
+    private readonly Mock<IHubContext<NotificationHub>> _hubContextMock;
 
     public ProcessAutoCheckoutsTests()
     {
         _workScheduleRepoMock = new Mock<IWorkScheduleRepository>();
         _loggerMock = new Mock<ILogger<AutoCheckoutService>>();
+        _hubContextMock = new Mock<IHubContext<NotificationHub>>();
 
         var serviceProviderMock = new Mock<IServiceProvider>();
         serviceProviderMock.Setup(sp => sp.GetService(typeof(IWorkScheduleRepository)))
@@ -40,7 +45,7 @@ public class ProcessAutoCheckoutsTests
         var pastShift = new Shift
         {
             Id = 1,
-            StartTime = TimeOnly.FromDateTime(localNow.AddHours(-5)),
+            StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-50)),
             EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(-40)) // Over 30 mins ago
         };
 
@@ -51,7 +56,7 @@ public class ProcessAutoCheckoutsTests
             BranchId = 1,
             WorkDate = today,
             Shift = pastShift,
-            CheckInAt = DateTime.UtcNow.AddHours(-5),
+            CheckInAt = DateTime.UtcNow.AddMinutes(-50),
             Status = "Working"
         };
 
@@ -64,7 +69,7 @@ public class ProcessAutoCheckoutsTests
         _workScheduleRepoMock.Setup(r => r.SaveChangesAsync())
             .Returns(Task.CompletedTask);
 
-        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object);
+        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object, _hubContextMock.Object);
 
         // Act - invoke private ProcessAutoCheckoutsAsync directly via Reflection
         var method = typeof(AutoCheckoutService).GetMethod("ProcessAutoCheckoutsAsync", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -88,7 +93,7 @@ public class ProcessAutoCheckoutsTests
         var currentShift = new Shift
         {
             Id = 1,
-            StartTime = TimeOnly.FromDateTime(localNow.AddHours(-4)),
+            StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-30)),
             EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(-5)) // Just ended
         };
 
@@ -96,7 +101,7 @@ public class ProcessAutoCheckoutsTests
         {
             Id = 2,
             StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-5)), // Starts right at current shift end
-            EndTime = TimeOnly.FromDateTime(localNow.AddHours(4))
+            EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(30))
         };
 
         var currentSchedule = new WorkSchedule
@@ -106,7 +111,7 @@ public class ProcessAutoCheckoutsTests
             BranchId = 1,
             WorkDate = today,
             Shift = currentShift,
-            CheckInAt = DateTime.UtcNow.AddHours(-4),
+            CheckInAt = DateTime.UtcNow.AddMinutes(-30),
             Status = "Working"
         };
 
@@ -129,7 +134,7 @@ public class ProcessAutoCheckoutsTests
         _workScheduleRepoMock.Setup(r => r.SaveChangesAsync())
             .Returns(Task.CompletedTask);
 
-        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object);
+        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object, _hubContextMock.Object);
 
         // Act
         var method = typeof(AutoCheckoutService).GetMethod("ProcessAutoCheckoutsAsync", BindingFlags.NonPublic | BindingFlags.Instance);

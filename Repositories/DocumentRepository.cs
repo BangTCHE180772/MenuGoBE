@@ -181,19 +181,39 @@ namespace MenuGoBE.Repositories
                     await _context.CashFlows.AddRangeAsync(cashFlows);
                     await _context.SaveChangesAsync();
 
-                    // Link each CashFlowDetail to its CashFlow and the correct DocumentPartner
-                    for (int i = 0; i < cashFlows.Count; i++)
-                    {
-                        if (i < cashFlowDetails.Count)
-                        {
-                            cashFlowDetails[i].CashFlowId = cashFlows[i].Id;
+                    var singleCashFlow = cashFlows.First();
 
+                    for (int i = 0; i < cashFlowDetails.Count; i++)
+                    {
+                        var cfd = cashFlowDetails[i];
+
+                        // Gán CashFlowId cho các chi tiết
+                        if (cashFlows.Count == 1)
+                        {
+                            cfd.CashFlowId = singleCashFlow.Id;
+                        }
+                        else if (i < cashFlows.Count)
+                        {
+                            cfd.CashFlowId = cashFlows[i].Id;
+                        }
+
+                        // Gán DocumentPartnerId tương ứng
+                        if (cfd.DocumentPartnerId == null)
+                        {
                             int partnerIdx = (cashFlowPartnerIndexes != null && i < cashFlowPartnerIndexes.Count)
                                 ? cashFlowPartnerIndexes[i]
-                                : i;
+                                : -1;
 
-                            if (partnerIdx < docPartners.Count)
-                                cashFlowDetails[i].DocumentPartnerId = docPartners[partnerIdx].Id;
+                            if (partnerIdx >= 0 && partnerIdx < docPartners.Count)
+                            {
+                                cfd.DocumentPartnerId = docPartners[partnerIdx].Id;
+                            }
+                            else if (cfd.PartnerId.HasValue)
+                            {
+                                var matchingDp = docPartners.FirstOrDefault(dp => dp.PartnerId == cfd.PartnerId.Value);
+                                if (matchingDp != null)
+                                    cfd.DocumentPartnerId = matchingDp.Id;
+                            }
                         }
                     }
 
@@ -223,6 +243,29 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<DocumentEntity>> GetReturnDocumentsByImportIdAsync(long importDocumentId)
+        {
+            return await _context.Documents
+                .Include(d => d.Branch)
+                .Include(d => d.Creator)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dd => dd.UnitConversion)
+                        .ThenInclude(uc => uc.Unit)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dd => dd.BInventory)
+                        .ThenInclude(b => b.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.CashFlowDetails)
+                        .ThenInclude(cfd => cfd.CashFlow)
+                .Where(d => d.ParentDocumentId == importDocumentId 
+                            && d.Type == DocumentType.Return 
+                            && !d.IsDeleted)
+                .OrderByDescending(d => d.BusinessDate)
+                .ToListAsync();
+        }
+
         /// <summary>
         /// Trả về true nếu có phiếu Return (trả hàng) có Status = Completed tham chiếu đến phiếu nhập này.
         /// Chỉ block xóa khi tồn tại phiếu trả hàng đã hoàn thành.
@@ -241,10 +284,18 @@ namespace MenuGoBE.Repositories
                 .Include(d => d.Branch)
                 .Include(d => d.Creator)
                 .Include(d => d.DocumentDetails)
+                    .ThenInclude(dd => dd.UnitConversion)
+                        .ThenInclude(uc => uc.Unit)
+                .Include(d => d.DocumentDetails)
                     .ThenInclude(dd => dd.BInventory)
                         .ThenInclude(b => b.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
                 .Include(d => d.DocumentPartners)
                     .ThenInclude(dp => dp.Partner)
+                .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.CashFlowDetails)
+                        .ThenInclude(cfd => cfd.CashFlow)
                 .FirstOrDefaultAsync(d => d.Id == documentId);
         }
 
@@ -254,10 +305,18 @@ namespace MenuGoBE.Repositories
                 .Include(d => d.Branch)
                 .Include(d => d.Creator)
                 .Include(d => d.DocumentDetails)
+                    .ThenInclude(dd => dd.UnitConversion)
+                        .ThenInclude(uc => uc.Unit)
+                .Include(d => d.DocumentDetails)
                     .ThenInclude(dd => dd.BInventory)
                         .ThenInclude(b => b.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
                 .Include(d => d.DocumentPartners)
                     .ThenInclude(dp => dp.Partner)
+                .Include(d => d.DocumentPartners)
+                    .ThenInclude(dp => dp.CashFlowDetails)
+                        .ThenInclude(cfd => cfd.CashFlow)
                 .Where(d => !d.IsDeleted);
 
             if (branchId.HasValue && branchId.Value > 0)
@@ -352,6 +411,26 @@ namespace MenuGoBE.Repositories
             return await _context.UnitConversions
                 .Where(u => ids.Contains(u.Id))
                 .ToListAsync();
+        }
+
+        public async Task<List<InventoryLedger>> GetLatestCheckLedgersForBInventoriesAsync(List<long> binvIds)
+        {
+            var result = new List<InventoryLedger>();
+            foreach (var binvId in binvIds)
+            {
+                var latest = await _context.InventoryLedgers
+                    .Include(l => l.Document)
+                    .Where(l => l.BInventoryId == binvId
+                             && l.DocumentType == DocumentType.Check
+                             && l.Document != null && !l.Document.IsDeleted)
+                    .OrderByDescending(l => l.BusinessDate)
+                    .ThenByDescending(l => l.PostingSequence)
+                    .FirstOrDefaultAsync();
+
+                if (latest != null)
+                    result.Add(latest);
+            }
+            return result;
         }
     }
 }

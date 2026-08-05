@@ -29,11 +29,56 @@ namespace MenuGoBE.Controllers
         [HttpGet("branch/{branchId}")]
         public async Task<ActionResult<List<PartnerViewDto>>> GetByBranchId(
             long branchId,
-            [FromQuery] string? search)
+            [FromQuery] string? search,
+            [FromQuery] int? mode)
         {
             try
             {
-                var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode: null);
+                var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // 2b. GetSuppliers (Mode 1: Supplier)
+        [HttpGet("suppliers")]
+        public async Task<ActionResult<List<PartnerViewDto>>> GetSuppliers(
+            [FromQuery] long branchId,
+            [FromQuery] string? search)
+        {
+            if (branchId <= 0)
+            {
+                return BadRequest(new { message = "BranchId là bắt buộc." });
+            }
+
+            try
+            {
+                var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode: 1);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // 2c. GetExtraPartners (Mode 2: Transporter & Other)
+        [HttpGet("extra-partners")]
+        public async Task<ActionResult<List<PartnerViewDto>>> GetExtraPartners(
+            [FromQuery] long branchId,
+            [FromQuery] string? search)
+        {
+            if (branchId <= 0)
+            {
+                return BadRequest(new { message = "BranchId là bắt buộc." });
+            }
+
+            try
+            {
+                var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode: 2);
                 return Ok(result);
             }
             catch (Exception ex)

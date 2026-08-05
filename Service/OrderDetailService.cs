@@ -93,6 +93,16 @@ namespace MenuGoBE.Service
             var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Confirmed");
             if (result)
             {
+                var detail = await _detailRepo.GetByIdAsync(orderDetailId);
+                if (detail != null)
+                {
+                    var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+                    if (order != null && (order.Status == "Reserved" || order.Status == "CustomerPending"))
+                    {
+                        order.Status = "Active";
+                        await _orderRepo.UpdateAsync(order);
+                    }
+                }
                 await _detailRepo.SaveChangesAsync();
             }
             return result;
@@ -141,7 +151,11 @@ namespace MenuGoBE.Service
             {
                 var tableName = order.Table?.Name ?? $"Bàn #{order.TableId}";
                 var items = order.OrderDetails
-                    .Where(od => od.Status == "Confirmed" && (string.IsNullOrEmpty(od.CookingStatus) || od.CookingStatus == "Waiting" || od.CookingStatus == "Accepted" || od.CookingStatus == "Cooking" || od.CookingStatus == "Ready"))
+                    .Where(od => string.Equals(od.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) || 
+                                 (!string.Equals(od.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && 
+                                  !string.IsNullOrEmpty(od.CookingStatus) && 
+                                  !string.Equals(od.CookingStatus, "Served", StringComparison.OrdinalIgnoreCase) && 
+                                  !string.Equals(od.CookingStatus, "CustomerPending", StringComparison.OrdinalIgnoreCase)))
                     .Select(od => new KitchenItemDto
                     {
                         OrderDetailId = od.Id,

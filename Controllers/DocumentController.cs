@@ -34,6 +34,11 @@ namespace MenuGoBE.Controllers
         [HttpGet]
         public async Task<IActionResult> GetDocuments([FromQuery] long? branchId, [FromQuery] DocumentType? type)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _service.GetDocumentsAsync(branchId, type);

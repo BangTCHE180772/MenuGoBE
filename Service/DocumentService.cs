@@ -34,7 +34,7 @@ namespace MenuGoBE.Service
             await base.DeleteDocumentAsync(documentId, deletedBy);
         }
 
-        private static DocumentResponseDto MapToDto(Models.Document doc)
+        public static DocumentResponseDto MapToDto(Models.Document doc)
         {
             string typeLabel = doc.Type switch
             {
@@ -48,6 +48,44 @@ namespace MenuGoBE.Service
                 _ => "Khác"
             };
 
+
+            var partnersDto = doc.DocumentPartners.Select(p =>
+            {
+                var activeCashFlows = p.CashFlowDetails?
+                    .Where(cfd => !cfd.IsDeleted && cfd.CashFlow != null && !cfd.CashFlow.IsDeleted)
+                    .ToList() ?? new List<CashFlowDetail>();
+
+                var paidAmount = activeCashFlows
+                    .Where(cfd => cfd.Type == CashFlowDetailType.Payment || cfd.Type == CashFlowDetailType.Refund)
+                    .Sum(cfd => cfd.Amount);
+
+                return new DocumentPartnerResponseDto
+                {
+                    Id = p.Id,
+                    PartnerId = p.PartnerId,
+                    PartnerName = p.Partner?.Name ?? string.Empty,
+                    PartnerType = p.Partner?.Type ?? PartnerType.Other,
+                    Cost = p.Cost,
+                    AmountDue = p.Cost,
+                    AmountPaid = paidAmount,
+                    Note = p.Note,
+                    CashFlowDetails = activeCashFlows.Select(cfd => new CashFlowDetailResponseDto
+                    {
+                        Id = cfd.Id,
+                        CashFlowId = cfd.CashFlowId,
+                        CashFlowCode = cfd.CashFlow?.Code ?? string.Empty,
+                        Type = cfd.Type,
+                        Amount = cfd.Amount,
+                        PaymentMethod = cfd.PaymentMethod.ToString(),
+                        BusinessDate = cfd.CashFlow?.BusinessDate ?? cfd.CashFlow?.CreatedAt ?? DateTime.MinValue,
+                        Note = cfd.Note ?? cfd.CashFlow?.Code
+                    }).ToList()
+                };
+            }).ToList();
+
+            var allCashFlowDetails = partnersDto
+                .SelectMany(p => p.CashFlowDetails)
+                .ToList();
 
             return new DocumentResponseDto
             {
@@ -65,27 +103,35 @@ namespace MenuGoBE.Service
                 TotalAmount = doc.TotalAmount,
                 Creator = doc.Creator?.Name ?? doc.Creator?.Email ?? "Hệ thống",
                 CreatedAt = doc.CreatedAt,
-                Details = doc.DocumentDetails.Select(d => new DocumentDetailResponseDto
+                Details = doc.DocumentDetails.Select(d =>
                 {
-                    Id = d.Id,
-                    BInventoryId = d.BInventoryId,
-                    ProductName = d.BInventory?.Product?.Name ?? string.Empty,
-                    ProductCode = d.BInventory?.Product?.SKUCode ?? string.Empty,
-                    Quantity = d.Quantity,
-                    SystemQuantity = d.SystemQuantity ?? d.Quantity,
-                    UnitPrice = d.UnitPrice,
-                    Amount = d.Quantity * d.UnitPrice,
-                    Note = d.Note,
-                    IsDeleted = d.IsDeleted
+                    var unitConversionId = d.UnitConversionId 
+                        ?? d.UnitConversion?.Id 
+                        ?? d.BInventory?.Product?.UnitConversions?.FirstOrDefault()?.Id;
+
+                    var unitName = d.UnitConversion?.Unit?.Name 
+                        ?? d.BInventory?.Product?.UnitConversions?.FirstOrDefault(uc => uc.Id == unitConversionId)?.Unit?.Name 
+                        ?? d.BInventory?.Product?.UnitConversions?.FirstOrDefault()?.Unit?.Name 
+                        ?? string.Empty;
+
+                    return new DocumentDetailResponseDto
+                    {
+                        Id = d.Id,
+                        BInventoryId = d.BInventoryId,
+                        UnitConversionId = unitConversionId,
+                        UnitName = unitName,
+                        ProductName = d.BInventory?.Product?.Name ?? string.Empty,
+                        ProductCode = d.BInventory?.Product?.SKUCode ?? string.Empty,
+                        Quantity = d.Quantity,
+                        SystemQuantity = d.SystemQuantity ?? d.Quantity,
+                        UnitPrice = d.UnitPrice,
+                        Amount = d.Quantity * d.UnitPrice,
+                        Note = d.Note,
+                        IsDeleted = d.IsDeleted
+                    };
                 }).ToList(),
-                Partners = doc.DocumentPartners.Select(p => new DocumentPartnerResponseDto
-                {
-                    Id = p.Id,
-                    PartnerId = p.PartnerId,
-                    PartnerName = p.Partner?.Name ?? string.Empty,
-                    Cost = p.Cost,
-                    Note = p.Note
-                }).ToList()
+                Partners = partnersDto,
+                CashFlowDetails = allCashFlowDetails
             };
         }
     }

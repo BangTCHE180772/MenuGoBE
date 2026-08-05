@@ -38,6 +38,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("transfer")]
         public async Task<IActionResult> GetTransferDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Transfer);
@@ -57,6 +62,11 @@ namespace MenuGoBE.Controllers.Document
         [HttpGet("receive-transfer")]
         public async Task<IActionResult> GetReceiveTransferDocuments([FromQuery] long? branchId)
         {
+            if (!branchId.HasValue || branchId.Value <= 0)
+            {
+                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+            }
+
             try
             {
                 var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.ReceiveTransfer);
@@ -81,8 +91,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.CreateTransferDocumentAsync(dto, createdBy);
+                var result = await _service.CreateTransferDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -110,8 +119,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var createdBy = dto.AccountId ?? GetUserId();
-                var result = await _service.ReceiveTransferDocumentAsync(dto, createdBy);
+                var result = await _service.ReceiveTransferDocumentAsync(dto, dto.CreatedByAccountId);
                 
                 return Ok(new
                 {
@@ -139,8 +147,7 @@ namespace MenuGoBE.Controllers.Document
 
             try
             {
-                var rejectedBy = dto.AccountId ?? GetUserId();
-                var result = await _service.RejectTransferDocumentAsync(dto, rejectedBy);
+                var result = await _service.RejectTransferDocumentAsync(dto, dto.CreatedByAccountId);
 
 
                 return Ok(new

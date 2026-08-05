@@ -1,10 +1,13 @@
 using System.Reflection;
+using MenuGoBE.Hubs;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Xunit;
 
 namespace MenuGoTest.UnitTests.ServiceTest.AutoCheckoutServiceTest;
 
@@ -13,11 +16,13 @@ public class CalculateNextShiftCutoffDelayTests
     private readonly Mock<IWorkScheduleRepository> _workScheduleRepoMock;
     private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
     private readonly Mock<ILogger<AutoCheckoutService>> _loggerMock;
+    private readonly Mock<IHubContext<NotificationHub>> _hubContextMock;
 
     public CalculateNextShiftCutoffDelayTests()
     {
         _workScheduleRepoMock = new Mock<IWorkScheduleRepository>();
         _loggerMock = new Mock<ILogger<AutoCheckoutService>>();
+        _hubContextMock = new Mock<IHubContext<NotificationHub>>();
 
         var serviceProviderMock = new Mock<IServiceProvider>();
         serviceProviderMock.Setup(sp => sp.GetService(typeof(IWorkScheduleRepository)))
@@ -37,7 +42,7 @@ public class CalculateNextShiftCutoffDelayTests
         _workScheduleRepoMock.Setup(r => r.GetOpenSchedulesAsync())
             .ReturnsAsync(new List<WorkSchedule>());
 
-        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object);
+        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object, _hubContextMock.Object);
 
         // Act
         var method = typeof(AutoCheckoutService).GetMethod("CalculateNextShiftCutoffDelayAsync", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -59,7 +64,7 @@ public class CalculateNextShiftCutoffDelayTests
         var futureShift = new Shift
         {
             Id = 1,
-            StartTime = TimeOnly.FromDateTime(localNow.AddHours(-1)),
+            StartTime = TimeOnly.FromDateTime(localNow.AddMinutes(-10)),
             EndTime = TimeOnly.FromDateTime(localNow.AddMinutes(20)) // 20 mins from now
         };
 
@@ -70,14 +75,14 @@ public class CalculateNextShiftCutoffDelayTests
             BranchId = 1,
             WorkDate = today,
             Shift = futureShift,
-            CheckInAt = DateTime.UtcNow.AddHours(-1),
+            CheckInAt = DateTime.UtcNow.AddMinutes(-10),
             Status = "Working"
         };
 
         _workScheduleRepoMock.Setup(r => r.GetOpenSchedulesAsync())
             .ReturnsAsync(new List<WorkSchedule> { openSchedule });
 
-        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object);
+        var autoCheckoutService = new AutoCheckoutService(_scopeFactoryMock.Object, _loggerMock.Object, _hubContextMock.Object);
 
         // Act
         var method = typeof(AutoCheckoutService).GetMethod("CalculateNextShiftCutoffDelayAsync", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -85,7 +90,7 @@ public class CalculateNextShiftCutoffDelayTests
         var task = (Task<TimeSpan>)method.Invoke(autoCheckoutService, null)!;
         var delay = await task;
 
-        // Assert - delay should be around 20 minutes
-        Assert.True(delay.TotalMinutes <= 21 && delay.TotalMinutes >= 19);
+        // Assert - EndTime is 20 mins from now. Delay should be around 20 mins (allow slight execution drift)
+        Assert.True(delay.TotalMinutes >= 19 && delay.TotalMinutes <= 21);
     }
 }
