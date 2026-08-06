@@ -148,6 +148,8 @@ namespace MenuGoBE.Controllers
                     quantity = b.Quantity,
                     avg = b.Avg,
                     stockQuantity = b.Quantity,
+                    imageLink = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
+                    createdAt = b.Product.CreatedAt,
                     unitConversions = b.Product.UnitConversions
                         .Select(uc => new
                         {
@@ -301,6 +303,8 @@ namespace MenuGoBE.Controllers
                         sellPrice = b.Product.SellPrice,
                         avg = b.Avg,
                         quantity = b.Quantity,
+                        imageLink = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
+                        createdAt = b.Product.CreatedAt,
                         baseUnit = b.Product.UnitConversions
                             .Where(uc => uc.BaseId == null)
                             .Select(uc => new
@@ -374,6 +378,8 @@ namespace MenuGoBE.Controllers
                         b.sellPrice,
                         b.baseUnit,
                         b.unitConversions,
+                        b.imageLink,
+                        b.createdAt,
                         runningQuantity = runningQty,
                         runningAverageCost = runningAvgCost,
                         quantity = runningQty,
