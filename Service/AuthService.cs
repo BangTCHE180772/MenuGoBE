@@ -25,7 +25,7 @@ namespace MenuGoBE.Service
         private readonly IEmailService _emailService;
 
         public AuthService(
-            IAccountRepository accountRepository, 
+            IAccountRepository accountRepository,
             IConfiguration configuration,
             IMemoryCache cache,
             IEmailService emailService)
@@ -77,9 +77,9 @@ namespace MenuGoBE.Service
 
             var tfa = new TwoFactorAuthenticator();
             string secretKey = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10).ToUpper();
-            
+
             var setupInfo = tfa.GenerateSetupCode("MenuGo", account.Email, secretKey, false, 3);
-            
+
             return new
             {
                 secretKey = secretKey,
