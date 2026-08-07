@@ -29,21 +29,21 @@ namespace MenuGoBE.Service
         public async Task<List<TableViewDto>> GetAllAsync(bool includeInternal = false)
         {
             var data = await _repo.GetAllAsync();
-            var filtered = data.Where(t => (includeInternal || t.Status != "Internal") && t.Status != "Deleted").ToList();
+            var filtered = data.Where(t => (includeInternal || t.Status != "Internal") && t.IsActive).ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
 
         public async Task<List<TableViewDto>> GetByBranchIdsAsync(List<long> branchIds, bool includeInternal = false)
         {
             var data = await _repo.GetByBranchIdsAsync(branchIds);
-            var filtered = data.Where(t => (includeInternal || t.Status != "Internal") && t.Status != "Deleted").ToList();
+            var filtered = data.Where(t => (includeInternal || t.Status != "Internal") && t.IsActive).ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
 
         public async Task<TableViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
-            if (data == null || data.Status == "Internal" || data.Status == "Deleted") return null;
+            if (data == null || data.Status == "Internal" || !data.IsActive) return null;
 
             return _mapper.Map<TableViewDto>(data);
         }
@@ -61,7 +61,7 @@ namespace MenuGoBE.Service
             
             if (existing != null)
             {
-                if (existing.Status != "Deleted")
+                if (existing.IsActive)
                 {
                     throw new MenuGoException(new ErrorResult(400, "Đã tồn tại bàn với tên này trong khu vực.", 400));
                 }
@@ -93,12 +93,12 @@ namespace MenuGoBE.Service
             dto.Name = dto.Name.Trim();
 
             var entity = await _repo.GetByIdAsync(dto.Id);
-            if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
+            if (entity == null || entity.Status == "Internal" || !entity.IsActive) return false;
 
             if (dto.Name.ToLower() != entity.Name.ToLower())
             {
                 var existing = await _repo.GetByNameAndAreaAsync(dto.Name, entity.AreaId);
-                if (existing != null && existing.Status != "Deleted")
+                if (existing != null && existing.IsActive)
                 {
                     throw new MenuGoException(new ErrorResult(400, "Đã tồn tại bàn với tên này trong khu vực.", 400));
                 }
@@ -124,7 +124,7 @@ namespace MenuGoBE.Service
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
-            if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
+            if (entity == null || entity.Status == "Internal" || !entity.IsActive) return false;
 
             var activeOrder = await _orderRepo.GetActiveOrderByTableIdAsync(id);
             if (activeOrder != null)
@@ -145,7 +145,7 @@ namespace MenuGoBE.Service
                 throw new MenuGoException(new ErrorResult(400, "Không thể xóa bàn vì bàn đã được đặt trước trong thời gian tới.", 400));
             }
 
-            entity.Status = "Deleted";
+            entity.IsActive = false;
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
 
