@@ -74,7 +74,7 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<OrderDetail>(dto);
             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
             
-            if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
+            if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "Waiting" || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
             {
                 if (productType == "Regular" || productType == "Manufactured")
                 {
@@ -439,11 +439,11 @@ namespace MenuGoBE.Service
             {
                 var tableName = order.Table?.Name ?? $"Bàn #{order.TableId}";
                 var items = order.OrderDetails
-                    .Where(od => string.Equals(od.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) || 
-                                 (!string.Equals(od.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) && 
-                                  !string.IsNullOrEmpty(od.CookingStatus) && 
-                                  !string.Equals(od.CookingStatus, "Served", StringComparison.OrdinalIgnoreCase) && 
-                                  !string.Equals(od.CookingStatus, "CustomerPending", StringComparison.OrdinalIgnoreCase)))
+                    .Where(od => od.Product != null && od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && 
+                                 (string.Equals(od.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) || 
+                                  string.Equals(od.Status, "PartialReturned", StringComparison.OrdinalIgnoreCase)) &&
+                                 !string.Equals(od.CookingStatus, "Served", StringComparison.OrdinalIgnoreCase) && 
+                                 !string.Equals(od.CookingStatus, "Cancelled", StringComparison.OrdinalIgnoreCase))
                     .Select(od => new KitchenItemDto
                     {
                         OrderDetailId = od.Id,
@@ -563,6 +563,13 @@ namespace MenuGoBE.Service
                 await RecalculateTotalAmountAsync(orderForRecalc);
 
             return true;
+        }
+
+        public async Task<bool> ConfirmReturnItemAsync(long orderDetailId, long confirmedByUserId)
+        {
+            // Trả món đã được thực hiện trực tiếp ở RequestReturnItemAsync.
+            // Endpoint này được giữ lại để tương thích ngược nếu client gọi.
+            return await Task.FromResult(true);
         }
     }
 }

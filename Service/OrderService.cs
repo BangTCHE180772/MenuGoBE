@@ -363,10 +363,10 @@ namespace MenuGoBE.Service
             var order = orderWithDetails;
             var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
 
-            decimal totalAmount = order.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
+            decimal totalAmount = order.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * (od.Quantity - od.ReturnedQuantity));
             foreach (var child in childOrders)
             {
-                totalAmount += child.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
+                totalAmount += child.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * (od.Quantity - od.ReturnedQuantity));
             }
             var grandTotal = totalAmount + Math.Round(totalAmount * 0.08m);
 
@@ -441,7 +441,7 @@ namespace MenuGoBE.Service
             return order.TotalAmount;
         }
 
-        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash")
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long userId = 1)
         {
             using var transaction = await _repo.BeginTransactionAsync();
             try
@@ -604,7 +604,7 @@ namespace MenuGoBE.Service
                         methodEnum = parsedMethod;
                     }
 
-                    await _documentService.FinalizeOrderDocumentsAsync(order.Id, finalAmount, methodEnum, targetPartner?.Id, order.CreatedBy ?? 1);
+                    await _documentService.FinalizeOrderDocumentsAsync(order.Id, finalAmount, methodEnum, targetPartner?.Id, userId);
                 }
 
                 await _repo.SaveChangesAsync();
