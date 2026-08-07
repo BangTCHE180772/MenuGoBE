@@ -28,12 +28,13 @@ namespace MenuGoTest.UnitTests
                 _detailRepoMock.Object,
                 _orderRepoMock.Object,
                 _mapperMock.Object,
-                new Mock<MenuGoBE.Interface.Services.IRedisInventoryService>().Object,
                 new Mock<MenuGoBE.Interface.Repository.ITableRepository>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IProductRepository>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IAreaRepository>().Object, 
                 new Mock<MenuGoBE.Interface.Services.IKitchenService>().Object, 
-                new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object);
+                new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object,
+                new Mock<MenuGoBE.Interface.Repository.IRecipesDetailedRepository>().Object,
+                new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object);
         }
 
         [Fact]

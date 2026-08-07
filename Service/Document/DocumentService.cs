@@ -1671,8 +1671,271 @@ namespace MenuGoBE.Service.Document
         {
             return await _repo.GetSaleDocumentsAsync(branchId);
         }
+
+        /// <summary>
+        /// Tạo phiếu Xuất bán chỉ ghi nhận tài chính, KHÔNG trừ kho.
+        /// Dùng khi hàng đã được trừ kho trực tiếp tại OrderDetailService (Confirm/Cooking).
+        /// </summary>
+        public async Task<Models.Document> CreateSaleRecordOnlyAsync(Models.Document document, long userId)
+        {
+            if (document == null)
+            {
+                throw new MenuGoException(ErrorCodes.DocumentNullInfo, "Thông tin chứng từ xuất bán không được để trống.");
+            }
+
+            document.Type = DocumentType.Sale;
+            document.Status = DocumentStatus.Completed;
+            document.CreatedBy = userId;
+            document.PostedBy = userId;
+            document.CreatedAt = DateTime.UtcNow;
+            document.PostedAt = DateTime.UtcNow;
+
+            await ValidateSaleBaseRulesAsync(document);
+
+            await _repo.AddAsync(document);
+            await _repo.SaveChangesAsync();
+
+            await GenerateOrValidateSaleCodeAsync(document);
+            await FreezeDocumentSnapshotsAsync(document, userId, isSoftDelete: false);
+            // KHÔNG gọi ProcessSaleCompletedAsync → Không trừ kho lần nữa
+
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+            return document;
+        }
         #endregion
-        #endregion
+
+        #region Real-time Incremental Documents cho Order
+
+        public async Task<Models.Document> GetOrCreatePendingDocumentAsync(long branchId, long orderId, DocumentType type, long userId)
+        {
+            var existingDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, type);
+            if (existingDoc != null) return existingDoc;
+
+            var newDoc = new Models.Document
+            {
+                BranchId = branchId,
+                OrderId = orderId,
+                Type = type,
+                Status = DocumentStatus.Pending,
+                CreatedBy = userId,
+                CreatedAt = DateTime.UtcNow,
+                OrderDate = DateTime.UtcNow,
+                PostedAt = DateTime.UtcNow,
+                Code = $"{(type == DocumentType.Sale ? "PXBH" : "PTH")}-{orderId}-{DateTime.UtcNow.ToString("HHmmssfff")}"
+            };
+
+            await _repo.AddAsync(newDoc);
+            await _repo.SaveChangesAsync();
+            return newDoc;
+        }
+
+        public async Task AppendItemToSaleDocumentAsync(long documentId, Product product, decimal baseQuantity, long parentDetailId, long userId)
+        {
+            var document = await _repo.GetByIdAsync(documentId);
+            if (document == null) throw new Exception("Không tìm thấy Sale Document.");
+
+            var rawDeductions = new List<SaleDeductionItem>();
+
+            if (product.Type == ProductType.Regular || product.Type == ProductType.Manufactured)
+            {
+                rawDeductions.Add(new SaleDeductionItem
+                {
+                    ProductId = product.Id,
+                    Product = product,
+                    RequiredBaseQuantity = baseQuantity,
+                    ParentDetailId = parentDetailId
+                });
+            }
+            else if (product.Type == ProductType.Processed)
+            {
+                await ValidateCircularDependencyAsync(product.Id, new HashSet<long>());
+                await UnrollProcessedProductRecipeAsync(product.Id, baseQuantity, parentDetailId, rawDeductions);
+            }
+
+            var consolidatedDeductions = rawDeductions
+                .GroupBy(d => d.ProductId)
+                .Select(g => new
+                {
+                    ProductId = g.Key,
+                    Product = g.First().Product,
+                    TotalRequiredQuantity = g.Sum(x => x.RequiredBaseQuantity),
+                    ParentDetailIds = g.Select(x => x.ParentDetailId).Distinct().ToList()
+                })
+                .ToList();
+
+            foreach (var item in consolidatedDeductions)
+            {
+                var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, item.ProductId);
+                if (binventory == null)
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Mặt hàng '{item.Product.Name}' chưa có trong kho.");
+
+                if (binventory.Quantity < item.TotalRequiredQuantity)
+                    throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Không đủ tồn kho '{item.Product.Name}'. Yêu cầu: {item.TotalRequiredQuantity:N3}, Tồn: {binventory.Quantity:N3}");
+
+                decimal leftover_old = binventory.LeftOver;
+                decimal val_delta;
+
+                binventory.Quantity -= item.TotalRequiredQuantity;
+
+                if (binventory.Quantity == 0)
+                {
+                    val_delta = -((item.TotalRequiredQuantity * binventory.Avg) + leftover_old);
+                    binventory.LeftOver = 0;
+                }
+                else
+                {
+                    val_delta = -(item.TotalRequiredQuantity * binventory.Avg);
+                }
+
+                var account = await _repo.GetAccountByIdAsync(userId);
+                string snapshotPostedByName = account != null ? account.Name : "System";
+
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.Sale,
+                    SnapshotPostedByName = snapshotPostedByName,
+                    SnapshotBranchName = document.SnapshotBranchName ?? "",
+                    SnapshotProductName = item.Product.Name,
+                    SnapshotUnitName = item.Product.Name,
+                    ConversionRateSnapshot = 1m,
+                    QuantityDelta = -item.TotalRequiredQuantity,
+                    InventoryValueDelta = val_delta,
+                    RunningQuantity = binventory.Quantity,
+                    RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                    RunningAverageCost = binventory.Avg,
+                    UnitCost = binventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                await _repo.AddInventoryLedgerAsync(ledger);
+
+                var childDetail = new DocumentDetail
+                {
+                    DocumentId = document.Id,
+                    FatherId = null, // Since we unrolled it, keeping it null for top-level, or we can use parentDetailId if we change schema.
+                    BInventoryId = binventory.Id,
+                    Quantity = item.TotalRequiredQuantity,
+                    ConversionRate = 1,
+                    BaseQuantity = item.TotalRequiredQuantity,
+                    UnitPrice = binventory.Avg,
+                    SnapshotProductName = item.Product.Name,
+                    SnapshotAvgCost = binventory.Avg
+                };
+                document.DocumentDetails.Add(childDetail);
+            }
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+        }
+
+        public async Task AppendItemToReturnDocumentAsync(long documentId, Product product, decimal baseQuantity, bool isIntact, long parentDetailId, long userId)
+        {
+            var document = await _repo.GetByIdAsync(documentId);
+            if (document == null) throw new Exception("Không tìm thấy Return Document.");
+
+            if (product.Type == ProductType.Regular && isIntact)
+            {
+                var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, product.Id);
+                if (binventory != null)
+                {
+                    binventory.Quantity += baseQuantity;
+                    
+                    var account = await _repo.GetAccountByIdAsync(userId);
+                    string snapshotPostedByName = account != null ? account.Name : "System";
+
+                    var ledger = new InventoryLedger
+                    {
+                        BInventoryId = binventory.Id,
+                        DocumentId = document.Id,
+                        PostedAt = DateTime.UtcNow,
+                        PostedBy = userId,
+                        DocumentType = DocumentType.CustomerReturn,
+                        SnapshotPostedByName = snapshotPostedByName,
+                        SnapshotBranchName = document.SnapshotBranchName ?? "",
+                        SnapshotProductName = product.Name,
+                        SnapshotUnitName = product.Name,
+                        ConversionRateSnapshot = 1m,
+                        QuantityDelta = baseQuantity,
+                        InventoryValueDelta = baseQuantity * binventory.Avg,
+                        RunningQuantity = binventory.Quantity,
+                        RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                        RunningAverageCost = binventory.Avg,
+                        UnitCost = binventory.Avg,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _repo.AddInventoryLedgerAsync(ledger);
+
+                    var childDetail = new DocumentDetail
+                    {
+                        DocumentId = document.Id,
+                        BInventoryId = binventory.Id,
+                        Quantity = baseQuantity,
+                        ConversionRate = 1,
+                        BaseQuantity = baseQuantity,
+                        UnitPrice = binventory.Avg,
+                        SnapshotProductName = product.Name,
+                        SnapshotAvgCost = binventory.Avg
+                    };
+                    document.DocumentDetails.Add(childDetail);
+                }
+            }
+            _repo.Update(document);
+            await _repo.SaveChangesAsync();
+        }
+
+        public async Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long userId)
+        {
+            var saleDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, DocumentType.Sale);
+            if (saleDoc != null)
+            {
+                saleDoc.Status = DocumentStatus.Completed;
+                saleDoc.TotalAmount = finalAmount;
+                if (partnerId.HasValue) saleDoc.PartnerId = partnerId.Value;
+                saleDoc.PostedBy = userId;
+                saleDoc.PostedAt = DateTime.UtcNow;
+
+                await FreezeDocumentSnapshotsAsync(saleDoc, userId, isSoftDelete: false);
+
+                if (finalAmount > 0)
+                {
+                    var cashFlow = new CashFlow
+                    {
+                        BranchId = saleDoc.BranchId,
+                        DocumentId = saleDoc.Id,
+                        PartnerId = saleDoc.PartnerId,
+                        Code = "PTBH-" + orderId,
+                        BusinessDate = DateTime.UtcNow,
+                        Direction = MenuGoBE.Models.Enums.CashFlowDirection.Inflow,
+                        Status = MenuGoBE.Models.Enums.CashFlowStatus.Completed,
+                        Type = MenuGoBE.Models.Enums.CashFlowDetailType.Payment,
+                        PaymentMethod = paymentMethod,
+                        TotalAmount = finalAmount,
+                        Note = $"Thanh toán đơn {orderId} từ Hóa đơn {saleDoc.Code}",
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    saleDoc.CashFlows.Add(cashFlow);
+                }
+                _repo.Update(saleDoc);
+            }
+
+            var returnDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, DocumentType.CustomerReturn);
+            if (returnDoc != null)
+            {
+                returnDoc.Status = DocumentStatus.Completed;
+                if (partnerId.HasValue) returnDoc.PartnerId = partnerId.Value;
+                returnDoc.PostedBy = userId;
+                returnDoc.PostedAt = DateTime.UtcNow;
+
+                await FreezeDocumentSnapshotsAsync(returnDoc, userId, isSoftDelete: false);
+                _repo.Update(returnDoc);
+            }
+
+            await _repo.SaveChangesAsync();
+        }
         #endregion
 
         #region 4. Nghiệp vụ Chứng từ Khách trả hàng (CustomerReturn)
@@ -3589,6 +3852,8 @@ namespace MenuGoBE.Service.Document
         {
             return await _repo.GetCostAdjustmentDocumentsAsync(branchId);
         }
+        #endregion
+        #endregion
         #endregion
         #endregion
         #endregion
