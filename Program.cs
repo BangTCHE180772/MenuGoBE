@@ -60,6 +60,7 @@ builder.Services.AddAutoMapper(cfg => { }, typeof(AutoMapperProfiles));
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddMemoryCache();
 
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
