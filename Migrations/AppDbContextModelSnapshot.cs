@@ -187,9 +187,6 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(51,3)");
 
-                    b.Property<decimal>("ReservedQuantity")
-                        .HasColumnType("decimal(51,3)");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
@@ -550,6 +547,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("OrderId")
+                        .HasColumnType("bigint");
 
                     b.Property<long?>("ParentDocumentId")
                         .HasColumnType("bigint");
@@ -1110,6 +1110,22 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ReturnConfirmedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("ReturnIsIntact")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReturnedQuantity")
                         .HasColumnType("integer");
 
                     b.Property<string>("Status")
