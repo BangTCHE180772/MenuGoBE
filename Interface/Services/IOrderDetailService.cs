@@ -17,5 +17,6 @@ namespace MenuGoBE.Interface.Services
         Task<List<KitchenItemDto>> GetKitchenItemsAsync();
 
         Task<bool> RequestReturnItemAsync(ReturnItemRequestDto dto, long confirmedByUserId);
+        Task<bool> ConfirmReturnItemAsync(long orderDetailId, long confirmedByUserId);
     }
 }
