@@ -22,6 +22,11 @@ namespace MenuGoBE.Interface.Repository.Document
         /// Lấy danh sách chứng từ tổng quan theo Chi nhánh, Loại chứng từ và Trạng thái.
         /// </summary>
         Task<IEnumerable<Models.Document>> GetDocumentsAsync(long branchId, DocumentType? type = null, DocumentStatus? status = null);
+
+        /// <summary>
+        /// Lấy chứng từ Pending theo OrderId.
+        /// </summary>
+        Task<Models.Document?> GetPendingDocumentByOrderIdAsync(long orderId, DocumentType type);
         #endregion
 
         #region Kiểm tra chứng từ gốc (Parent Document)
