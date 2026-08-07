@@ -2,6 +2,7 @@ using AutoMapper;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
@@ -21,6 +22,7 @@ namespace MenuGoBE.Service
         private readonly IBInventoryRepository _bInventoryRepo;
         private readonly IRecipesDetailedRepository _recipesRepo;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IDocumentService _documentService;
 
         public OrderDetailService(
             IOrderDetailRepository detailRepo, 
@@ -32,7 +34,8 @@ namespace MenuGoBE.Service
             IKitchenService kitchenService,
             IBInventoryRepository bInventoryRepo,
             IRecipesDetailedRepository recipesRepo,
-            IHubContext<NotificationHub> hubContext)
+            IHubContext<NotificationHub> hubContext,
+            IDocumentService documentService)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
@@ -44,6 +47,7 @@ namespace MenuGoBE.Service
             _bInventoryRepo = bInventoryRepo;
             _recipesRepo = recipesRepo;
             _hubContext = hubContext;
+            _documentService = documentService;
         }
 
 
@@ -259,7 +263,7 @@ namespace MenuGoBE.Service
 
             if (productType == "Regular" || productType == "Manufactured")
             {
-                // CHECK & DEDUCT kho trực tiếp cho Regular/Manufactured
+                // CHECK & DEDUCT kho trực tiếp cho Regular/Manufactured qua DocumentService
                 if (order != null)
                 {
                     var table = await _tableRepo.GetByIdAsync(order.TableId);
@@ -269,17 +273,19 @@ namespace MenuGoBE.Service
                         if (area != null)
                         {
                             long branchId = area.BranchId;
-                            var binv = await _bInventoryRepo.GetByProductAndBranchAsync(detail.ProductId, branchId);
-                            if (binv != null && binv.IsManageQuantity)
+                            try
                             {
-                                if (binv.Quantity < detail.Quantity)
+                                var product = await _productRepo.GetByIdAsync(detail.ProductId);
+                                if (product != null)
                                 {
-                                    await SendStockAlertAsync(branchId, detail.ProductId, "Sản phẩm đã hết hàng trong kho.");
-                                    throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
+                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.Sale, order.CreatedBy ?? 1);
+                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, detail.Quantity, detail.Id, order.CreatedBy ?? 1);
                                 }
-                                binv.Quantity -= detail.Quantity;
-                                await _bInventoryRepo.UpdateAsync(binv);
-                                await _bInventoryRepo.SaveChangesAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                await SendStockAlertAsync(branchId, detail.ProductId, ex.Message);
+                                throw new InvalidOperationException(ex.Message);
                             }
                         }
                     }
@@ -328,57 +334,30 @@ namespace MenuGoBE.Service
                                 if (area != null)
                                 {
                                     long branchId = area.BranchId;
-                                    var recipes = await _recipesRepo.GetRecipesByProductIdAsync(detail.ProductId);
-
-                                    if (recipes.Any())
+                                    try
                                     {
-                                        // CHECK toàn bộ nguyên liệu trước khi trừ
-                                        var insufficientIngredients = new List<string>();
-                                        var ingredientUpdates = new List<(BInventory binv, decimal needed)>();
-
-                                        foreach (var recipe in recipes)
+                                        var product = await _productRepo.GetByIdAsync(detail.ProductId);
+                                        if (product != null)
                                         {
-                                            decimal neededQty = recipe.Quantity * detail.Quantity;
-                                            var ingredientBinv = await _bInventoryRepo.GetByProductAndBranchAsync(recipe.IngredientProductId, branchId);
-
-                                            if (ingredientBinv == null || (ingredientBinv.IsManageQuantity && ingredientBinv.Quantity < neededQty))
-                                            {
-                                                var ingredientProduct = await _productRepo.GetByIdAsync(recipe.IngredientProductId);
-                                                string ingredientName = ingredientProduct?.Name ?? $"SP #{recipe.IngredientProductId}";
-                                                insufficientIngredients.Add(ingredientName);
-                                            }
-                                            else if (ingredientBinv.IsManageQuantity)
-                                            {
-                                                ingredientUpdates.Add((ingredientBinv, neededQty));
-                                            }
+                                            var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.Sale, order.CreatedBy ?? 1);
+                                            await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, detail.Quantity, detail.Id, order.CreatedBy ?? 1);
                                         }
-
-                                        if (insufficientIngredients.Any())
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        var product = await _productRepo.GetByIdAsync(detail.ProductId);
+                                        string productName = product?.Name ?? "Món ăn";
+                                        
+                                        await _hubContext.Clients.Group($"branch_{branchId}").SendAsync("ReceiveStockAlert", new
                                         {
-                                            var product = await _productRepo.GetByIdAsync(detail.ProductId);
-                                            string productName = product?.Name ?? "Món ăn";
-                                            string missingList = string.Join(", ", insufficientIngredients);
+                                            type = "stock-alert",
+                                            branchId = branchId,
+                                            productName = productName,
+                                            message = $"⚠️ Món \"{productName}\" không thể nấu - {ex.Message}",
+                                            timestamp = DateTime.UtcNow
+                                        });
 
-                                            await _hubContext.Clients.Group($"branch_{branchId}").SendAsync("ReceiveStockAlert", new
-                                            {
-                                                type = "stock-alert",
-                                                branchId = branchId,
-                                                productName = productName,
-                                                message = $"⚠️ Món \"{productName}\" không thể nấu - thiếu nguyên liệu: {missingList}",
-                                                missingItems = insufficientIngredients,
-                                                timestamp = DateTime.UtcNow
-                                            });
-
-                                            throw new InvalidOperationException($"Không đủ nguyên liệu để nấu: {missingList}");
-                                        }
-
-                                        // Tất cả đủ → Trừ nguyên liệu
-                                        foreach (var (binv, needed) in ingredientUpdates)
-                                        {
-                                            binv.Quantity -= needed;
-                                            await _bInventoryRepo.UpdateAsync(binv);
-                                        }
-                                        await _bInventoryRepo.SaveChangesAsync();
+                                        throw new InvalidOperationException($"Không đủ nguyên liệu để nấu: {ex.Message}");
                                     }
                                 }
                             }
@@ -553,26 +532,22 @@ namespace MenuGoBE.Service
             entity.ReturnConfirmedBy = confirmedByUserId;
 
             // Re-stock logic: CHỈ Regular + còn nguyên vẹn mới cộng lại kho
-            var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-            if (productType == "Regular" && dto.IsIntact)
+            // Logic trừ/cộng kho và ghi sổ kho được quản lý tập trung ở DocumentService
+            var order = await _orderRepo.GetByIdAsync(entity.OrderId);
+            if (order != null)
             {
-                var order = await _orderRepo.GetByIdAsync(entity.OrderId);
-                if (order != null)
+                var table = await _tableRepo.GetByIdAsync(order.TableId);
+                if (table != null)
                 {
-                    var table = await _tableRepo.GetByIdAsync(order.TableId);
-                    if (table != null)
+                    var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                    if (area != null)
                     {
-                        var area = await _areaRepo.GetByIdAsync(table.AreaId);
-                        if (area != null)
+                        long branchId = area.BranchId;
+                        var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                        if (product != null)
                         {
-                            long branchId = area.BranchId;
-                            var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                            if (binv != null && binv.IsManageQuantity)
-                            {
-                                binv.Quantity += dto.ReturnQuantity;
-                                await _bInventoryRepo.UpdateAsync(binv);
-                                await _bInventoryRepo.SaveChangesAsync();
-                            }
+                            var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
+                            await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, entity.Id, confirmedByUserId);
                         }
                     }
                 }
