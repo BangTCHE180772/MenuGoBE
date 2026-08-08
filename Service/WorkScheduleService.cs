@@ -353,6 +353,42 @@ namespace MenuGoBE.Service
         {
             return await _accountRepo.GetActiveRoleIdsAsync(accountId);
         }
+
+        public async Task<bool> RequestLeaveAsync(long accountId, LeaveRequestDto dto)
+        {
+            var entity = await _repo.GetByIdAsync(dto.WorkScheduleId);
+            if (entity == null || entity.AccountId != accountId) return false;
+
+            var reasonStr = string.IsNullOrWhiteSpace(dto.Reason) ? "Xin nghỉ ca" : dto.Reason;
+            entity.Status = $"LEAVE_REQUEST:{reasonStr}";
+            entity.ManagerApproved = false;
+
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> RequestShiftSwapAsync(long accountId, ShiftSwapRequestDto dto)
+        {
+            var entity = await _repo.GetByIdAsync(dto.WorkScheduleId);
+            if (entity == null || entity.AccountId != accountId) return false;
+
+            var targetAccount = await _accountRepo.GetByIdAsync(dto.TargetAccountId);
+            if (targetAccount == null) return false;
+
+            var noteStr = string.IsNullOrWhiteSpace(dto.Note) ? "Đổi ca" : dto.Note;
+            
+            // Theo luồng FE, gán accountId của người được nhận ca cho ca làm việc
+            // và giữ lại AccountId cũ trong Status
+            var oldAccountId = entity.AccountId;
+            entity.AccountId = dto.TargetAccountId;
+            
+            entity.Status = $"TRANSFER_PENDING_EMP:{oldAccountId}:{noteStr}";
+            entity.ManagerApproved = false;
+
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync();
+            return true;
+        }
     }
 }
-
