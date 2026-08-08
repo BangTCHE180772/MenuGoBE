@@ -11,6 +11,7 @@ namespace MenuGoBE.Interface.Repository
         Task<Branch?> GetBranchAsync(long branchId);
         Task<List<BInventory>> GetBInventoriesAsync(long branchId, List<long> binvIds);
         Task<List<BInventory>> GetBInventoriesByIdsAsync(List<long> binvIds);
+        Task<List<BInventory>> GetBInventoriesByProductIdsAsync(long branchId, List<long> productIds);
         Task<List<Partner>> GetPartnersAsync(List<long> partnerIds);
         Task<List<InventoryLedger>> GetLatestLedgersBeforeOrEqualDateAsync(List<long> binvIds, DateTime date, long? excludeDocumentId = null);
         Task<List<InventoryLedger>> GetLedgersAfterDateAsync(List<long> binvIds, DateTime date, long? excludeDocumentId = null);

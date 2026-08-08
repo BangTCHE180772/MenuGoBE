@@ -91,6 +91,7 @@ builder.Services.AddScoped<ITransferDocumentRepository, TransferDocumentReposito
 builder.Services.AddScoped<IExportDeleteDocumentRepository, ExportDeleteDocumentRepository>();
 builder.Services.AddScoped<ICheckDocumentRepository, CheckDocumentRepository>();
 builder.Services.AddScoped<IProductionDocumentRepository, ProductionDocumentRepository>();
+builder.Services.AddScoped<IInvoiceDocumentRepository, InvoiceDocumentRepository>();
 builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 
@@ -129,6 +130,7 @@ builder.Services.AddScoped<ITransferDocumentService, TransferDocumentService>();
 builder.Services.AddScoped<IExportDeleteDocumentService, ExportDeleteDocumentService>();
 builder.Services.AddScoped<ICheckDocumentService, CheckDocumentService>();
 builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
+builder.Services.AddScoped<IInvoiceDocumentService, InvoiceDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));

@@ -41,6 +41,14 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<BInventory>> GetBInventoriesByProductIdsAsync(long branchId, List<long> productIds)
+        {
+            return await _context.BInventories
+                .Include(b => b.Product)
+                .Where(b => productIds.Contains(b.ProductId) && b.BranchId == branchId)
+                .ToListAsync();
+        }
+
         public async Task<List<Partner>> GetPartnersAsync(List<long> partnerIds)
         {
             return await _context.Partners

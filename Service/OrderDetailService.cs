@@ -1,8 +1,11 @@
 using AutoMapper;
+using MenuGoBE.Dtos.Document;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Service
@@ -11,12 +14,24 @@ namespace MenuGoBE.Service
     {
         private readonly IOrderDetailRepository _detailRepo;
         private readonly IOrderRepository _orderRepo;
+        private readonly ITableService _tableService;
+        private readonly IProductService _productService;
+        private readonly IInvoiceDocumentService _invoiceService;
         private readonly IMapper _mapper;
 
-        public OrderDetailService(IOrderDetailRepository detailRepo, IOrderRepository orderRepo, IMapper mapper)
+        public OrderDetailService(
+            IOrderDetailRepository detailRepo,
+            IOrderRepository orderRepo,
+            ITableService tableService,
+            IProductService productService,
+            IInvoiceDocumentService invoiceService,
+            IMapper mapper)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
+            _tableService = tableService;
+            _productService = productService;
+            _invoiceService = invoiceService;
             _mapper = mapper;
         }
 
@@ -48,6 +63,11 @@ namespace MenuGoBE.Service
 
             await _detailRepo.CreateAsync(entity);
             await _detailRepo.SaveChangesAsync();
+
+            if (entity.Status == "Confirmed")
+            {
+                await DeductInventoryForConfirmedDetailAsync(entity);
+            }
 
             await RecalculateTotalAmountAsync(order);
 
@@ -90,6 +110,11 @@ namespace MenuGoBE.Service
 
         public async Task<bool> ConfirmAsync(long orderDetailId)
         {
+            var existing = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (existing == null) return false;
+
+            bool wasAlreadyConfirmed = existing.Status == "Confirmed";
+
             var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Confirmed");
             if (result)
             {
@@ -102,10 +127,58 @@ namespace MenuGoBE.Service
                         order.Status = "Active";
                         await _orderRepo.UpdateAsync(order);
                     }
+
+                    if (!wasAlreadyConfirmed)
+                    {
+                        await DeductInventoryForConfirmedDetailAsync(detail);
+                    }
                 }
                 await _detailRepo.SaveChangesAsync();
             }
             return result;
+        }
+
+        /// <summary>
+        /// Trừ kho khi một OrderDetail được xác nhận (ấn confirm): trừ nguyên liệu
+        /// theo công thức nếu sản phẩm thuộc loại Processed, ngược lại trừ trực tiếp
+        /// số lượng của chính sản phẩm đó.
+        /// </summary>
+        private async Task DeductInventoryForConfirmedDetailAsync(OrderDetail entity)
+        {
+            var order = await _orderRepo.GetByIdAsync(entity.OrderId);
+            if (order == null) return;
+
+            var table = await _tableService.GetByIdAsync(order.TableId);
+            if (table == null) return;
+
+            var product = await _productService.GetByIdAsync(entity.ProductId);
+            if (product == null) return;
+
+            var lines = new List<InvoiceOutflowLineDto>();
+
+            if (product.Type == ProductType.Processed && product.RecipeItems != null && product.RecipeItems.Count > 0)
+            {
+                foreach (var ingredient in product.RecipeItems)
+                {
+                    lines.Add(new InvoiceOutflowLineDto
+                    {
+                        ProductId = ingredient.IngredientProductId,
+                        Quantity = ingredient.Quantity * entity.Quantity,
+                        Note = $"Trừ nguyên liệu [{ingredient.IngredientProductName}] cho món {product.Name} x{entity.Quantity} (OrderDetail #{entity.Id})"
+                    });
+                }
+            }
+            else
+            {
+                lines.Add(new InvoiceOutflowLineDto
+                {
+                    ProductId = entity.ProductId,
+                    Quantity = entity.Quantity,
+                    Note = $"Xuất bán {product.Name} x{entity.Quantity} (OrderDetail #{entity.Id})"
+                });
+            }
+
+            await _invoiceService.CreateInvoiceAsync(table.BranchId, lines);
         }
 
         public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus)
