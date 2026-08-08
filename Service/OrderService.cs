@@ -23,7 +23,6 @@ namespace MenuGoBE.Service
         private readonly IReservationRepository _reservationRepo;
         private readonly IProductRepository _productRepo;
         private readonly IAreaRepository _areaRepo;
-        private readonly IRedisInventoryService _redisInventoryService;
         private readonly IBInventoryRepository _bInventoryRepo;
         private readonly IDocumentRepository _documentRepo;
         private readonly IDocumentService _documentService;
@@ -40,7 +39,6 @@ namespace MenuGoBE.Service
             IReservationRepository reservationRepo,
             IProductRepository productRepo,
             IAreaRepository areaRepo,
-            IRedisInventoryService redisInventoryService,
             IBInventoryRepository bInventoryRepo,
             IDocumentRepository documentRepo,
             IPartnerRepository partnerRepo,
@@ -56,7 +54,6 @@ namespace MenuGoBE.Service
             _reservationRepo = reservationRepo;
             _productRepo = productRepo;
             _areaRepo = areaRepo;
-            _redisInventoryService = redisInventoryService;
             _bInventoryRepo = bInventoryRepo;
             _documentRepo = documentRepo;
             _documentService = documentService;
@@ -314,6 +311,8 @@ namespace MenuGoBE.Service
                     Status = od.Status,
                     CookingStatus = od.CookingStatus,
                     CreatedAt = od.CreatedAt,
+                    ReturnedQuantity = od.ReturnedQuantity,
+                    ReturnReason = od.ReturnReason
                 }).ToList();
             foreach (var child in childOrders)
             {
@@ -330,6 +329,8 @@ namespace MenuGoBE.Service
                         Status = od.Status,
                         CookingStatus = od.CookingStatus,
                         CreatedAt = od.CreatedAt,
+                        ReturnedQuantity = od.ReturnedQuantity,
+                        ReturnReason = od.ReturnReason
                     });
                 items.AddRange(childItems);
             }
@@ -362,10 +363,10 @@ namespace MenuGoBE.Service
             var order = orderWithDetails;
             var childOrders = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
 
-            decimal totalAmount = order.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
+            decimal totalAmount = order.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * (od.Quantity - od.ReturnedQuantity));
             foreach (var child in childOrders)
             {
-                totalAmount += child.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * od.Quantity);
+                totalAmount += child.OrderDetails.Where(od => od.Status != "Cancelled").Sum(od => od.Price * (od.Quantity - od.ReturnedQuantity));
             }
             var grandTotal = totalAmount + Math.Round(totalAmount * 0.08m);
 
@@ -440,7 +441,7 @@ namespace MenuGoBE.Service
             return order.TotalAmount;
         }
 
-        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash")
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long userId = 1)
         {
             using var transaction = await _repo.BeginTransactionAsync();
             try
@@ -596,92 +597,14 @@ namespace MenuGoBE.Service
                         targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
                     }
 
-                    // 2. Tạo Document và xử lý tồn kho qua DocumentService
-                    var document = new MenuGoBE.Models.Document
+                    // 2. Chốt các chứng từ Pending của Order và tự động sinh CashFlow
+                    var methodEnum = MenuGoBE.Models.Enums.PaymentMethod.Cash;
+                    if (Enum.TryParse<MenuGoBE.Models.Enums.PaymentMethod>(paymentMethod, true, out var parsedMethod))
                     {
-                        BranchId = branchId.Value,
-                        OrderDate = DateTime.UtcNow,
-                        PostedAt = DateTime.UtcNow,
-                        Code = "PXBH-" + order.Id,
-                        Type = DocumentType.Sale,
-                        Status = DocumentStatus.Completed,
-                        TotalAmount = finalAmount,
-                        PartnerId = targetPartner?.Id,
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    document.DocumentDetails = new List<DocumentDetail>();
-                    foreach (var group in productGroups)
-                    {
-                        var product = await _productRepo.GetByIdAsync(group.ProductId);
-                        if (product == null)
-                        {
-                            Console.WriteLine($"Product {group.ProductId} is null");
-                            continue;
-                        }
-
-                        var binv = await _bInventoryRepo.GetByProductAndBranchAsync(group.ProductId, branchId.Value);
-                        if (binv != null)
-                        {
-                            Console.WriteLine($"Adding binv for product {group.ProductId}");
-                            document.DocumentDetails.Add(new DocumentDetail
-                            {
-                                BInventoryId = binv.Id,
-                                BaseQuantity = group.Quantity,
-                                Quantity = group.Quantity,
-                                UnitPrice = group.Price,
-                                CreatedAt = DateTime.UtcNow
-                            });
-
-                            var productTypeStr = product.Type.ToString();
-                            if (productTypeStr == "Regular" || productTypeStr == "Manufactured")
-                            {
-                                await _redisInventoryService.DecrementReservedQuantityAsync((int)branchId.Value, (int)group.ProductId, group.Quantity);
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"binv is null for product {group.ProductId}");
-                        }
+                        methodEnum = parsedMethod;
                     }
 
-                    if (document.DocumentDetails.Any())
-                    {
-                        Console.WriteLine($"Calling CreateSaleCompletedAsync");
-                        await _documentService.CreateSaleCompletedAsync(document, order.CreatedBy ?? 1);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"No document details");
-                    }
-
-                    // 3. Tạo CashFlow
-                    if (finalAmount > 0)
-                    {
-                        var methodEnum = MenuGoBE.Models.Enums.PaymentMethod.Cash;
-                        if (Enum.TryParse<MenuGoBE.Models.Enums.PaymentMethod>(paymentMethod, true, out var parsedMethod))
-                        {
-                            methodEnum = parsedMethod;
-                        }
-
-                        var cashFlow = new CashFlow
-                        {
-                            BranchId = branchId.Value,
-                            DocumentId = document.Id > 0 ? document.Id : null,
-                            PartnerId = document.PartnerId,
-                            Code = "PTBH-" + order.Id,
-                            BusinessDate = DateTime.UtcNow,
-                            Direction = MenuGoBE.Models.Enums.CashFlowDirection.Inflow,
-                            Status = MenuGoBE.Models.Enums.CashFlowStatus.Completed,
-                            TotalAmount = finalAmount,
-                            Type = MenuGoBE.Models.Enums.CashFlowDetailType.Payment,
-                            PaymentMethod = methodEnum,
-                            Note = $"Thanh toán đơn {order.Id}",
-                            CreatedAt = DateTime.UtcNow
-                        };
-
-                        await _documentRepo.AddCashFlowAsync(cashFlow);
-                    }
+                    await _documentService.FinalizeOrderDocumentsAsync(order.Id, finalAmount, methodEnum, targetPartner?.Id, userId);
                 }
 
                 await _repo.SaveChangesAsync();

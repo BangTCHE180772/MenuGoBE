@@ -259,5 +259,47 @@ namespace MenuGoBE.Controllers
             var result = await _service.GetByAccountIdAsync(currentUserId.Value);
             return Ok(result);
         }
+
+        [HttpPost("leave-request")]
+        public async Task<IActionResult> RequestLeave([FromBody] LeaveRequestDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var success = await _service.RequestLeaveAsync(currentUserId.Value, dto);
+                if (!success)
+                    return BadRequest(new { message = "Không thể gửi đơn xin nghỉ. Có thể ca làm việc không tồn tại hoặc không thuộc về bạn." });
+
+                return Ok(new { message = "Đã gửi đơn xin nghỉ thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("shift-swap")]
+        public async Task<IActionResult> RequestShiftSwap([FromBody] ShiftSwapRequestDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var success = await _service.RequestShiftSwapAsync(currentUserId.Value, dto);
+                if (!success)
+                    return BadRequest(new { message = "Không thể gửi yêu cầu đổi ca. Vui lòng kiểm tra lại thông tin." });
+
+                return Ok(new { message = "Đã gửi yêu cầu đổi ca thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }

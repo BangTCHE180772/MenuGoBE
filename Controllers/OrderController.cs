@@ -46,6 +46,12 @@ namespace MenuGoBE.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
+            var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (claim != null && long.TryParse(claim.Value, out var parsedId))
+            {
+                dto.CreatedBy = parsedId;
+            }
+            
             var result = await _service.CreateAsync(dto);
             return Ok(result);
         }
@@ -75,7 +81,14 @@ namespace MenuGoBE.Controllers
         [HttpPost("{id}/pay")]
         public async Task<IActionResult> Pay(long id, [FromBody] OrderPayDto? dto)
         {
-            var paidTableIds = await _service.PayOrderAsync(id, dto);
+            long currentUserId = 1; // Fallback
+            var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (claim != null && long.TryParse(claim.Value, out var parsedId))
+            {
+                currentUserId = parsedId;
+            }
+
+            var paidTableIds = await _service.PayOrderAsync(id, dto, "Cash", currentUserId);
 
             if (paidTableIds == null || !paidTableIds.Any())
                 return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
@@ -248,7 +261,7 @@ namespace MenuGoBE.Controllers
             var result = await _detailService.ConfirmAsync(id);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
-
+            
             try
             {
                 var detail = await _detailService.GetByIdAsync(id);
@@ -288,7 +301,56 @@ namespace MenuGoBE.Controllers
                 // Non-blocking SignalR fail-safe
             }
 
-            return Ok(new { message = "Xác nhận thành công" });
+            return Ok(new { message = "Xác nhận món thành công" });
+        }
+
+        [HttpPut("details/{id}/request-return")]
+        public async Task<IActionResult> RequestReturn(long id, [FromBody] ReturnItemRequestDto dto)
+        {
+            dto.OrderDetailId = id; // Đảm bảo ID khớp với URL
+            long confirmedByUserId = 1; // Fallback
+            var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (claim != null && long.TryParse(claim.Value, out var parsedId))
+            {
+                confirmedByUserId = parsedId;
+            }
+
+            try
+            {
+                var result = await _detailService.RequestReturnItemAsync(dto, confirmedByUserId);
+                if (!result)
+                    return BadRequest(new { message = "Không thể yêu cầu trả món (Kiểm tra lại số lượng hoặc trạng thái)" });
+
+                return Ok(new { message = "Yêu cầu trả món thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.InnerException?.Message ?? ex.Message });
+            }
+        }
+
+        [HttpPut("details/{id}/confirm-return")]
+        public async Task<IActionResult> ConfirmReturn(long id)
+        {
+            long confirmedByUserId = 1; // Fallback
+            var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (claim != null && long.TryParse(claim.Value, out var parsedId))
+            {
+                confirmedByUserId = parsedId;
+            }
+
+            try
+            {
+                var result = await _detailService.ConfirmReturnItemAsync(id, confirmedByUserId);
+                if (!result)
+                    return BadRequest(new { message = "Không thể xác nhận trả món" });
+
+                return Ok(new { message = "Xác nhận trả món thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.InnerException?.Message ?? ex.Message });
+            }
         }
 
         [HttpGet("kitchen-items")]

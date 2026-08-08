@@ -5,7 +5,9 @@ using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
+using MenuGoBE.Data;
 using Moq;
+using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoTest.UnitTests.ServiceTest.OrderServiceTest;
 
@@ -23,7 +25,6 @@ public abstract class OrderServiceTestBase
     protected readonly Mock<IReservationRepository> _reservationRepoMock;
     protected readonly Mock<IProductRepository> _productRepoMock;
     protected readonly Mock<IAreaRepository> _areaRepoMock;
-    protected readonly Mock<MenuGoBE.Interface.Services.IRedisInventoryService> _redisInventoryServiceMock;
     protected readonly Mock<IBInventoryRepository> _bInventoryRepoMock;
     protected readonly Mock<IDocumentRepository> _documentRepoMock;
     protected readonly Mock<MenuGoBE.Interface.Services.Document.IDocumentService> _documentServiceMock;
@@ -41,7 +42,6 @@ public abstract class OrderServiceTestBase
         _reservationRepoMock = new Mock<IReservationRepository>();
         _productRepoMock = new Mock<IProductRepository>();
         _areaRepoMock = new Mock<IAreaRepository>();
-        _redisInventoryServiceMock = new Mock<MenuGoBE.Interface.Services.IRedisInventoryService>();
         _bInventoryRepoMock = new Mock<IBInventoryRepository>();
         _documentRepoMock = new Mock<IDocumentRepository>();
         _documentServiceMock = new Mock<MenuGoBE.Interface.Services.Document.IDocumentService>();
@@ -50,13 +50,20 @@ public abstract class OrderServiceTestBase
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName: System.Guid.NewGuid().ToString())
+            .Options;
+        var dbContext = new AppDbContext(options);
+
         _service = new OrderService(
             _orderRepoMock.Object, _mapper, _tableRepoMock.Object,
             _customerRepoMock.Object, _paymentRepoMock.Object,
             _voucherRepoMock.Object, _reservationRepoMock.Object,
             _productRepoMock.Object, _areaRepoMock.Object,
-            _redisInventoryServiceMock.Object, _bInventoryRepoMock.Object,
-            _documentRepoMock.Object, _documentServiceMock.Object, _partnerRepoMock.Object);
+            _bInventoryRepoMock.Object,
+            _documentRepoMock.Object, _partnerRepoMock.Object,
+            dbContext, _documentServiceMock.Object);
 
         var transactionMock = new Mock<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>();
         _orderRepoMock.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(transactionMock.Object);
