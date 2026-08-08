@@ -1,406 +1,303 @@
 @baseUrl = http://localhost:5067
 @branchId = 1
-@accountId = 6
+@partnerId = 1
+@bInventoryId1 = 1
+@bInventoryId2 = 4
+@token = YOUR_BEARER_TOKEN_HERE
 
 # ==============================================================================
-# BẢNG THAM CHÍẾU DỮ LIỆU CẤP SẴN:
-# ------------------------------------------------------------------------------
-# AccountId mặc định: 6
-# BranchId mặc định: 1
-#
-# Partners chi nhánh (BranchId = 1):
-#   - ID 1: Vũ Mạnh Cường (Type 1 - Supplier / Nhà cung cấp)
-#   - ID 2: Transporter Comapany (Type 3 - Transport / Đơn vị vận chuyển)
-#   - ID 3: Temp worker (Type 4 - Other / Nhân công tạm thời)
-#
-# Binventory / Hàng hóa chi nhánh (BranchId = 1):
-#   - ID 1: Ngũ vị hương (Code: NL000041, Type: Ingredient, UnitConversions: Gram [ID 68, base], Kilogram [ID 69, conv: 1000])
-#   - ID 4: Test-01 (Code: NL000042, Type: Ingredient, UnitConversions: Gram [ID 72, base], Kilogram [ID 73, conv: 1000])
-#   - ID 7: Test-02 (Code: HH000002, Type: Regular, UnitConversions: Cái [ID 74, base], Lốc [ID 75, conv: 5])
+# QUẢN LÝ THỬ NGHIỆM API CHỨNG TỪ NHẬP KHO (IMPORT CONTROLLER)
+# Module: Document (DocumentType = Import)
+# Controller: DocumentController (Route: /api/document/import)
 # ==============================================================================
 
-### ==========================================
-# PHẦN 1: GET & DELETE OPERATIONS
-# ==========================================
+### ----------------------------------------------------------------------------
+### PHẦN 0: ĐĂNG NHẬP LẤY BEARER TOKEN (HELPER)
+### ----------------------------------------------------------------------------
 
-### 1. [GET] Lấy danh sách phiếu nhập kho theo BranchId
+### 0. Đăng nhập hệ thống lấy Access Token
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "Password123!"
+}
+
+
+### ----------------------------------------------------------------------------
+### PHẦN 1: TẢI DANH SÁCH CHỨNG TỪ (GET)
+### ----------------------------------------------------------------------------
+
+### 1. Lấy danh sách phiếu Nhập kho theo Chi nhánh (BranchId)
 GET {{baseUrl}}/api/document/import?branchId={{branchId}}
 Accept: application/json
+Authorization: Bearer {{token}}
 
-### 2. [DELETE] Xóa phiếu nhập kho theo Document ID (Ví dụ ID = 1)
-DELETE {{baseUrl}}/api/document/import/10
+
+### ----------------------------------------------------------------------------
+### PHẦN 2: TẠO MỚI PHIẾU NHẬP KHO (POST)
+### ----------------------------------------------------------------------------
+
+### 2. [Success] Tạo phiếu Nhập kho trạng thái PENDING (Lưu tạm) - Chưa thanh toán
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "partnerId": {{partnerId}},
+  "orderDate": "2026-08-01T08:00:00Z",
+  "note": "Nhập kho lưu tạm ngũ vị hương - Chưa thanh toán",
+  "amountPaid": 0,
+  "documentDetails": [
+    {
+      "bInventoryId": {{bInventoryId1}},
+      "unitConversionId": null,
+      "quantity": 50,
+      "unitPrice": 20000,
+      "note": "Nhập 50 gram Ngũ vị hương"
+    }
+  ]
+}
+
+### 3. [Success] Tạo phiếu Nhập kho trạng thái PENDING (Lưu tạm) - Thanh toán 1 phần
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "partnerId": {{partnerId}},
+  "orderDate": "2026-08-01T08:30:00Z",
+  "note": "Nhập kho lưu tạm - Thanh toán trước 500,000 VNĐ",
+  "amountPaid": 500000,
+  "documentDetails": [
+    {
+      "bInventoryId": {{bInventoryId1}},
+      "quantity": 100,
+      "unitPrice": 20000
+    }
+  ]
+}
+
+### 4. [Success] Tạo và Chốt trực tiếp phiếu Nhập kho (COMPLETED) - Thanh toán 100%
+POST {{baseUrl}}/api/document/import/completed
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "partnerId": {{partnerId}},
+  "orderDate": "2026-08-01T09:00:00Z",
+  "note": "Nhập kho chốt trực tiếp - Thanh toán đủ",
+  "amountPaid": 2000000,
+  "documentDetails": [
+    {
+      "bInventoryId": {{bInventoryId1}},
+      "quantity": 100,
+      "unitPrice": 20000,
+      "note": "100 gram Ngũ vị hương"
+    }
+  ]
+}
+
+### 5. [Success] Tạo và Chốt trực tiếp phiếu Nhập kho (COMPLETED) nhiều mặt hàng
+POST {{baseUrl}}/api/document/import/completed
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "partnerId": {{partnerId}},
+  "orderDate": "2026-08-01T09:30:00Z",
+  "note": "Nhập kho chốt trực tiếp danh sách nhiều mặt hàng",
+  "amountPaid": 2750000,
+  "documentDetails": [
+    {
+      "bInventoryId": {{bInventoryId1}},
+      "quantity": 100,
+      "unitPrice": 20000
+    },
+    {
+      "bInventoryId": {{bInventoryId2}},
+      "quantity": 50,
+      "unitPrice": 15000
+    }
+  ]
+}
+
+
+### ----------------------------------------------------------------------------
+### PHẦN 3: CẬP NHẬT & CHỐT PHIẾU PENDING (PUT / POST)
+### ----------------------------------------------------------------------------
+
+### 6. [Success] Cập nhật nội dung phiếu Nhập kho PENDING (ID = 1)
+PUT {{baseUrl}}/api/document/import/pending/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "partnerId": {{partnerId}},
+  "orderDate": "2026-08-01T10:00:00Z",
+  "note": "Đã cập nhật số lượng nhập kho lên 150",
+  "amountPaid": 1000000,
+  "documentDetails": [
+    {
+      "bInventoryId": {{bInventoryId1}},
+      "quantity": 150,
+      "unitPrice": 20000,
+      "note": "Cập nhật 150 gram Ngũ vị hương"
+    }
+  ]
+}
+
+### 7. [Success] Chốt phiếu Nhập kho Pending sang COMPLETED (ID = 1)
+# Nghiệp vụ: Tự động ghi Sổ kho (InventoryLedger), tính Giá vốn bình quân (AvgCost) và phát sinh Sổ quỹ (CashFlow)
+POST {{baseUrl}}/api/document/import/1/complete
+Authorization: Bearer {{token}}
 Accept: application/json
 
 
-### ==========================================
-# PHẦN 2: HAPPY PATH (POST - Tạo phiếu nhập thành công)
-# ==========================================
+### ----------------------------------------------------------------------------
+### PHẦN 4: XÓA MỀM PHIẾU PENDING (DELETE)
+### ----------------------------------------------------------------------------
 
-### 3. [Success] Tạo phiếu nhập kho cơ bản - 1 Nhà cung cấp (Thanh toán đủ)
-POST {{baseUrl}}/api/document/import
+### 8. [Success] Xóa mềm phiếu Nhập kho PENDING -> Chuyển sang Canceled (ID = 2)
+DELETE {{baseUrl}}/api/document/import/2/soft-delete?deleteNote=Huy%20phi%20nhap%20do%20nhap%20sai%20thong%20tin
+Authorization: Bearer {{token}}
+Accept: application/json
+
+
+### ----------------------------------------------------------------------------
+### PHẦN 5: BẮT LỖI NEGATIVE TEST CASES (VALIDATION & BUSINESS RULES)
+### ----------------------------------------------------------------------------
+
+### 9. [Fail] Lỗi Validation: Danh sách mặt hàng chi tiết (documentDetails) rỗng
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "branchId": {{branchId}},
-  "businessDate": "2026-07-28T08:00:00Z",
-  "accountId": {{accountId}},
-  "note": "Nhập kho ngũ vị hương từ Vũ Mạnh Cường - Thanh toán đủ",
-  "details": [
-    {
-      "bInventoryId": 1,
-      "quantity": 100,
-      "unitPrice": 20000,
-      "note": "Nhập 100 gram Ngũ vị hương"
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 2000000,
-      "amountPaid": 2000000,
-      "note": "Thanh toán toàn bộ tiền hàng cho Vũ Mạnh Cường"
-    }
-  ]
+  "partnerId": {{partnerId}},
+  "note": "Thất bại do thiếu chi tiết mặt hàng",
+  "documentDetails": []
 }
 
-### 4. [Success] Tạo phiếu nhập kho - Quy đổi đơn vị (UnitConversionId = 69: Kilogram & 75: Lốc) & Chưa thanh toán (Ghi nợ NCC)
-POST {{baseUrl}}/api/document/import
+### 10. [Fail] Lỗi Business: Trùng lặp mặt hàng (BInventoryId) trong cùng 1 phiếu
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "branchId": {{branchId}},
-  "businessDate": "2026-07-28T08:30:00Z",
-  "accountId": {{accountId}},
-  "note": "Nhập kho quy đổi đơn vị Kg và Lốc - Nợ tiền NCC",
-  "details": [
+  "partnerId": {{partnerId}},
+  "note": "Thất bại do trùng mặt hàng BInventoryId 1",
+  "documentDetails": [
     {
-      "bInventoryId": 1,
-      "unitConversionId": 69,
-      "quantity": 2,
-      "unitPrice": 20000000,
-      "note": "Nhập 2 Kg Ngũ vị hương"
-    },
-    {
-      "bInventoryId": 7,
-      "unitConversionId": 75,
+      "bInventoryId": {{bInventoryId1}},
       "quantity": 10,
-      "unitPrice": 600000,
-      "note": "Nhập 10 Lốc Test-02"
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 46000000,
-      "amountPaid": 0,
-      "note": "Chưa thanh toán (Ghi nợ NCC)"
-    }
-  ]
-}
-
-### 5. [Success] Tạo phiếu nhập kho - Kết hợp NCC và Đơn vị vận chuyển (Transporter Comapany)
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T09:00:00Z",
-  "accountId": {{accountId}},
-  "note": "Nhập kho hàng Test-01 kèm chi phí vận chuyển",
-  "details": [
-    {
-      "bInventoryId": 4,
-      "quantity": 50,
-      "unitPrice": 15000,
-      "note": "Nhập 50 đơn vị Test-01"
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 750000,
-      "amountPaid": 750000,
-      "note": "Thanh toán 100% tiền hàng cho NCC"
+      "unitPrice": 20000
     },
     {
-      "partnerId": 2,
-      "amountDue": 50000,
-      "amountPaid": 50000,
-      "note": "Thanh toán chi phí vận chuyển cho Transporter Comapany"
-    }
-  ]
-}
-
-### 6. [Success] Tạo phiếu nhập kho - Đầy đủ 3 Partner (NCC + Vận chuyển + Temp worker)
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T09:30:00Z",
-  "accountId": {{accountId}},
-  "note": "Nhập kho gồm chi phí vận chuyển và nhân công bốc xếp",
-  "details": [
-    {
-      "bInventoryId": 1,
+      "bInventoryId": {{bInventoryId1}},
       "quantity": 20,
       "unitPrice": 20000
-    },
-    {
-      "bInventoryId": 7,
-      "quantity": 5,
-      "unitPrice": 120000
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 1000000,
-      "amountPaid": 500000,
-      "note": "Thanh toán một phần cho NCC Vũ Mạnh Cường"
-    },
-    {
-      "partnerId": 2,
-      "amountDue": 100000,
-      "amountPaid": 100000,
-      "note": "Thanh toán tiền vận chuyển"
-    },
-    {
-      "partnerId": 3,
-      "amountDue": 150000,
-      "amountPaid": 0,
-      "note": "Nợ chi phí bốc xếp của Temp worker"
     }
   ]
 }
 
-
-### ==========================================
-# PHẦN 3: NEGATIVE PATH (POST - Kiểm tra các trường hợp lỗi Validation & Business Rules)
-# ==========================================
-
-### 7. [Fail] Lỗi Validation - Danh sách hàng nhập (Details) bị rỗng
-POST {{baseUrl}}/api/document/import
+### 11. [Fail] Lỗi Business: Chốt phiếu (COMPLETED) nhưng KHÔNG chọn Nhà cung cấp (PartnerId null)
+POST {{baseUrl}}/api/document/import/completed
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [],
-  "partners": [
+  "partnerId": null,
+  "note": "Thất bại do thiếu PartnerId khi chốt",
+  "amountPaid": 0,
+  "documentDetails": [
     {
-      "partnerId": 1,
-      "amountDue": 0,
-      "amountPaid": 0
-    }
-  ]
-}
-
-### 8. [Fail] Lỗi Business - Không khai báo Nhà cung cấp (Thiếu Partner Type = Supplier)
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
-    {
-      "bInventoryId": 1,
+      "bInventoryId": {{bInventoryId1}},
       "quantity": 10,
       "unitPrice": 20000
     }
-  ],
-  "partners": [
-    {
-      "partnerId": 2,
-      "amountDue": 50000,
-      "amountPaid": 50000
-    }
   ]
 }
 
-### 9. [Fail] Lỗi Business - Khai báo thừa Nhà cung cấp (Hệ thống yêu cầu duy nhất 1 Supplier)
-POST {{baseUrl}}/api/document/import
+### 12. [Fail] Lỗi Business: Số tiền đã trả (AmountPaid) lớn hơn Tổng tiền chứng từ (TotalAmount)
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
+  "partnerId": {{partnerId}},
+  "note": "Thất bại do AmountPaid > TotalAmount",
+  "amountPaid": 5000000,
+  "documentDetails": [
     {
-      "bInventoryId": 1,
+      "bInventoryId": {{bInventoryId1}},
       "quantity": 10,
       "unitPrice": 20000
     }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 0
-    },
-    {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 0
-    }
   ]
 }
 
-### 10. [Fail] Lỗi Business - Đơn vị vận chuyển / Khác (Transport/Other) không khai báo AmountDue
-POST {{baseUrl}}/api/document/import
+### 13. [Fail] Lỗi Business: Mặt hàng BInventory không tồn tại trong hệ thống (BInventoryId = 99999)
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
-    {
-      "bInventoryId": 1,
-      "quantity": 10,
-      "unitPrice": 20000
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 0
-    },
-    {
-      "partnerId": 2,
-      "amountDue": null,
-      "amountPaid": 50000
-    }
-  ]
-}
-
-### 11. [Fail] Lỗi Business - Số tiền đã trả (AmountPaid) lớn hơn tổng tiền hàng phải trả NCC
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
-    {
-      "bInventoryId": 1,
-      "quantity": 10,
-      "unitPrice": 20000
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 300000
-    }
-  ]
-}
-
-### 12. [Fail] Lỗi Business - Số tiền đã trả cho Transport lớn hơn AmountDue khai báo
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
-    {
-      "bInventoryId": 1,
-      "quantity": 10,
-      "unitPrice": 20000
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 200000
-    },
-    {
-      "partnerId": 2,
-      "amountDue": 50000,
-      "amountPaid": 100000
-    }
-  ]
-}
-
-### 13. [Fail] Lỗi Business - Sản phẩm không tồn tại trong kho chi nhánh (BInventoryId không hợp lệ)
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
+  "partnerId": {{partnerId}},
+  "note": "Thất bại do BInventoryId không tồn tại",
+  "amountPaid": 0,
+  "documentDetails": [
     {
       "bInventoryId": 99999,
       "quantity": 10,
       "unitPrice": 20000
     }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 0
-    }
   ]
 }
 
-### 14. [Fail] Lỗi Validation - Đơn giá nhập không phải số nguyên hoặc Số lượng <= 0
-POST {{baseUrl}}/api/document/import
+### 14. [Fail] Lỗi Validation: Số lượng nhập bằng 0 hoặc âm
+POST {{baseUrl}}/api/document/import/pending
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
+  "partnerId": {{partnerId}},
+  "note": "Thất bại do quantity = 0",
+  "amountPaid": 0,
+  "documentDetails": [
     {
-      "bInventoryId": 1,
+      "bInventoryId": {{bInventoryId1}},
       "quantity": 0,
-      "unitPrice": 20000.5
-    }
-  ],
-  "partners": [
-    {
-      "partnerId": 1,
-      "amountDue": 0,
-      "amountPaid": 0
-    }
-  ]
-}
-
-### 15. [Fail] Lỗi Business - Mã quy đổi đơn vị (UnitConversionId) không tồn tại
-POST {{baseUrl}}/api/document/import
-Content-Type: application/json
-
-{
-  "branchId": {{branchId}},
-  "businessDate": "2026-07-28T10:00:00Z",
-  "accountId": {{accountId}},
-  "details": [
-    {
-      "bInventoryId": 1,
-      "unitConversionId": 99999,
-      "quantity": 10,
       "unitPrice": 20000
     }
-  ],
-  "partners": [
+  ]
+}
+
+### 15. [Fail] Lỗi Authentication: Truy cập không truyền Access Token (401 Unauthorized)
+POST {{baseUrl}}/api/document/import/pending
+Content-Type: application/json
+
+{
+  "branchId": {{branchId}},
+  "partnerId": {{partnerId}},
+  "documentDetails": [
     {
-      "partnerId": 1,
-      "amountDue": 200000,
-      "amountPaid": 0
+      "bInventoryId": {{bInventoryId1}},
+      "quantity": 10,
+      "unitPrice": 20000
     }
   ]
 }

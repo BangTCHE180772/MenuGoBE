@@ -25,6 +25,8 @@ public class BInventory
     [Column(TypeName = "decimal(51,3)")]
     public decimal Quantity { get; set; }
 
+
+
     public bool ChainActive { get; set; }
 
     public bool BranchActive { get; set; }

@@ -1,4 +1,5 @@
 using AutoMapper;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Dtos.Area;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Mapper;
@@ -23,7 +24,7 @@ public class UpdateAsyncTests
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
-        _service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper);
+        _service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper, new Mock<MenuGoBE.Interface.Repository.IOrderRepository>().Object, new Mock<MenuGoBE.Interface.Repository.IReservationRepository>().Object);
     }
 
     [Fact]
@@ -75,5 +76,27 @@ public class UpdateAsyncTests
         // Assert
         _repoMock.Verify(r => r.UpdateAsync(It.Is<Area>(a => a.Name == "Updated")), Times.Once);
         _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
+    }
+
+    [Fact]
+    public async Task ThrowsException_WhenNameIsEmptyOrWhitespace()
+    {
+        var dto = new AreaUpdateDto { Id = 1, BranchId = 1, Name = "   ", Status = "Active", IsActive = true };
+        var exception = await Assert.ThrowsAsync<MenuGoException>(() => _service.UpdateAsync(dto));
+        Assert.Equal("Tên khu vực không được để trống.", exception.Message);
+    }
+
+    [Fact]
+    public async Task ThrowsException_WhenRenamingToExistingName()
+    {
+        var existing = new Area { Id = 1, BranchId = 1, Name = "Old", Status = "Active", IsActive = true };
+        var duplicate = new Area { Id = 2, BranchId = 1, Name = "New", Status = "Active", IsActive = true };
+        var dto = new AreaUpdateDto { Id = 1, BranchId = 1, Name = "New", Status = "Active", IsActive = true };
+
+        _repoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        _repoMock.Setup(r => r.GetByNameAndBranchAsync("New", 1)).ReturnsAsync(duplicate);
+
+        var exception = await Assert.ThrowsAsync<MenuGoException>(() => _service.UpdateAsync(dto));
+        Assert.Equal("Đã tồn tại khu vực với tên này trong chi nhánh.", exception.Message);
     }
 }

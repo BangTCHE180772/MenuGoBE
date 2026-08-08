@@ -1,8 +1,6 @@
 using AutoMapper;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
-using MenuGoBE.Interface.Services;
-using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
@@ -14,9 +12,6 @@ public class GetKitchenItemsAsyncTests
 {
     private readonly Mock<IOrderDetailRepository> _detailRepoMock;
     private readonly Mock<IOrderRepository> _orderRepoMock;
-    private readonly Mock<ITableService> _tableServiceMock;
-    private readonly Mock<IProductService> _productServiceMock;
-    private readonly Mock<IInvoiceDocumentService> _invoiceServiceMock;
     private readonly IMapper _mapper;
     private readonly OrderDetailService _service;
 
@@ -24,14 +19,11 @@ public class GetKitchenItemsAsyncTests
     {
         _detailRepoMock = new Mock<IOrderDetailRepository>();
         _orderRepoMock = new Mock<IOrderRepository>();
-        _tableServiceMock = new Mock<ITableService>();
-        _productServiceMock = new Mock<IProductService>();
-        _invoiceServiceMock = new Mock<IInvoiceDocumentService>();
         var config = new MapperConfiguration(cfg =>
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
-        _service = new OrderDetailService(_detailRepoMock.Object, _orderRepoMock.Object, _tableServiceMock.Object, _productServiceMock.Object, _invoiceServiceMock.Object, _mapper);
+        _service = new OrderDetailService(_detailRepoMock.Object, _orderRepoMock.Object, _mapper, new Mock<MenuGoBE.Interface.Repository.ITableRepository>().Object, new Mock<MenuGoBE.Interface.Repository.IProductRepository>().Object, new Mock<MenuGoBE.Interface.Repository.IAreaRepository>().Object, new Mock<MenuGoBE.Interface.Services.IKitchenService>().Object, new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object, new Mock<MenuGoBE.Interface.Repository.IRecipesDetailedRepository>().Object, new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object);
     }
 
     [Fact]

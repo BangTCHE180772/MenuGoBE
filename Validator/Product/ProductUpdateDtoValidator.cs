@@ -23,7 +23,7 @@ namespace MenuGoBE.Validator.Product
             RuleFor(x => x.SellPrice)
                 .GreaterThanOrEqualTo(0).WithMessage("Giá bán không được âm.")
                 .Must(price => price % 1 == 0).WithMessage("Giá bán phải là số nguyên.")
-                .LessThanOrEqualTo(1000000000m).WithMessage("Giá bán phải nhỏ hơn hoặc bằng 1 tỷ.");
+                .LessThanOrEqualTo(10000000000m).WithMessage("Giá bán không được vượt quá 10 tỷ.");
         }
     }
 }

@@ -66,7 +66,12 @@ namespace MenuGoBE.Repositories
             if (!string.IsNullOrWhiteSpace(dto.Keyword))
             {
                 query = query.Where(b =>
-                    b.Name.ToLower().Contains(dto.Keyword.ToLower()));
+                    b.Name.ToLower().Contains(dto.Keyword.ToLower())
+                    ||
+                    b.Address.NewWard != null && b.Address.NewWard.Name.ToLower().Contains(dto.Keyword.ToLower())
+                    ||
+                    b.Address.NewWard!.NewProvince != null && b.Address.NewWard.NewProvince.Name.ToLower().Contains(dto.Keyword.ToLower())
+                    );
             }
 
             if (!string.IsNullOrWhiteSpace(dto.Type))

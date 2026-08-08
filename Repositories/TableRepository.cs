@@ -22,6 +22,7 @@ namespace MenuGoBE.Repositories
         {
             return await _context.Tables
                 .Include(t => t.Area)
+                .Where(t => t.IsActive)
                 .ToListAsync();
         }
 
@@ -29,13 +30,21 @@ namespace MenuGoBE.Repositories
         {
             return await _context.Tables
                 .Include(t => t.Area)
-                .Where(t => t.Area != null && branchIds.Contains(t.Area.BranchId))
+                .Where(t => t.Area != null && branchIds.Contains(t.Area.BranchId) && t.IsActive)
                 .ToListAsync();
         }
 
         public async Task<Table?> GetByIdAsync(long id)
         {
-            return await _context.Tables.FindAsync(id);
+            var entity = await _context.Tables.FindAsync(id);
+            if (entity != null && !entity.IsActive) return null;
+            return entity;
+        }
+
+        public async Task<Table?> GetByNameAndAreaAsync(string name, long areaId)
+        {
+            return await _context.Tables
+                .FirstOrDefaultAsync(t => t.AreaId == areaId && t.Name.ToLower() == name.ToLower());
         }
 
         public async Task CreateAsync(Table entity)

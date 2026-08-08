@@ -6,6 +6,7 @@ namespace MenuGoBE.Dtos.Order
         public string TableName { get; set; } = string.Empty;
         public string TableStatus { get; set; } = string.Empty;
         public string AreaName { get; set; } = string.Empty;
+        public long BranchId { get; set; }
         public long? ActiveOrderId { get; set; }
         public long? OriginalOrderId { get; set; }
         public bool IsMerged { get; set; }

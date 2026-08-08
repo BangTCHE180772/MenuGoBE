@@ -1,150 +1,113 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using MenuGoBE.Dtos.Document;
-using MenuGoBE.Exceptions;
-using MenuGoBE.Interface.Services;
-using MenuGoBE.Interface.Services.Document;
-using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
+using MenuGoBE.Dtos.Document;
+using MenuGoBE.Interface.Services.Document;
+using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Controllers.Document
 {
+    /// <summary>
+    /// Controller chuyên biệt quản lý nghiệp vụ Chứng từ Trả hàng NCC (Return Document).
+    /// Chuẩn hóa sử dụng DTO yêu cầu (ReturnDocumentCreateDto) và DTO phản hồi (DocumentResponseDto).
+    /// </summary>
     [ApiController]
-    [Route("api/document")]
-    public class ReturnDocumentController : ControllerBase
+    [Route("api/[controller]")]
+    public class ReturnDocumentController : BaseApiController
     {
-        private readonly IReturnDocumentService _service;
         private readonly IDocumentService _documentService;
 
-        public ReturnDocumentController(IReturnDocumentService service, IDocumentService documentService)
+        public ReturnDocumentController(IDocumentService documentService)
         {
-            _service = service;
             _documentService = documentService;
         }
 
-        private long? GetUserId()
-        {
-            var userIdStr = User.Identity?.IsAuthenticated == true
-                ? User.FindFirst("AccountId")?.Value
-                : null;
-            return !string.IsNullOrEmpty(userIdStr) && long.TryParse(userIdStr, out var parsedId) && parsedId > 0
-                ? parsedId
-                : null;
-        }
-
-        // ==========================================
-        // 4. RETURN DOCUMENT (Trả hàng nhập - Type 4)
-        // Nghiệp vụ:
-        //   - Mỗi phiếu trả thuộc về 1 phiếu nhập gốc (ParentDocumentId)
-        //   - Mỗi ReturnDetail gắn với ImportDetail cụ thể qua FatherId
-        //   - Hạn mức trả: ImportDetail.Quantity - SUM(active ReturnDetails.Quantity)
-        //   - CashFlow: chỉ tạo khi PaidAmount > 0
-        // ==========================================
-
+        #region GET api/returndocument (Lấy danh sách phiếu trả hàng NCC DTO)
         /// <summary>
-        /// Lấy danh sách tất cả phiếu trả hàng nhập của một chi nhánh.
+        /// Lấy danh sách phiếu Trả hàng NCC thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
-        [HttpGet("return")]
-        public async Task<IActionResult> GetReturnDocuments([FromQuery] long? branchId)
+        [HttpGet]
+        [HttpGet("/api/document/return")]
+        public async Task<IActionResult> GetReturnList([FromQuery] long branchId)
         {
-            if (!branchId.HasValue || branchId.Value <= 0)
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
             {
-                return BadRequest(new { message = "Vui lòng cung cấp branchId hợp lệ." });
+                return errorResult!;
             }
 
-            try
-            {
-                var result = await _documentService.GetDocumentsAsync(branchId, DocumentType.Return);
-                return Ok(result);
-            }
-            catch (MenuGoException ex)
-            {
-                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy danh sách phiếu trả hàng nhập.", error = ex.Message });
-            }
+            var result = await _documentService.GetDocumentListDtosAsync(branchId, DocumentType.Return);
+            return Ok(result);
         }
+        #endregion
 
+        #region GET api/returndocument/{id} (Lấy chi tiết phiếu trả hàng NCC DTO)
         /// <summary>
-        /// Lấy chi tiết một phiếu trả hàng nhập theo Id.
+        /// Lấy chi tiết 1 phiếu Trả hàng NCC theo ID (Trả về DocumentResponseDto).
         /// </summary>
-        [HttpGet("return/{id:long}")]
-        public async Task<IActionResult> GetReturnDocument(long id)
+        [HttpGet("{id:long}")]
+        [HttpGet("/api/document/return/{id:long}")]
+        public async Task<IActionResult> GetReturnById(long id)
         {
-            try
+            if (!ValidateUserToken(out _, out var errorResult))
             {
-                var result = await _documentService.GetDocumentByIdAsync(id);
-                if (result == null)
-                    return NotFound(new { message = $"Không tìm thấy phiếu trả hàng nhập với Id={id}." });
+                return errorResult!;
+            }
 
-                return Ok(result);
-            }
-            catch (MenuGoException ex)
+            var result = await _documentService.GetDocumentByIdDtoAsync(id);
+            if (result == null || result.Type != DocumentType.Return)
             {
-                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
+                return NotFound(new { message = $"Không tìm thấy phiếu Trả hàng NCC với ID: {id}" });
             }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi lấy chi tiết phiếu trả hàng nhập.", error = ex.Message });
-            }
+
+            return Ok(result);
         }
+        #endregion
 
+        #region POST api/returndocument/completed (Tạo & Chốt trực tiếp theo DTO)
         /// <summary>
-        /// Tạo phiếu trả hàng nhập mới.
-        /// Body cần: ImportDocumentId, BusinessDate, PaidAmount (nếu có), PaymentMethod, Details[].
-        /// Mỗi Detail: ImportDocumentDetailId, Quantity, UnitPrice.
+        /// Tạo và Chốt trực tiếp phiếu Trả hàng NCC sang Completed sử dụng ReturnDocumentCreateDto.
         /// </summary>
-        [HttpPost("return")]
-        public async Task<IActionResult> CreateReturn([FromBody] ReturnDocumentCreateDto dto)
+        [HttpPost("completed")]
+        [HttpPost("/api/document/return/completed")]
+        public async Task<IActionResult> CreateReturnCompleted([FromBody] ReturnDocumentCreateDto dto)
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
-            try
+            if (dto == null)
             {
-                var result = await _service.CreateReturnDocumentAsync(dto, dto.CreatedByAccountId);
+                return BadRequest(new { message = "Thông tin chứng từ không được để trống." });
+            }
 
-                return Ok(new
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+
+            var document = new Models.Document
+            {
+                BranchId = dto.BranchId,
+                PartnerId = dto.PartnerId,
+                ParentDocumentId = dto.ParentDocumentId,
+                OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
+                Note = dto.Note,
+                AmountPaid = dto.AmountPaid,
+                Type = DocumentType.Return,
+                DocumentDetails = (dto.Details ?? new List<ReturnDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
-                    message = "Tạo phiếu trả hàng nhập thành công.",
-                    documentId = result.Id,
-                    code = result.Code
-                });
-            }
-            catch (MenuGoException ex)
-            {
-                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi tạo phiếu trả hàng nhập.", error = ex.Message });
-            }
-        }
+                    BInventoryId = d.BInventoryId,
+                    UnitConversionId = d.UnitConversionId,
+                    FatherId = d.FatherId,
+                    Quantity = d.Quantity,
+                    UnitPrice = d.UnitPrice,
+                    Note = d.Note
+                }).ToList()
+            };
 
-        /// <summary>
-        /// Xóa mềm phiếu trả hàng nhập.
-        /// Sau khi xóa: IsDeleted = true cho Document + tất cả ReturnDetails,
-        /// InventoryLedger được tính lại (ripple recalculate).
-        /// </summary>
-        [HttpDelete("return/{id:long}")]
-        public async Task<IActionResult> DeleteReturn(long id)
-        {
-            try
-            {
-                var deletedBy = GetUserId();
-                await _service.DeleteReturnDocumentAsync(id, deletedBy);
-                return Ok(new { message = "Xóa phiếu trả hàng nhập thành công." });
-            }
-            catch (MenuGoException ex)
-            {
-                return StatusCode(ex.HttpStatusCode, new { code = ex.Code, message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { message = "Đã xảy ra lỗi khi xóa phiếu trả hàng nhập.", error = ex.Message });
-            }
+            var createdDoc = await _documentService.CreateReturnCompletedAsync(document, userId);
+            var responseDto = await _documentService.GetDocumentByIdDtoAsync(createdDoc.Id);
+            return Ok(responseDto ?? (object)createdDoc);
         }
+        #endregion
     }
 }

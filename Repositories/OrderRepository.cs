@@ -52,14 +52,18 @@ namespace MenuGoBE.Repositories
 
         public async Task<Order?> GetActiveOrderByTableIdAsync(long tableId)
         {
-            return await _context.Orders
-                .Where(o => o.TableId == tableId && (o.Status == "Active" || o.Status == "Reserved"))
+            var activeOrders = await _context.Orders
+                .Where(o => o.TableId == tableId && (o.Status == "Active" || o.Status == "Internal"))
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
-                .OrderBy(o => o.CreatedAt)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
+
+            return activeOrders
+                .OrderBy(o => o.Status == "Active" ? 0 : 1)
+                .ThenBy(o => o.CreatedAt)
+                .FirstOrDefault();
         }
 
         public async Task<Order?> GetActiveOrderByIdWithDetailsAsync(long orderId)
@@ -76,7 +80,7 @@ namespace MenuGoBE.Repositories
         public async Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync()
         {
             return await _context.Orders
-                .Where(o => o.Status == "Active")
+                .Where(o => o.Status == "Active" || o.Status == "Internal")
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                         .ThenInclude(p => p.Image)
@@ -118,6 +122,11 @@ namespace MenuGoBE.Repositories
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync()
+        {
+            return await _context.Database.BeginTransactionAsync();
         }
     }
 }

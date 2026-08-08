@@ -3,9 +3,14 @@ using MenuGoBE.Data;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using MenuGoBE.Interface.Services;
+using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Service;
+using MenuGoBE.Service.Document;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Repository.Document;
 using MenuGoBE.Repositories;
+using MenuGoBE.Repositories.Document;
+using MenuGoBE.Controllers.Document;
 using MenuGoBE.Mapper;
 using MenuGoBE.Exceptions;
 using AutoMapper;
@@ -13,19 +18,16 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.OData.ModelBuilder;
 using MenuGoBE.Models;
 using MenuGoBE.Helpers;
-using MenuGoBE.Interface.Repository.Document;
-using MenuGoBE.Repositories.Document;
-using MenuGoBE.Interface.Services.Document;
-using MenuGoBE.Service.Document;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using PayOS;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
-System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+// System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -46,11 +48,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+
 builder.Services.AddAutoMapper(cfg => { }, typeof(AutoMapperProfiles));
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddMemoryCache();
 
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -85,17 +90,14 @@ builder.Services.AddScoped<IOldDistrictRepository, OldDistrictRepository>();
 builder.Services.AddScoped<IPayrollRepository, PayrollRepository>();
 builder.Services.AddScoped<ISalaryDetailRepository, SalaryDetailRepository>();
 builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
-builder.Services.AddScoped<IImportDocumentRepository, ImportDocumentRepository>();
-builder.Services.AddScoped<IReturnDocumentRepository, ReturnDocumentRepository>();
-builder.Services.AddScoped<ITransferDocumentRepository, TransferDocumentRepository>();
-builder.Services.AddScoped<IExportDeleteDocumentRepository, ExportDeleteDocumentRepository>();
-builder.Services.AddScoped<ICheckDocumentRepository, CheckDocumentRepository>();
-builder.Services.AddScoped<IProductionDocumentRepository, ProductionDocumentRepository>();
-builder.Services.AddScoped<IInvoiceDocumentRepository, InvoiceDocumentRepository>();
 builder.Services.AddScoped<IPartnerRepository, PartnerRepository>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
+builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
+builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
+builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 
 // Service
+
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
 builder.Services.AddScoped<ITableService, TableService>();
@@ -112,6 +114,15 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+// builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
+builder.Services.AddScoped<IPartnerService, PartnerService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
+builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
+builder.Services.AddScoped<IPhotoService, PhotoService>();
+builder.Services.AddScoped<IEmailService,EmailService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IKitchenService, KitchenService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
@@ -124,19 +135,17 @@ builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<ISalaryDetailService, SalaryDetailService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
-builder.Services.AddScoped<IImportDocumentService, ImportDocumentService>();
-builder.Services.AddScoped<IReturnDocumentService, ReturnDocumentService>();
-builder.Services.AddScoped<ITransferDocumentService, TransferDocumentService>();
-builder.Services.AddScoped<IExportDeleteDocumentService, ExportDeleteDocumentService>();
-builder.Services.AddScoped<ICheckDocumentService, CheckDocumentService>();
-builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
-builder.Services.AddScoped<IInvoiceDocumentService, InvoiceDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
+
+// SignalR
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IDictionary<string, string>>(opts => new Dictionary<string, string>());
+builder.Services.AddSingleton<IDictionary<string, long>>(opts => new Dictionary<string, long>());
 
 
 // Signal & Monitor Services for Reservation

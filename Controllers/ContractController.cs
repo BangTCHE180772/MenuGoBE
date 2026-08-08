@@ -56,6 +56,18 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpGet("my-contract")]
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMyContract()
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var result = await _service.GetByAccountIdAsync(currentUserId.Value);
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(long id)
         {
@@ -63,13 +75,19 @@ namespace MenuGoBE.Controllers
             if (!currentUserId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
-            if (!isAdmin && !isManager)
-                return StatusCode(403, new { message = "Bạn không có quyền xem hợp đồng." });
-
             var result = await _service.GetByIdAsync(id);
             if (result == null)
                 return NotFound(new { message = "Không tìm thấy Contract" });
+
+            // Allow employee to view their own contract regardless of admin/manager role
+            if (result.AccountId == currentUserId.Value)
+            {
+                return Ok(result);
+            }
+
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền xem hợp đồng." });
 
             if (isAdmin && result.RoleId != 3)
             {

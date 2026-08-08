@@ -40,7 +40,8 @@ namespace MenuGoTest.UnitTests
                 .Options;
             _context = new AppDbContext(options);
 
-            // Add a base material product to satisfy pre-requisite for processed/manufactured tests
+            // Add a default group and base material product to satisfy pre-requisites
+            _context.Groups.Add(new Group { Id = 1, Name = "Default Group" });
             _context.Products.Add(new Product
             {
                 Id = 9999,
@@ -66,16 +67,13 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Hammer",
                 IsSellable = false,
                 SellPrice = 0,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1",
-                    Details = new List<ProductRecipeDetailedDto>
-                    {
-                        new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
-                    }
+                    new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
                 }
             };
 
@@ -93,12 +91,13 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Table",
                 IsSellable = true,
                 SellPrice = 100,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1"
+                    new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
                 }
             };
 
@@ -115,11 +114,12 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Salt",
                 IsSellable = false,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1"
+                    new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
                 }
             };
 
@@ -136,6 +136,7 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Car",
                 IsSellable = true,
                 SellPrice = 500000000,
@@ -155,14 +156,11 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Car",
                 IsSellable = true,
                 SellPrice = 500000000,
-                Recipe = new ProductRecipeDto
-                {
-                    VersionName = "v1",
-                    Details = new List<ProductRecipeDetailedDto>() // Empty details
-                }
+                Recipe = new List<ProductRecipeDetailedDto>() // Empty details
             };
 
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
@@ -178,9 +176,10 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
-                Name = "Fried Rice",
+                GroupId = 1,
+                Name = "Coffee",
                 IsSellable = true,
-                SellPrice = 50000,
+                SellPrice = 30000,
                 Recipe = null
             };
 
@@ -192,38 +191,82 @@ namespace MenuGoTest.UnitTests
         }
 
         [Fact]
-        public async Task CreateWithTypeAsync_ShouldAcceptSellPriceOfZero_WhenIsSellableIsTrue()
+        public async Task CreateWithTypeAsync_ShouldThrowInvalidRecipeIngredient_WhenProcessedRecipeContainsTool()
         {
             // Arrange
             var dto = new ProductCreateDto
             {
-                Name = "Free Gift",
+                GroupId = 1,
+                Name = "Soup",
                 IsSellable = true,
-                SellPrice = 0 // Permitted now
+                SellPrice = 50000,
+                Recipe = new List<ProductRecipeDetailedDto>
+                {
+                    new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1 } // tool
+                }
             };
 
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
-            _repoMock.Setup(r => r.CreateAsync(It.IsAny<Product>())).Returns(Task.CompletedTask);
-            _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(10)).ReturnsAsync(ProductType.Tool);
 
-            // Act
-            var result = await _service.CreateWithTypeAsync(dto, "regular");
-
-            // Assert
-            Assert.NotNull(result);
-            Assert.Equal(0, result.SellPrice);
-            _repoMock.Verify(r => r.CreateAsync(It.Is<Product>(p => p.SellPrice == 0)), Times.Once);
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateWithTypeAsync(dto, "processed"));
+            Assert.Equal(ErrorCodes.InvalidRecipeIngredient.Code, ex.Code);
         }
 
         [Fact]
-        public async Task CreateWithTypeAsync_ShouldAllowCustomSellPrice_ForTool()
+        public async Task CreateWithTypeAsync_ShouldThrowInvalidRecipeIngredient_WhenManufacturedRecipeContainsProcessed()
         {
             // Arrange
             var dto = new ProductCreateDto
             {
-                Name = "Screwdriver",
+                GroupId = 1,
+                Name = "Cake Mix",
                 IsSellable = true,
-                SellPrice = 15000
+                SellPrice = 80000,
+                Recipe = new List<ProductRecipeDetailedDto>
+                {
+                    new ProductRecipeDetailedDto { ProductId = 20, Quantity = 1 } // processed
+                }
+            };
+
+            _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
+            _repoMock.Setup(r => r.GetProductTypeEnumAsync(20)).ReturnsAsync(ProductType.Processed);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateWithTypeAsync(dto, "manufactured"));
+            Assert.Equal(ErrorCodes.InvalidRecipeIngredient.Code, ex.Code);
+        }
+
+        [Fact]
+        public async Task CreateWithTypeAsync_ShouldThrowSellPriceRequired_WhenRegularHasZeroPrice()
+        {
+            // Arrange
+            var dto = new ProductCreateDto
+            {
+                GroupId = 1,
+                Name = "Free Gift",
+                IsSellable = true,
+                SellPrice = 0
+            };
+
+            _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateWithTypeAsync(dto, "regular"));
+            Assert.Equal(ErrorCodes.SellPriceRequired.Code, ex.Code);
+        }
+
+        [Fact]
+        public async Task CreateWithTypeAsync_ShouldAllowValidTool_WithZeroSellPriceAndNotSellable()
+        {
+            // Arrange
+            var dto = new ProductCreateDto
+            {
+                GroupId = 1,
+                Name = "Screwdriver",
+                IsSellable = false,
+                SellPrice = 0
             };
 
             _repoMock.Setup(r => r.ExistsByNameAsync(dto.Name)).ReturnsAsync(false);
@@ -235,8 +278,8 @@ namespace MenuGoTest.UnitTests
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(15000, result.SellPrice);
-            _repoMock.Verify(r => r.CreateAsync(It.Is<Product>(p => p.SellPrice == 15000)), Times.Once);
+            Assert.Equal(0, result.SellPrice);
+            _repoMock.Verify(r => r.CreateAsync(It.Is<Product>(p => p.SellPrice == 0 && p.IsSellable == false)), Times.Once);
         }
 
         [Fact]
@@ -245,18 +288,14 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Fried Rice Special",
                 IsSellable = true,
                 SellPrice = 60000,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1",
-                    IsActive = true,
-                    Details = new List<ProductRecipeDetailedDto>
-                    {
-                        new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1.123000m }, // valid, should be cut to 1.123
-                        new ProductRecipeDetailedDto { ProductId = 11, Quantity = 2.0m } // valid
-                    }
+                    new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1.123000m }, // valid, should be cut to 1.123
+                    new ProductRecipeDetailedDto { ProductId = 11, Quantity = 2.0m } // valid
                 }
             };
 
@@ -290,17 +329,13 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Fried Rice Failed",
                 IsSellable = true,
                 SellPrice = 60000,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1",
-                    IsActive = true,
-                    Details = new List<ProductRecipeDetailedDto>
-                    {
-                        new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1.1234m } // invalid
-                    }
+                    new ProductRecipeDetailedDto { ProductId = 10, Quantity = 1.1234m } // invalid
                 }
             };
 
@@ -320,12 +355,13 @@ namespace MenuGoTest.UnitTests
             var dto = new ProductUpdateDto
             {
                 Id = 1,
+                GroupId = 1,
                 Name = "Hammer",
                 IsSellable = false,
                 SellPrice = 0,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1"
+                    new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
                 }
             };
 
@@ -348,16 +384,13 @@ namespace MenuGoTest.UnitTests
             var dto = new ProductUpdateDto
             {
                 Id = 1,
+                GroupId = 1,
                 Name = "Pizza",
                 IsSellable = true,
                 SellPrice = 10000,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1",
-                    Details = new List<ProductRecipeDetailedDto>
-                    {
-                        new ProductRecipeDetailedDto { ProductId = 1, Quantity = 1 } // self reference (Pizza -> Pizza)
-                    }
+                    new ProductRecipeDetailedDto { ProductId = 1, Quantity = 1 } // self reference (Pizza -> Pizza)
                 }
             };
 
@@ -383,16 +416,13 @@ namespace MenuGoTest.UnitTests
             var dto = new ProductUpdateDto
             {
                 Id = 1,
+                GroupId = 1,
                 Name = "Pizza",
                 IsSellable = true,
                 SellPrice = 10000,
-                Recipe = new ProductRecipeDto
+                Recipe = new List<ProductRecipeDetailedDto>
                 {
-                    VersionName = "v1",
-                    Details = new List<ProductRecipeDetailedDto>
-                    {
-                        new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
-                    }
+                    new ProductRecipeDetailedDto { ProductId = 2, Quantity = 1 }
                 }
             };
 
@@ -421,6 +451,7 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Too Many Bases",
                 IsSellable = true,
                 SellPrice = 10000,
@@ -444,12 +475,13 @@ namespace MenuGoTest.UnitTests
             // Arrange
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 Name = "Processed Multi Units",
                 IsSellable = true,
                 SellPrice = 10000,
                 UnitConversions = new List<ProductUnitConversionDto>
                 {
-                    new ProductUnitConversionDto { UnitId = 2, ConversionPoint = 0, IsBase = true },
+                    new ProductUnitConversionDto { UnitId = 2, ConversionPoint = 1, IsBase = true },
                     new ProductUnitConversionDto { UnitId = 3, ConversionPoint = 20, IsBase = false } // derived conversion, not allowed for processed
                 }
             };
@@ -471,6 +503,7 @@ namespace MenuGoTest.UnitTests
 
             var dto = new ProductCreateDto
             {
+                GroupId = 1,
                 ChainId = chainId,
                 Name = "New Milk Tea",
                 SKUCode = "TEA-001",
