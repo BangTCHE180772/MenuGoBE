@@ -232,7 +232,7 @@ namespace MenuGoBE.Service
                 return (false, "Bạn không có ca làm việc hôm nay tại chi nhánh này.", "");
             }
 
-            var workingIndex = schedules.FindIndex(s => s.Status == "Working");
+            var workingIndex = schedules.FindIndex(s => s.Status == "Đang làm việc");
 
             if (workingIndex >= 0)
             {
@@ -255,7 +255,7 @@ namespace MenuGoBE.Service
                         currentWs.CheckOutAt = utcEndTime;
                         var duration1 = currentWs.CheckOutAt.Value - currentWs.CheckInAt.Value;
                         currentWs.ActualHours = (decimal)duration1.TotalHours;
-                        currentWs.Status = "Completed";
+                        currentWs.Status = "Hoàn thành";
                         await _repo.UpdateAsync(currentWs);
                         
                         // Mở ca tiếp theo ở đúng giờ StartTime
@@ -263,7 +263,7 @@ namespace MenuGoBE.Service
                         var utcStartTime = DateTime.SpecifyKind(localStartTime.AddHours(-7), DateTimeKind.Utc);
                         
                         nextWs.CheckInAt = utcStartTime;
-                        nextWs.Status = "Working";
+                        nextWs.Status = "Đang làm việc";
                         await _repo.UpdateAsync(nextWs);
                         
                         autoSplitOccurred = true;
@@ -280,7 +280,7 @@ namespace MenuGoBE.Service
                 finalWorking.CheckOutAt = now;
                 var duration = finalWorking.CheckOutAt.Value - finalWorking.CheckInAt.Value;
                 finalWorking.ActualHours = (decimal)duration.TotalHours;
-                finalWorking.Status = "Completed";
+                finalWorking.Status = "Hoàn thành";
                 await _repo.UpdateAsync(finalWorking);
                 
                 await _repo.SaveChangesAsync();
@@ -320,12 +320,12 @@ namespace MenuGoBE.Service
 
                     foreach (var missed in missedSchedules)
                     {
-                        missed.Status = "Absent";
+                        missed.Status = "Vắng mặt";
                         await _repo.UpdateAsync(missed);
                     }
 
                     nextSchedule.CheckInAt = now;
-                    nextSchedule.Status = "Working";
+                    nextSchedule.Status = "Đang làm việc";
                     await _repo.UpdateAsync(nextSchedule);
                     await _repo.SaveChangesAsync();
                     return (true, "Check-in thành công", "checkin");
@@ -333,7 +333,7 @@ namespace MenuGoBE.Service
                 else
                 {
                     // Nếu tất cả đã Completed, cập nhật lại giờ Check-out cho ca cuối cùng
-                    var lastCompleted = schedules.LastOrDefault(s => s.Status == "Completed");
+                    var lastCompleted = schedules.LastOrDefault(s => s.Status == "Hoàn thành");
                     if (lastCompleted != null)
                     {
                         lastCompleted.CheckOutAt = now;

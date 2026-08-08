@@ -226,7 +226,11 @@ namespace MenuGoBE.Service
                 .Where(w => w.AccountId == dto.AccountId 
                          && w.WorkDate >= startDate 
                          && w.WorkDate <= endDate
-                         && (w.Status == "APPROVED" || w.Status == "COMPLETED" || w.ManagerApproved))
+                         && (w.Status == "APPROVED"
+                             || w.Status == "COMPLETED"
+                             || w.Status == "Hoàn thành"
+                             || w.Status == "Đang làm việc"
+                             || w.ManagerApproved))
                 .ToListAsync();
 
             decimal actualWorkDays = schedules.Select(s => s.WorkDate).Distinct().Count();
