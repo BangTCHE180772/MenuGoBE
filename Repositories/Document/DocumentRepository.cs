@@ -66,6 +66,13 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.Deleter)
                 .FirstOrDefaultAsync(d => d.Id == id);
         }
+
+        public async Task<Models.Document?> GetPendingDocumentByOrderIdAsync(long orderId, DocumentType type)
+        {
+            return await _context.Documents
+                .Include(d => d.DocumentDetails)
+                .FirstOrDefaultAsync(d => d.OrderId == orderId && d.Type == type && d.Status == DocumentStatus.Pending);
+        }
         #endregion
 
         #region Kiểm tra chứng từ gốc (Parent Document)
