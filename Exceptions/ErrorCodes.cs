@@ -421,6 +421,12 @@ public static class ErrorCodes
         "Mỗi đối tác chỉ được xuất hiện một lần trong chứng từ.",
         400
     );
+
+    public static readonly ErrorResult DocumentInvoiceInsufficientIngredient = new(
+        2126,
+        "Tồn kho nguyên liệu/sản phẩm không đủ để xác nhận món.",
+        400
+    );
 }
 
 

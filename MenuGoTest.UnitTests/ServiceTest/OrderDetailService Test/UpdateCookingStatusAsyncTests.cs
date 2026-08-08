@@ -1,5 +1,7 @@
 using AutoMapper;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Services;
+using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Mapper;
 using MenuGoBE.Service;
 using Moq;
@@ -10,6 +12,9 @@ public class UpdateCookingStatusAsyncTests
 {
     private readonly Mock<IOrderDetailRepository> _detailRepoMock;
     private readonly Mock<IOrderRepository> _orderRepoMock;
+    private readonly Mock<ITableService> _tableServiceMock;
+    private readonly Mock<IProductService> _productServiceMock;
+    private readonly Mock<IInvoiceDocumentService> _invoiceServiceMock;
     private readonly IMapper _mapper;
     private readonly OrderDetailService _service;
 
@@ -17,11 +22,14 @@ public class UpdateCookingStatusAsyncTests
     {
         _detailRepoMock = new Mock<IOrderDetailRepository>();
         _orderRepoMock = new Mock<IOrderRepository>();
+        _tableServiceMock = new Mock<ITableService>();
+        _productServiceMock = new Mock<IProductService>();
+        _invoiceServiceMock = new Mock<IInvoiceDocumentService>();
         var config = new MapperConfiguration(cfg =>
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
-        _service = new OrderDetailService(_detailRepoMock.Object, _orderRepoMock.Object, _mapper);
+        _service = new OrderDetailService(_detailRepoMock.Object, _orderRepoMock.Object, _tableServiceMock.Object, _productServiceMock.Object, _invoiceServiceMock.Object, _mapper);
     }
 
     [Fact]

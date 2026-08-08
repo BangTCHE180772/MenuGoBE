@@ -17,5 +17,8 @@ namespace MenuGoBE.Interface.Services
         Task<List<WorkScheduleViewDto>> AssignBulkAsync(WorkScheduleAssignDto dto);
         Task<List<WorkScheduleViewDto>> GetByAccountIdAsync(long accountId);
         Task<List<long>> GetActiveRoleIdsAsync(long accountId);
+
+        Task<bool> RequestLeaveAsync(long accountId, LeaveRequestDto dto);
+        Task<bool> RequestShiftSwapAsync(long accountId, ShiftSwapRequestDto dto);
     }
 }
