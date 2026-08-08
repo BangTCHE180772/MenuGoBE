@@ -23,7 +23,7 @@ public class PreparePaymentAsyncTests : OrderServiceTestBase
     {
         _orderRepoMock.Setup(r => r.GetActiveOrderByIdWithDetailsAsync(999)).ReturnsAsync((Order?)null);
 
-        await Assert.ThrowsAsync<Exception>(() => _service.PreparePaymentAsync(999, null));
+        await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.PreparePaymentAsync(999, null));
     }
 
     [Fact]

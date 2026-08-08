@@ -23,8 +23,9 @@ namespace MenuGoBE.Validator.Branch
                     || x.ToLower() == "createdat"
                     || x.ToLower() == "id"
                     || x.ToLower() == "managerName"
+                    || x.ToLower() == "province"
                     )
-                .WithMessage("SortBy must be Name, CreatedAt, Id or ManagerName.");
+                .WithMessage("SortBy must be Name, CreatedAt, Id, ManagerName or Province.");
 
             RuleFor(x => x.Keyword)
                 .MaximumLength(100);

@@ -220,6 +220,9 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -229,6 +232,10 @@ namespace MenuGoBE.Migrations
 
                     b.Property<DateTime?>("PostingLockDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -275,49 +282,7 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<long>("PostingSequence")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("PostingSequence"));
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(108,12)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.HasIndex("DeletedBy");
-
-                    b.ToTable("CashFlows");
-                });
-
-            modelBuilder.Entity("MenuGoBE.Models.CashFlowDetail", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(108,12)");
-
-                    b.Property<long>("CashFlowId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("DocumentPartnerId")
+                    b.Property<long?>("DocumentId")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsDeleted")
@@ -333,19 +298,37 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long>("PostingSequence")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("PostingSequence"));
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(108,12)");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CashFlowId");
+                    b.HasIndex("BranchId");
 
-                    b.HasIndex("DocumentPartnerId");
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("DeletedBy");
+
+                    b.HasIndex("DocumentId");
 
                     b.HasIndex("PartnerId");
 
-                    b.ToTable("CashFlowDetails");
+                    b.ToTable("CashFlows");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Chain", b =>
@@ -528,11 +511,14 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<decimal?>("AmountDue")
+                        .HasColumnType("decimal(108,12)");
+
+                    b.Property<decimal>("AmountPaid")
+                        .HasColumnType("decimal(108,12)");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
-
-                    b.Property<DateTime>("BusinessDate")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Code")
                         .IsRequired()
@@ -545,16 +531,36 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("CreatedBy")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("DeleteNote")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("DeletedBy")
                         .HasColumnType("bigint");
 
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
+                    b.Property<string>("Note")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("OrderId")
+                        .HasColumnType("bigint");
 
                     b.Property<long?>("ParentDocumentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("PartnerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("PostedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("PostedBy")
                         .HasColumnType("bigint");
 
                     b.Property<long>("PostingSequence")
@@ -562,6 +568,60 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("PostingSequence"));
+
+                    b.Property<long?>("ReceiverAccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ResponseDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SnapshotBranchName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotCreatedByName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotCreatedByUsername")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SnapshotDeletedByName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotPartnerName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotPostedByName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotPostedByUsername")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SnapshotReceiverName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotReceiverUsername")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SnapshotToBranchName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("ToBranchId")
+                        .HasColumnType("bigint");
 
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("decimal(108,12)");
@@ -587,6 +647,14 @@ namespace MenuGoBE.Migrations
 
                     b.HasIndex("ParentDocumentId");
 
+                    b.HasIndex("PartnerId");
+
+                    b.HasIndex("PostedBy");
+
+                    b.HasIndex("ReceiverAccountId");
+
+                    b.HasIndex("ToBranchId");
+
                     b.ToTable("Documents");
                 });
 
@@ -598,8 +666,20 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<decimal?>("ActualQuantity")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal?>("AdjustedCostDelta")
+                        .HasColumnType("decimal(108,12)");
+
                     b.Property<long>("BInventoryId")
                         .HasColumnType("bigint");
+
+                    b.Property<decimal>("BaseQuantity")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal>("ConversionRate")
+                        .HasColumnType("decimal(18,6)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -613,11 +693,40 @@ namespace MenuGoBE.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<decimal?>("NewAvgCost")
+                        .HasColumnType("decimal(108,12)");
+
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal?>("ReceivedQuantity")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal>("SnapshotAvgCost")
+                        .HasColumnType("decimal(108,12)");
+
+                    b.Property<string>("SnapshotBaseUnitName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SnapshotProductCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("SnapshotProductName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotUnitName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<decimal?>("SystemQuantity")
                         .HasColumnType("decimal(51,3)");
@@ -639,38 +748,6 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("UnitConversionId");
 
                     b.ToTable("DocumentDetails");
-                });
-
-            modelBuilder.Entity("MenuGoBE.Models.DocumentPartner", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<decimal>("Cost")
-                        .HasColumnType("decimal(108,12)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<long>("DocumentId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Note")
-                        .HasColumnType("text");
-
-                    b.Property<long>("PartnerId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DocumentId");
-
-                    b.HasIndex("PartnerId");
-
-                    b.ToTable("DocumentPartners");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Group", b =>
@@ -724,20 +801,14 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<decimal?>("ActualQuantity")
-                        .HasColumnType("decimal(51,3)");
-
                     b.Property<long>("BInventoryId")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime>("BusinessDate")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<decimal>("ConversionRateSnapshot")
+                        .HasColumnType("decimal(18,6)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<long?>("DocumentDetailId")
-                        .HasColumnType("bigint");
 
                     b.Property<long?>("DocumentId")
                         .HasColumnType("bigint");
@@ -748,6 +819,12 @@ namespace MenuGoBE.Migrations
 
                     b.Property<decimal>("InventoryValueDelta")
                         .HasColumnType("decimal(108,12)");
+
+                    b.Property<DateTime>("PostedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("PostedBy")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("PostingSequence")
                         .ValueGeneratedOnAdd()
@@ -764,23 +841,35 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("RunningInventoryValue")
                         .HasColumnType("decimal(108,12)");
 
-                    b.Property<decimal>("RunningLeftOver")
-                        .HasColumnType("decimal(108,12)");
-
                     b.Property<decimal>("RunningQuantity")
                         .HasColumnType("decimal(51,3)");
+
+                    b.Property<string>("SnapshotBranchName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotPostedByName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotProductName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("SnapshotUnitName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("UnitCost")
                         .HasColumnType("decimal(108,12)");
 
-                    b.Property<decimal?>("VarianceQuantity")
-                        .HasColumnType("decimal(51,3)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("BInventoryId");
-
-                    b.HasIndex("DocumentDetailId");
 
                     b.HasIndex("DocumentId");
 
@@ -1021,6 +1110,22 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("ReturnConfirmedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("ReturnIsIntact")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReturnedQuantity")
                         .HasColumnType("integer");
 
                     b.Property<string>("Status")
@@ -1823,32 +1928,21 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("DeletedBy")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("Branch");
-
-                    b.Navigation("Deleter");
-                });
-
-            modelBuilder.Entity("MenuGoBE.Models.CashFlowDetail", b =>
-                {
-                    b.HasOne("MenuGoBE.Models.CashFlow", "CashFlow")
-                        .WithMany("CashFlowDetails")
-                        .HasForeignKey("CashFlowId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MenuGoBE.Models.DocumentPartner", "DocumentPartner")
-                        .WithMany("CashFlowDetails")
-                        .HasForeignKey("DocumentPartnerId")
+                    b.HasOne("MenuGoBE.Models.Document", "Document")
+                        .WithMany("CashFlows")
+                        .HasForeignKey("DocumentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("MenuGoBE.Models.Partner", "Partner")
-                        .WithMany()
+                        .WithMany("CashFlows")
                         .HasForeignKey("PartnerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("CashFlow");
+                    b.Navigation("Branch");
 
-                    b.Navigation("DocumentPartner");
+                    b.Navigation("Deleter");
+
+                    b.Navigation("Document");
 
                     b.Navigation("Partner");
                 });
@@ -1933,6 +2027,26 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("ParentDocumentId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.Partner", "Partner")
+                        .WithMany("Documents")
+                        .HasForeignKey("PartnerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Account", "Poster")
+                        .WithMany()
+                        .HasForeignKey("PostedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Account", "ReceiverAccount")
+                        .WithMany()
+                        .HasForeignKey("ReceiverAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Branch", "ToBranch")
+                        .WithMany()
+                        .HasForeignKey("ToBranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Branch");
 
                     b.Navigation("Creator");
@@ -1940,6 +2054,14 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Deleter");
 
                     b.Navigation("ParentDocument");
+
+                    b.Navigation("Partner");
+
+                    b.Navigation("Poster");
+
+                    b.Navigation("ReceiverAccount");
+
+                    b.Navigation("ToBranch");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.DocumentDetail", b =>
@@ -1975,25 +2097,6 @@ namespace MenuGoBE.Migrations
                     b.Navigation("UnitConversion");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.DocumentPartner", b =>
-                {
-                    b.HasOne("MenuGoBE.Models.Document", "Document")
-                        .WithMany("DocumentPartners")
-                        .HasForeignKey("DocumentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("MenuGoBE.Models.Partner", "Partner")
-                        .WithMany("DocumentPartners")
-                        .HasForeignKey("PartnerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Document");
-
-                    b.Navigation("Partner");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.InventoryLedger", b =>
                 {
                     b.HasOne("MenuGoBE.Models.BInventory", "BInventory")
@@ -2001,11 +2104,6 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("BInventoryId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("MenuGoBE.Models.DocumentDetail", "DocumentDetail")
-                        .WithMany("InventoryLedgers")
-                        .HasForeignKey("DocumentDetailId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("MenuGoBE.Models.Document", "Document")
                         .WithMany("InventoryLedgers")
@@ -2015,8 +2113,6 @@ namespace MenuGoBE.Migrations
                     b.Navigation("BInventory");
 
                     b.Navigation("Document");
-
-                    b.Navigation("DocumentDetail");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.MenuProduct", b =>
@@ -2432,11 +2528,6 @@ namespace MenuGoBE.Migrations
                     b.Navigation("WorkSchedules");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.CashFlow", b =>
-                {
-                    b.Navigation("CashFlowDetails");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.Chain", b =>
                 {
                     b.Navigation("Branches");
@@ -2451,11 +2542,11 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Document", b =>
                 {
+                    b.Navigation("CashFlows");
+
                     b.Navigation("ChildDocuments");
 
                     b.Navigation("DocumentDetails");
-
-                    b.Navigation("DocumentPartners");
 
                     b.Navigation("InventoryLedgers");
                 });
@@ -2463,13 +2554,6 @@ namespace MenuGoBE.Migrations
             modelBuilder.Entity("MenuGoBE.Models.DocumentDetail", b =>
                 {
                     b.Navigation("Children");
-
-                    b.Navigation("InventoryLedgers");
-                });
-
-            modelBuilder.Entity("MenuGoBE.Models.DocumentPartner", b =>
-                {
-                    b.Navigation("CashFlowDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Group", b =>
@@ -2523,7 +2607,9 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Partner", b =>
                 {
-                    b.Navigation("DocumentPartners");
+                    b.Navigation("CashFlows");
+
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Payroll", b =>

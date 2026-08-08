@@ -15,9 +15,6 @@ namespace MenuGoTest.UnitTests
     {
         private readonly Mock<IOrderDetailRepository> _detailRepoMock;
         private readonly Mock<IOrderRepository> _orderRepoMock;
-        private readonly Mock<MenuGoBE.Interface.Services.ITableService> _tableServiceMock;
-        private readonly Mock<MenuGoBE.Interface.Services.IProductService> _productServiceMock;
-        private readonly Mock<MenuGoBE.Interface.Services.Document.IInvoiceDocumentService> _invoiceServiceMock;
         private readonly Mock<IMapper> _mapperMock;
         private readonly OrderDetailService _service;
 
@@ -25,19 +22,19 @@ namespace MenuGoTest.UnitTests
         {
             _detailRepoMock = new Mock<IOrderDetailRepository>();
             _orderRepoMock = new Mock<IOrderRepository>();
-            _tableServiceMock = new Mock<MenuGoBE.Interface.Services.ITableService>();
-            _productServiceMock = new Mock<MenuGoBE.Interface.Services.IProductService>();
-            _invoiceServiceMock = new Mock<MenuGoBE.Interface.Services.Document.IInvoiceDocumentService>();
             _mapperMock = new Mock<IMapper>();
 
             _service = new OrderDetailService(
                 _detailRepoMock.Object,
                 _orderRepoMock.Object,
-                _tableServiceMock.Object,
-                _productServiceMock.Object,
-                _invoiceServiceMock.Object,
-                _mapperMock.Object
-            );
+                _mapperMock.Object,
+                new Mock<MenuGoBE.Interface.Repository.ITableRepository>().Object,
+                new Mock<MenuGoBE.Interface.Repository.IProductRepository>().Object,
+                new Mock<MenuGoBE.Interface.Repository.IAreaRepository>().Object, 
+                new Mock<MenuGoBE.Interface.Services.IKitchenService>().Object, 
+                new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object,
+                new Mock<MenuGoBE.Interface.Repository.IRecipesDetailedRepository>().Object,
+                new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object);
         }
 
         [Fact]

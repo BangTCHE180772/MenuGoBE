@@ -104,6 +104,8 @@ namespace MenuGoBE.Service
 
             entity.Address.Type = "Chi Nhánh";
             entity.Type = "Main";
+            entity.Status = string.IsNullOrWhiteSpace(dto.Status) ? "Hoạt động" : dto.Status;
+            entity.IsDeleted = false;
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
 
@@ -172,10 +174,14 @@ namespace MenuGoBE.Service
             if (entity == null)
                 return false;
 
+            if (entity.IsDeleted)
+            {
+                throw new MenuGoException(ErrorCodes.BranchAlreadyDeleted);
+            }
+
             _mapper.Map(dto, entity);
 
             entity.Address.Type = "Chi Nhánh";
-
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -190,7 +196,10 @@ namespace MenuGoBE.Service
             if (entity == null)
                 return false;
 
-            await _repo.DeleteAsync(id);
+            entity.IsDeleted = true;
+            entity.Status = "Ngừng kinh doanh";
+
+            await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
 
             return true;

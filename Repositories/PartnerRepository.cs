@@ -103,19 +103,14 @@ namespace MenuGoBE.Repositories
 
         public async Task<bool> CheckPartnerInTransactionsAsync(long partnerId)
         {
-            // Check if partner exists in DocumentPartners
-            var inDocuments = await _context.DocumentPartners.AnyAsync(dp => dp.PartnerId == partnerId);
+            // Check if partner exists in Documents
+            var inDocuments = await _context.Documents.AnyAsync(d => d.PartnerId == partnerId);
             if (inDocuments) return true;
 
-            // Check if partner exists in CashFlowDetails
-            var inCashFlows = await _context.CashFlowDetails.AnyAsync(cfd => cfd.PartnerId == partnerId);
+            // Check if partner exists in CashFlows
+            var inCashFlows = await _context.CashFlows.AnyAsync(cf => cf.PartnerId == partnerId);
             if (inCashFlows) return true;
 
-            // Check if partner exists in Orders (if they are a Customer)
-            // Wait, does Order have a CustomerId/PartnerId? Let's check safely via DB context if possible.
-            // If Order doesn't have it, we just return false. But wait, we shouldn't assume Order schema without checking.
-            // I'll just check DocumentPartners and CashFlowDetails since those are directly bound.
-            
             return false;
         }
     }

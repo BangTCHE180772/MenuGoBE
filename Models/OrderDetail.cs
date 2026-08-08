@@ -32,4 +32,14 @@ public class OrderDetail
 
     [ForeignKey("ProductId")]
     public Product Product { get; set; } = null!;
+
+    public int ReturnedQuantity { get; set; } = 0;
+
+    [MaxLength(255)]
+    public string? ReturnReason { get; set; }
+
+    public bool ReturnIsIntact { get; set; } = false;
+
+    public DateTime? ReturnedAt { get; set; }
+    public long? ReturnConfirmedBy { get; set; }
 }

@@ -1,16 +1,22 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Models.Enums;
 
 namespace MenuGoBE.Models;
 
 [Table("CashFlows")]
+[Index(nameof(Code), IsUnique = true)]
 public class CashFlow
 {
     [Key]
     public long Id { get; set; }
 
     public long BranchId { get; set; }
+
+    public long? DocumentId { get; set; }
+
+    public long? PartnerId { get; set; }
 
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public long PostingSequence { get; set; }
@@ -23,10 +29,16 @@ public class CashFlow
 
     public CashFlowDirection Direction { get; set; }
 
+    public CashFlowDetailType Type { get; set; } = CashFlowDetailType.Payment;
+
+    public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
+
     public CashFlowStatus Status { get; set; }
 
     [Column(TypeName = "decimal(108,12)")]
     public decimal TotalAmount { get; set; }
+
+    public string? Note { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -40,8 +52,12 @@ public class CashFlow
     [ForeignKey("BranchId")]
     public Branch Branch { get; set; } = null!;
 
+    [ForeignKey("DocumentId")]
+    public Document? Document { get; set; }
+
+    [ForeignKey("PartnerId")]
+    public Partner? Partner { get; set; }
+
     [ForeignKey("DeletedBy")]
     public Account? Deleter { get; set; }
-
-    public ICollection<CashFlowDetail> CashFlowDetails { get; set; } = new List<CashFlowDetail>();
 }

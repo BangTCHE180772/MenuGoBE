@@ -23,7 +23,7 @@ public class GetAllAsyncTests
             cfg.AddProfile<AutoMapperProfiles>(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         _mapper = config.CreateMapper();
-        _service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper);
+        _service = new AreaService(_repoMock.Object, _tableRepoMock.Object, _mapper, new Mock<MenuGoBE.Interface.Repository.IOrderRepository>().Object, new Mock<MenuGoBE.Interface.Repository.IReservationRepository>().Object);
     }
 
     [Fact]

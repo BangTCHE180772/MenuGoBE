@@ -18,10 +18,14 @@ namespace MenuGoBE.Repositories
         public async Task<Product?> GetByIdAsync(long id)
         {
             return await _context.Products
+                .Include(p => p.Group)
                 .Include(p => p.Image)
                 .Include(p => p.UnitConversions)
+                    .ThenInclude(uc => uc.Unit)
                 .Include(p => p.RecipeItems)
                     .ThenInclude(ri => ri.IngredientProduct)
+                .Include(p => p.MenuProducts)
+                    .ThenInclude(mp => mp.Menu)
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
 
@@ -29,10 +33,14 @@ namespace MenuGoBE.Repositories
         {
             var query = _context.Products
                 .AsNoTracking()
+                .Include(p => p.Group)
                 .Include(p => p.Image)
                 .Include(p => p.UnitConversions)
+                    .ThenInclude(uc => uc.Unit)
                 .Include(p => p.RecipeItems)
                     .ThenInclude(ri => ri.IngredientProduct)
+                .Include(p => p.MenuProducts)
+                    .ThenInclude(mp => mp.Menu)
                 .AsQueryable();
 
             if (type.HasValue)
@@ -51,9 +59,15 @@ namespace MenuGoBE.Repositories
             }
 
             return await _context.Products
+                .AsNoTracking()
+                .Include(p => p.Group)
+                .Include(p => p.Image)
                 .Include(p => p.UnitConversions)
+                    .ThenInclude(uc => uc.Unit)
                 .Include(p => p.RecipeItems)
                     .ThenInclude(ri => ri.IngredientProduct)
+                .Include(p => p.MenuProducts)
+                    .ThenInclude(mp => mp.Menu)
                 .ToListAsync();
         }
 
@@ -70,9 +84,14 @@ namespace MenuGoBE.Repositories
         public async Task<Product?> GetByIdAndTypeAsync(long id, ProductType type)
         {
             return await _context.Products
+                .Include(p => p.Group)
+                .Include(p => p.Image)
                 .Include(p => p.UnitConversions)
+                    .ThenInclude(uc => uc.Unit)
                 .Include(p => p.RecipeItems)
                     .ThenInclude(ri => ri.IngredientProduct)
+                .Include(p => p.MenuProducts)
+                    .ThenInclude(mp => mp.Menu)
                 .FirstOrDefaultAsync(p => p.Id == id && p.Type == type);
         }
 
