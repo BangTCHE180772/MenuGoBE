@@ -194,7 +194,8 @@ namespace MenuGoBE.Mapper
             CreateMap<PayrollUpdateDto, Payroll>();
 
             CreateMap<SalaryDetail, SalaryDetailViewDto>()
-                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty));
+                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty))
+                .ForMember(dest => dest.CreatedByName, opt => opt.MapFrom(src => src.Creator != null ? src.Creator.Name : string.Empty));
             CreateMap<SalaryDetailCreateDto, SalaryDetail>();
             CreateMap<SalaryDetailUpdateDto, SalaryDetail>();
 

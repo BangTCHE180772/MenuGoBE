@@ -14,5 +14,6 @@ public class SalaryDetailViewDto
     public decimal Amount { get; set; }
     public string Note { get; set; } = string.Empty;
     public long CreatedBy { get; set; }
+    public string CreatedByName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 }
