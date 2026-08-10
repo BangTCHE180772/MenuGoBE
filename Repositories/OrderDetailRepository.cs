@@ -68,6 +68,18 @@ namespace MenuGoBE.Repositories
             return true;
         }
 
+        public async Task<int> GetPendingQuantityAsync(long productId, long branchId)
+        {
+            return await _context.OrderDetails
+                .Include(od => od.Order)
+                .ThenInclude(o => o.Table)
+                .ThenInclude(t => t.Area)
+                .Where(od => od.ProductId == productId 
+                             && od.Order.Table.Area.BranchId == branchId
+                             && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
+                .SumAsync(od => od.Quantity);
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

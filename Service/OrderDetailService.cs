@@ -65,6 +65,50 @@ namespace MenuGoBE.Service
             return _mapper.Map<OrderDetailViewDto>(data);
         }
 
+        public async Task<int> GetAvailableQuantityAsync(long productId, long branchId)
+        {
+            var productType = await _productRepo.GetProductTypeAsync(productId);
+            if (productType == "Processed")
+            {
+                var recipes = await _recipesRepo.GetRecipesByProductIdAsync(productId);
+                if (recipes == null || !recipes.Any())
+                {
+                    var fallbackBinv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
+                    if (fallbackBinv != null && !fallbackBinv.IsManageQuantity) return 999999;
+                    return 0;
+                }
+
+                int maxProcessable = 999999;
+                foreach (var recipe in recipes)
+                {
+                    if (recipe.Quantity > 0)
+                    {
+                        int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId);
+                        int possibleQty = (int)(ingredientQty / recipe.Quantity);
+                        if (possibleQty < maxProcessable)
+                        {
+                            maxProcessable = possibleQty;
+                        }
+                    }
+                }
+                return maxProcessable == 999999 ? 0 : maxProcessable;
+            }
+
+            var binv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
+            if (binv == null)
+            {
+                return 0; // Chưa có thông tin kho, coi như hết hàng
+            }
+
+            if (!binv.IsManageQuantity)
+            {
+                return 999999; // Món không quản lý số lượng (Unlimited)
+            }
+
+            var pendingQty = await _detailRepo.GetPendingQuantityAsync(productId, branchId);
+            return (int)binv.Quantity - pendingQty;
+        }
+
         public async Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto)
         {
             var order = await _orderRepo.GetByIdAsync(dto.OrderId);
