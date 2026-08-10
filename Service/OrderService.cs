@@ -356,7 +356,7 @@ namespace MenuGoBE.Service
             return summary;
         }
 
-        public async Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto)
+        public async Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto, string paymentMethod = "Cash")
         {
             var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
             if (orderWithDetails == null) throw new MenuGoException(new ErrorResult(404, "Không tìm thấy đơn hàng hoặc đơn hàng đã thanh toán", 404));
@@ -431,9 +431,19 @@ namespace MenuGoBE.Service
                 }
             }
 
-            order.DiscountAmount = discountAmount;
+            decimal amountBeforeRounding = grandTotal - discountAmount - pointsUsed;
+            decimal roundedTotal = amountBeforeRounding;
+            decimal roundingDiscount = 0;
+
+            if (paymentMethod == "Cash")
+            {
+                roundedTotal = Math.Round(amountBeforeRounding / 1000m, MidpointRounding.AwayFromZero) * 1000m;
+                roundingDiscount = amountBeforeRounding - roundedTotal;
+            }
+
+            order.DiscountAmount = discountAmount + roundingDiscount;
             order.PointsUsed = pointsUsed;
-            order.TotalAmount = grandTotal - discountAmount - pointsUsed;
+            order.TotalAmount = roundedTotal;
 
             await _repo.UpdateAsync(order);
             await _repo.SaveChangesAsync();
@@ -454,7 +464,7 @@ namespace MenuGoBE.Service
 
                 if (paymentMethod == "Cash" || dto != null)
                 {
-                    await PreparePaymentAsync(orderId, dto);
+                    await PreparePaymentAsync(orderId, dto, paymentMethod);
                     order = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
                     if (order == null) return paidTableIds;
                 }
