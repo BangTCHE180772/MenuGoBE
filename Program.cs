@@ -104,6 +104,7 @@ builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 // Service
 
@@ -150,6 +151,7 @@ builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection(
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // SignalR
 builder.Services.AddSignalR();
