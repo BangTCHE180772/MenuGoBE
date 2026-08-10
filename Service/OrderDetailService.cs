@@ -113,7 +113,26 @@ namespace MenuGoBE.Service
         {
             var order = await _orderRepo.GetByIdAsync(dto.OrderId);
             if (order == null)
-                throw new KeyNotFoundException($"Không tìm thấy Order với Id = {dto.OrderId}");
+            {
+                throw new KeyNotFoundException("Không tìm thấy Order.");
+            }
+
+            var table = await _tableRepo.GetByIdAsync(order.TableId);
+            long branchId = 0;
+            if (table != null)
+            {
+                var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                if (area != null) branchId = area.BranchId;
+            }
+
+            if (branchId > 0)
+            {
+                int availableQty = await GetAvailableQuantityAsync(dto.ProductId, branchId);
+                if (dto.Quantity > availableQty)
+                {
+                    throw new InvalidOperationException($"Số lượng món không đủ. Chỉ còn {availableQty} phần.");
+                }
+            }
 
             var entity = _mapper.Map<OrderDetail>(dto);
             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
@@ -134,13 +153,11 @@ namespace MenuGoBE.Service
             {
                 if (productType == "Regular" || productType == "Manufactured")
                 {
-                    var table = await _tableRepo.GetByIdAsync(order.TableId);
                     if (table != null)
                     {
                         var area = await _areaRepo.GetByIdAsync(table.AreaId);
                         if (area != null)
                         {
-                            long branchId = area.BranchId;
                             var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
                             if (binv != null && binv.IsManageQuantity)
                             {
@@ -180,27 +197,28 @@ namespace MenuGoBE.Service
             if (oldStatus == "Confirmed" && entity.Status == "Confirmed" && oldQuantity < entity.Quantity)
             {
                 int quantityDiff = entity.Quantity - oldQuantity;
-                var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-                if (productType == "Regular" || productType == "Manufactured")
+                var order_check = await _orderRepo.GetByIdAsync(entity.OrderId);
+                if (order_check != null)
                 {
-                    var order_check = await _orderRepo.GetByIdAsync(entity.OrderId);
-                    if (order_check != null)
+                    var table = await _tableRepo.GetByIdAsync(order_check.TableId);
+                    if (table != null)
                     {
-                        var table = await _tableRepo.GetByIdAsync(order_check.TableId);
-                        if (table != null)
+                        var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                        if (area != null)
                         {
-                            var area = await _areaRepo.GetByIdAsync(table.AreaId);
-                            if (area != null)
+                            long branchId = area.BranchId;
+                            int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId);
+                            if (quantityDiff > availableQty)
                             {
-                                long branchId = area.BranchId;
+                                throw new InvalidOperationException($"Số lượng khả dụng không đủ. Chỉ còn {availableQty} phần.");
+                            }
+                            
+                            var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+                            if (productType == "Regular" || productType == "Manufactured" && oldStatus == "Confirmed")
+                            {
                                 var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
                                 if (binv != null && binv.IsManageQuantity)
                                 {
-                                    if (binv.Quantity < quantityDiff)
-                                    {
-                                        await SendStockAlertAsync(branchId, entity.ProductId, "Sản phẩm đã hết hàng trong kho.");
-                                        throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
-                                    }
                                     binv.Quantity -= quantityDiff;
                                     await _bInventoryRepo.UpdateAsync(binv);
                                     await _bInventoryRepo.SaveChangesAsync();
