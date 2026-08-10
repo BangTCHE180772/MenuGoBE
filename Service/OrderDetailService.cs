@@ -309,6 +309,34 @@ namespace MenuGoBE.Service
                     await _orderRepo.UpdateAsync(order);
                 }
                 await _detailRepo.SaveChangesAsync();
+
+        public async Task<bool> RejectAsync(long orderDetailId, string reason)
+        {
+            var detail = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (detail == null) return false;
+
+            if (detail.Status != "CustomerPending")
+            {
+                throw new InvalidOperationException("Chỉ có thể từ chối món đang chờ xác nhận (CustomerPending).");
+            }
+
+            if (!string.IsNullOrEmpty(reason))
+            {
+                detail.ReturnReason = reason;
+                detail.Note = (string.IsNullOrEmpty(detail.Note) ? "" : detail.Note + " - ") + $"Từ chối: {reason}";
+            }
+
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
+            if (result)
+            {
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.SaveChangesAsync();
+                
+                var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+                if (order != null)
+                {
+                    await RecalculateTotalAmountAsync(order);
+                }
             }
             return result;
         }
