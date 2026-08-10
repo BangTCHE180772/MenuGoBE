@@ -1136,7 +1136,8 @@ namespace MenuGoBE.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductId", "Status", "CookingStatus")
+                        .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
 
                     b.ToTable("OrderDetails");
                 });
