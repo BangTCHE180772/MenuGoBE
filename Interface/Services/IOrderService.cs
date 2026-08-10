@@ -19,7 +19,7 @@ namespace MenuGoBE.Interface.Services
 
         Task<TableOrderSummaryDto> GetTableOrderSummaryAsync(long tableId);
         Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long userId = 1);
-        Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto);
+        Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto, string paymentMethod = "Cash");
         Task<bool> CancelOrderAsync(long orderId);
     }
 }
