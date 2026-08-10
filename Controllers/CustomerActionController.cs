@@ -3,6 +3,7 @@ using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MenuGoBE.Controllers
 {
@@ -20,6 +21,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost("{tableId}/call-staff")]
+        [EnableRateLimiting("CustomerActionPolicy")]
         public async Task<IActionResult> CallStaff(long tableId)
         {
             var table = await _tableService.GetByIdAsync(tableId);
@@ -39,6 +41,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost("{tableId}/request-bill")]
+        [EnableRateLimiting("CustomerActionPolicy")]
         public async Task<IActionResult> RequestBill(long tableId)
         {
             var table = await _tableService.GetByIdAsync(tableId);

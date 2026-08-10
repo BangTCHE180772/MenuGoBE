@@ -3,6 +3,7 @@ using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MenuGoBE.Controllers
 {
@@ -44,6 +45,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost]
+        [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
             var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
@@ -182,6 +184,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost("{orderId}/details")]
+        [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> CreateDetail(long orderId, [FromBody] OrderDetailCreateDto dto)
         {
             dto.OrderId = orderId;
@@ -225,6 +228,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPut("{orderId}/details/{id}")]
+        [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> UpdateDetail(long orderId, long id, [FromBody] OrderDetailUpdateDto dto)
         {
             dto.Id = id;
