@@ -134,6 +134,11 @@ public class AppDbContext : DbContext
             .HasForeignKey(rd => rd.IngredientProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Optimize Virtual Stock calculation
+        modelBuilder.Entity<OrderDetail>()
+            .HasIndex(od => new { od.ProductId, od.Status, od.CookingStatus })
+            .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
+
         // ── 9. Inventory Module ─────────────────────────────────────────────
 
         // Document: unique index on Code

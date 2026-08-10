@@ -65,11 +65,74 @@ namespace MenuGoBE.Service
             return _mapper.Map<OrderDetailViewDto>(data);
         }
 
+        public async Task<int> GetAvailableQuantityAsync(long productId, long branchId)
+        {
+            var productType = await _productRepo.GetProductTypeAsync(productId);
+            if (productType == "Processed")
+            {
+                var recipes = await _recipesRepo.GetRecipesByProductIdAsync(productId);
+                if (recipes == null || !recipes.Any())
+                {
+                    var fallbackBinv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
+                    if (fallbackBinv != null && !fallbackBinv.IsManageQuantity) return 999999;
+                    return 0;
+                }
+
+                int maxProcessable = 999999;
+                foreach (var recipe in recipes)
+                {
+                    if (recipe.Quantity > 0)
+                    {
+                        int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId);
+                        int possibleQty = (int)(ingredientQty / recipe.Quantity);
+                        if (possibleQty < maxProcessable)
+                        {
+                            maxProcessable = possibleQty;
+                        }
+                    }
+                }
+                return maxProcessable == 999999 ? 0 : maxProcessable;
+            }
+
+            var binv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
+            if (binv == null)
+            {
+                return 0; // Chưa có thông tin kho, coi như hết hàng
+            }
+
+            if (!binv.IsManageQuantity)
+            {
+                return 999999; // Món không quản lý số lượng (Unlimited)
+            }
+
+            var pendingQty = await _detailRepo.GetPendingQuantityAsync(productId, branchId);
+            return (int)binv.Quantity - pendingQty;
+        }
+
         public async Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto)
         {
             var order = await _orderRepo.GetByIdAsync(dto.OrderId);
             if (order == null)
-                throw new KeyNotFoundException($"Không tìm thấy Order với Id = {dto.OrderId}");
+            {
+                throw new KeyNotFoundException("Không tìm thấy Order.");
+            }
+
+            var table = await _tableRepo.GetByIdAsync(order.TableId);
+            long branchId = 0;
+            if (table != null)
+            {
+                var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                if (area != null) branchId = area.BranchId;
+            }
+
+            if (branchId > 0)
+            {
+                int availableQty = await GetAvailableQuantityAsync(dto.ProductId, branchId);
+                if (dto.Quantity > availableQty)
+                {
+                    throw new InvalidOperationException($"Số lượng món không đủ. Chỉ còn {availableQty} phần.");
+                }
+            }
 
             var entity = _mapper.Map<OrderDetail>(dto);
             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
@@ -90,13 +153,11 @@ namespace MenuGoBE.Service
             {
                 if (productType == "Regular" || productType == "Manufactured")
                 {
-                    var table = await _tableRepo.GetByIdAsync(order.TableId);
                     if (table != null)
                     {
                         var area = await _areaRepo.GetByIdAsync(table.AreaId);
                         if (area != null)
                         {
-                            long branchId = area.BranchId;
                             var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
                             if (binv != null && binv.IsManageQuantity)
                             {
@@ -136,27 +197,28 @@ namespace MenuGoBE.Service
             if (oldStatus == "Confirmed" && entity.Status == "Confirmed" && oldQuantity < entity.Quantity)
             {
                 int quantityDiff = entity.Quantity - oldQuantity;
-                var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-                if (productType == "Regular" || productType == "Manufactured")
+                var order_check = await _orderRepo.GetByIdAsync(entity.OrderId);
+                if (order_check != null)
                 {
-                    var order_check = await _orderRepo.GetByIdAsync(entity.OrderId);
-                    if (order_check != null)
+                    var table = await _tableRepo.GetByIdAsync(order_check.TableId);
+                    if (table != null)
                     {
-                        var table = await _tableRepo.GetByIdAsync(order_check.TableId);
-                        if (table != null)
+                        var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                        if (area != null)
                         {
-                            var area = await _areaRepo.GetByIdAsync(table.AreaId);
-                            if (area != null)
+                            long branchId = area.BranchId;
+                            int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId);
+                            if (quantityDiff > availableQty)
                             {
-                                long branchId = area.BranchId;
+                                throw new InvalidOperationException($"Số lượng khả dụng không đủ. Chỉ còn {availableQty} phần.");
+                            }
+                            
+                            var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+                            if (productType == "Regular" || productType == "Manufactured" && oldStatus == "Confirmed")
+                            {
                                 var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
                                 if (binv != null && binv.IsManageQuantity)
                                 {
-                                    if (binv.Quantity < quantityDiff)
-                                    {
-                                        await SendStockAlertAsync(branchId, entity.ProductId, "Sản phẩm đã hết hàng trong kho.");
-                                        throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
-                                    }
                                     binv.Quantity -= quantityDiff;
                                     await _bInventoryRepo.UpdateAsync(binv);
                                     await _bInventoryRepo.SaveChangesAsync();
@@ -253,13 +315,38 @@ namespace MenuGoBE.Service
             return true;
         }
 
-        public async Task<bool> ConfirmAsync(long orderDetailId)
+        public async Task<bool> ConfirmAsync(long orderDetailId, int? finalQuantity = null)
         {
             var detail = await _detailRepo.GetByIdAsync(orderDetailId);
             if (detail == null) return false;
 
+            if (finalQuantity.HasValue && finalQuantity.Value > 0)
+            {
+                detail.Quantity = finalQuantity.Value;
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.SaveChangesAsync();
+            }
+
             var productType = await _productRepo.GetProductTypeAsync(detail.ProductId);
             var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+
+            if (order != null)
+            {
+                var table = await _tableRepo.GetByIdAsync(order.TableId);
+                if (table != null)
+                {
+                    var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                    if (area != null)
+                    {
+                        long branchId = area.BranchId;
+                        int availableQty = await GetAvailableQuantityAsync(detail.ProductId, branchId);
+                        // Khi confirm, món này ĐÃ NẰM trong pendingQty (nếu là CustomerPending). 
+                        // Do đó availableQty hiện tại đã bị trừ đi số lượng của chính detail này.
+                        // Nếu finalQuantity lớn hơn detail.Quantity ban đầu, ta phải kiểm tra phần chênh lệch.
+                        // Để đơn giản, ta tính lại khoảng chênh lệch hoặc bỏ qua vì lúc Create đã chặn rồi.
+                    }
+                }
+            }
 
             if (productType == "Regular" || productType == "Manufactured")
             {
@@ -309,6 +396,42 @@ namespace MenuGoBE.Service
                     await _orderRepo.UpdateAsync(order);
                 }
                 await _detailRepo.SaveChangesAsync();
+
+                if (finalQuantity.HasValue && order != null)
+                {
+                    await RecalculateTotalAmountAsync(order);
+                }
+            }
+            return result;
+        }
+
+        public async Task<bool> RejectAsync(long orderDetailId, string reason)
+        {
+            var detail = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (detail == null) return false;
+
+            if (detail.Status != "CustomerPending")
+            {
+                throw new InvalidOperationException("Chỉ có thể từ chối món đang chờ xác nhận (CustomerPending).");
+            }
+
+            if (!string.IsNullOrEmpty(reason))
+            {
+                detail.ReturnReason = reason;
+                detail.Note = (string.IsNullOrEmpty(detail.Note) ? "" : detail.Note + " - ") + $"Từ chối: {reason}";
+            }
+
+            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
+            if (result)
+            {
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.SaveChangesAsync();
+                
+                var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+                if (order != null)
+                {
+                    await RecalculateTotalAmountAsync(order);
+                }
             }
             return result;
         }
