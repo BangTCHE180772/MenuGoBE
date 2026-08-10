@@ -12,6 +12,8 @@ namespace MenuGoBE.Interface.Services
         Task<bool> DeleteAsync(long id);
 
         Task<bool> ConfirmAsync(long orderDetailId);
+        Task<bool> ConfirmAsync(long orderDetailId, int? finalQuantity = null);
+        Task<bool> RejectAsync(long orderDetailId, string reason);
         Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus);
         Task<bool> CancelOrderDetailAsync(long orderDetailId);
         Task<List<KitchenItemDto>> GetKitchenItemsAsync();

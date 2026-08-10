@@ -256,9 +256,10 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPut("details/{id}/confirm")]
-        public async Task<IActionResult> ConfirmOrderDetail(long id)
+        public async Task<IActionResult> ConfirmOrderDetail(long id, [FromBody] ConfirmRequestDto? dto = null)
         {
-            var result = await _detailService.ConfirmAsync(id);
+            var quantity = dto?.Quantity;
+            var result = await _detailService.ConfirmAsync(id, quantity);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
             
