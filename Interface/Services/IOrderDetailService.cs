@@ -6,12 +6,13 @@ namespace MenuGoBE.Interface.Services
     {
         Task<List<OrderDetailViewDto>> GetByOrderIdAsync(long orderId);
         Task<OrderDetailViewDto?> GetByIdAsync(long id);
-
+        Task<int> GetAvailableQuantityAsync(long productId, long branchId);
         Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto);
         Task<bool> UpdateAsync(OrderDetailUpdateDto dto);
         Task<bool> DeleteAsync(long id);
 
-        Task<bool> ConfirmAsync(long orderDetailId);
+        Task<bool> ConfirmAsync(long orderDetailId, int? finalQuantity = null);
+        Task<bool> RejectAsync(long orderDetailId, string reason);
         Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus);
         Task<bool> CancelOrderDetailAsync(long orderDetailId);
         Task<List<KitchenItemDto>> GetKitchenItemsAsync();
