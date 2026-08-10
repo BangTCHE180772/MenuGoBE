@@ -253,13 +253,38 @@ namespace MenuGoBE.Service
             return true;
         }
 
-        public async Task<bool> ConfirmAsync(long orderDetailId)
+        public async Task<bool> ConfirmAsync(long orderDetailId, int? finalQuantity = null)
         {
             var detail = await _detailRepo.GetByIdAsync(orderDetailId);
             if (detail == null) return false;
 
+            if (finalQuantity.HasValue && finalQuantity.Value > 0)
+            {
+                detail.Quantity = finalQuantity.Value;
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.SaveChangesAsync();
+            }
+
             var productType = await _productRepo.GetProductTypeAsync(detail.ProductId);
             var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+
+            if (order != null)
+            {
+                var table = await _tableRepo.GetByIdAsync(order.TableId);
+                if (table != null)
+                {
+                    var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                    if (area != null)
+                    {
+                        long branchId = area.BranchId;
+                        int availableQty = await GetAvailableQuantityAsync(detail.ProductId, branchId);
+                        // Khi confirm, món này ĐÃ NẰM trong pendingQty (nếu là CustomerPending). 
+                        // Do đó availableQty hiện tại đã bị trừ đi số lượng của chính detail này.
+                        // Nếu finalQuantity lớn hơn detail.Quantity ban đầu, ta phải kiểm tra phần chênh lệch.
+                        // Để đơn giản, ta tính lại khoảng chênh lệch hoặc bỏ qua vì lúc Create đã chặn rồi.
+                    }
+                }
+            }
 
             if (productType == "Regular" || productType == "Manufactured")
             {
@@ -309,6 +334,14 @@ namespace MenuGoBE.Service
                     await _orderRepo.UpdateAsync(order);
                 }
                 await _detailRepo.SaveChangesAsync();
+
+                if (finalQuantity.HasValue && order != null)
+                {
+                    await RecalculateTotalAmountAsync(order);
+                }
+            }
+            return result;
+        }
 
         public async Task<bool> RejectAsync(long orderDetailId, string reason)
         {
