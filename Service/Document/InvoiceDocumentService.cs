@@ -10,7 +10,7 @@ using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 
 using DocumentEntity = MenuGoBE.Models.Document;
-
+/*
 namespace MenuGoBE.Service.Document
 {
     public class InvoiceDocumentService : DocumentServiceBase, IInvoiceDocumentService
@@ -168,3 +168,4 @@ namespace MenuGoBE.Service.Document
         }
     }
 }
+*/
