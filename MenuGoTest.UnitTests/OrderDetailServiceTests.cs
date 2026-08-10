@@ -34,7 +34,8 @@ namespace MenuGoTest.UnitTests
                 new Mock<MenuGoBE.Interface.Services.IKitchenService>().Object, 
                 new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IRecipesDetailedRepository>().Object,
-                new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object);
+                new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object,
+                new Mock<MenuGoBE.Interface.Services.Document.IDocumentService>().Object);
         }
 
         [Fact]
@@ -52,7 +53,8 @@ namespace MenuGoTest.UnitTests
                 Id = 10,
                 Name = "Phở bò",
                 ImageId = 1,
-                Image = image
+                Image = image,
+                Type = MenuGoBE.Models.Enums.ProductType.Processed
             };
 
             var order = new Order
