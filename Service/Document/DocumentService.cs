@@ -1837,16 +1837,21 @@ namespace MenuGoBE.Service.Document
             var document = await _repo.GetByIdAsync(documentId);
             if (document == null) throw new Exception("Không tìm thấy Return Document.");
 
-            if (product.Type == ProductType.Regular && isIntact)
+            var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, product.Id);
+            if (binventory != null)
             {
-                var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, product.Id);
-                if (binventory != null)
+                string note = "";
+                
+                // Logic kiểm tra Regular và IsIntact nằm ở đây
+                if (product.Type == ProductType.Regular && isIntact)
                 {
+                    // Cộng lại tồn kho
                     binventory.Quantity += baseQuantity;
                     
                     var account = await _repo.GetAccountByIdAsync(userId);
                     string snapshotPostedByName = account != null ? account.Name : "System";
 
+                    // Ghi thẻ kho (Inventory Ledger)
                     var ledger = new InventoryLedger
                     {
                         BInventoryId = binventory.Id,
@@ -1868,21 +1873,31 @@ namespace MenuGoBE.Service.Document
                         CreatedAt = DateTime.UtcNow
                     };
                     await _repo.AddInventoryLedgerAsync(ledger);
-
-                    var childDetail = new DocumentDetail
-                    {
-                        DocumentId = document.Id,
-                        BInventoryId = binventory.Id,
-                        Quantity = baseQuantity,
-                        ConversionRate = 1,
-                        BaseQuantity = baseQuantity,
-                        UnitPrice = binventory.Avg,
-                        SnapshotProductName = product.Name,
-                        SnapshotAvgCost = binventory.Avg
-                    };
-                    document.DocumentDetails.Add(childDetail);
+                    
+                    note = "Trả lại nguyên vẹn - Đã cộng tồn kho";
                 }
+                else
+                {
+                    // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho
+                    note = "Hàng lỗi/Đã chế biến - Không cộng tồn kho";
+                }
+
+                // LUÔN LUÔN ghi nhận vào chi tiết phiếu trả (DocumentDetail)
+                var childDetail = new DocumentDetail
+                {
+                    DocumentId = document.Id,
+                    BInventoryId = binventory.Id,
+                    Quantity = baseQuantity,
+                    ConversionRate = 1,
+                    BaseQuantity = baseQuantity,
+                    UnitPrice = binventory.Avg,
+                    SnapshotProductName = product.Name,
+                    SnapshotAvgCost = binventory.Avg,
+                    Note = note
+                };
+                document.DocumentDetails.Add(childDetail);
             }
+            
             _repo.Update(document);
             await _repo.SaveChangesAsync();
         }
