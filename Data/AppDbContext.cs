@@ -61,6 +61,7 @@ public class AppDbContext : DbContext
     public DbSet<Device> Devices { get; set; } = null!;
 
     // 9. Inventory Module
+    public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<BInventory> BInventories { get; set; } = null!;
     public DbSet<InventoryLedger> InventoryLedgers { get; set; } = null!;
     public DbSet<Document> Documents { get; set; } = null!;
