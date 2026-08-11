@@ -578,9 +578,12 @@ namespace MenuGoBE.Service.Document
         {
             var (roundedTotal, roundingValue) = CalculateDocumentRounding(document.TotalAmount);
 
+            Console.WriteLine($"[DEBUG CashFlow] DocumentId={document.Id}, Code={document.Code}, AmountPaid={document.AmountPaid}, TotalAmount={document.TotalAmount}");
+
             #region Quy tắc a7: Nếu AmountPaid > 0 khi chốt phiếu -> Tạo CashFlow Thanh Toán
             if (document.AmountPaid > 0)
             {
+                Console.WriteLine($"[DEBUG CashFlow] Creating Outflow for document {document.Code}, amount={document.AmountPaid}");
                 var cashFlow = new CashFlow
                 {
                     BranchId = document.BranchId,
@@ -588,7 +591,7 @@ namespace MenuGoBE.Service.Document
                     PartnerId = document.PartnerId,
                     Code = $"CF_{document.Code}",
                     BusinessDate = DateTime.UtcNow,
-                    Direction = CashFlowDirection.Outflow, // Phiếu chi tiền trả NCC
+                    Direction = CashFlowDirection.Outflow,
                     Type = CashFlowDetailType.Payment,
                     PaymentMethod = PaymentMethod.Cash,
                     Status = CashFlowStatus.Completed,
@@ -596,8 +599,12 @@ namespace MenuGoBE.Service.Document
                     Note = $"Thanh toán cho nhà cung cấp phiếu nhập kho {document.Code}",
                     CreatedAt = DateTime.UtcNow
                 };
-
                 await _repo.AddCashFlowAsync(cashFlow);
+                Console.WriteLine($"[DEBUG CashFlow] Outflow added.");
+            }
+            else
+            {
+                Console.WriteLine($"[DEBUG CashFlow] AmountPaid={document.AmountPaid} <= 0, no CashFlow created.");
             }
             #endregion
 
