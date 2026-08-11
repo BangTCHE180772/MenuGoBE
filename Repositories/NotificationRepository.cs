@@ -19,13 +19,14 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<Notification>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query)
+        public async Task<List<Notification>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null)
         {
             var dbQuery = _context.Notifications
                 .Include(n => n.Branch)
                 .Where(n => branchIds.Contains(n.BranchId));
 
             dbQuery = ApplyFilters(dbQuery, query);
+            dbQuery = ApplyRoleFilter(dbQuery, userRole);
 
             return await dbQuery
                 .OrderByDescending(n => n.IsImportant)
@@ -35,18 +36,21 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<int> GetTotalCountAsync(long[] branchIds, NotificationQueryDto query)
+        public async Task<int> GetTotalCountAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null)
         {
             var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId));
             dbQuery = ApplyFilters(dbQuery, query);
+            dbQuery = ApplyRoleFilter(dbQuery, userRole);
             return await dbQuery.CountAsync();
         }
 
-        public async Task<List<Notification>> GetRecentNotificationsAsync(long[] branchIds, int limit)
+        public async Task<List<Notification>> GetRecentNotificationsAsync(long[] branchIds, int limit, string? userRole = null)
         {
             var dbQuery = _context.Notifications
                 .Include(n => n.Branch)
                 .Where(n => branchIds.Contains(n.BranchId));
+
+            dbQuery = ApplyRoleFilter(dbQuery, userRole);
 
             var list = await dbQuery.ToListAsync();
 
@@ -58,10 +62,14 @@ namespace MenuGoBE.Repositories
                 .ToList();
         }
 
-        public async Task<int> GetUnreadCountAsync(long[] branchIds)
+        public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null)
         {
-            return await _context.Notifications
-                .CountAsync(n => branchIds.Contains(n.BranchId) && !n.IsRead);
+            var dbQuery = _context.Notifications
+                .Where(n => branchIds.Contains(n.BranchId) && !n.IsRead);
+
+            dbQuery = ApplyRoleFilter(dbQuery, userRole);
+
+            return await dbQuery.CountAsync();
         }
 
         public async Task<Notification?> GetByIdAsync(long id)
@@ -120,6 +128,37 @@ namespace MenuGoBE.Repositories
                 dbQuery = dbQuery.Where(n => n.Title.ToLower().Contains(search) || n.Message.ToLower().Contains(search));
             }
 
+            return dbQuery;
+        }
+
+        private IQueryable<Notification> ApplyRoleFilter(IQueryable<Notification> dbQuery, string? userRole)
+        {
+            if (string.IsNullOrEmpty(userRole))
+            {
+                return dbQuery;
+            }
+
+            var role = userRole.ToLower();
+
+            // Admin, Owner, Manager see all notifications
+            if (role == "admin" || role == "owner" || role == "manager" || role == "quản trị viên" || role == "chủ sở hữu" || role == "quản lý")
+            {
+                return dbQuery;
+            }
+
+            // Chef, Kitchen see Inventory, Quality, ShelfLife
+            if (role == "chef" || role == "kitchen" || role == "bếp")
+            {
+                return dbQuery.Where(n => n.Type == "Inventory" || n.Type == "Quality" || n.Type == "ShelfLife");
+            }
+
+            // Cashier, Waiter see Operational
+            if (role == "cashier" || role == "waiter" || role == "thu ngân" || role == "phục vụ")
+            {
+                return dbQuery.Where(n => n.Type == "Operational");
+            }
+
+            // Default fallback
             return dbQuery;
         }
     }

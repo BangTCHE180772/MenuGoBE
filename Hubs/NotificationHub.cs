@@ -14,5 +14,10 @@ namespace MenuGoBE.Hubs
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"branch_{branchId}");
         }
+
+        public async Task JoinUserGroup(long accountId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{accountId}");
+        }
     }
 }

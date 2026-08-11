@@ -37,6 +37,12 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            return Ok(new { message = "Đăng xuất thành công" });
+        }
+
         [HttpPost("setup-2fa")]
         public async Task<IActionResult> Setup2FA([FromBody] Setup2FADto dto)
         {
