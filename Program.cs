@@ -23,6 +23,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using PayOS;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,7 +49,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsqlOptionsAction: sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorCodesToAdd: null);
+        }));
 
 
 builder.Services.AddAutoMapper(cfg => { }, typeof(AutoMapperProfiles));
@@ -184,6 +193,62 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        await context.HttpContext.Response.WriteAsJsonAsync(new { message = "Thao tác quá nhanh. Vui lòng thử lại sau." }, token);
+    };
+
+    options.AddPolicy("CustomerActionPolicy", httpContext =>
+    {
+        var user = httpContext.User;
+        bool isStaff = user.Identity != null && user.Identity.IsAuthenticated && 
+                       user.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && 
+                                    (c.Value == "Admin" || c.Value == "Cashier" || c.Value == "Waiter"));
+        if (isStaff)
+        {
+            return RateLimitPartition.GetNoLimiter("NoLimit");
+        }
+
+        var tableId = httpContext.Request.RouteValues["tableId"]?.ToString();
+        var partitionKey = !string.IsNullOrEmpty(tableId) ? $"Table_{tableId}" : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 1,
+                Window = TimeSpan.FromSeconds(10)
+            });
+    });
+
+    options.AddPolicy("CustomerOrderPolicy", httpContext =>
+    {
+        var user = httpContext.User;
+        bool isStaff = user.Identity != null && user.Identity.IsAuthenticated && 
+                       user.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && 
+                                    (c.Value == "Admin" || c.Value == "Cashier" || c.Value == "Waiter"));
+        if (isStaff)
+        {
+            return RateLimitPartition.GetNoLimiter("NoLimit");
+        }
+
+        var tableId = httpContext.Request.RouteValues["tableId"]?.ToString();
+        var partitionKey = !string.IsNullOrEmpty(tableId) ? $"Table_{tableId}" : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 30,
+                Window = TimeSpan.FromSeconds(30)
+            });
+    });
+});
+
 builder.Services.AddControllers().AddOData(options =>
 {
     var odataBuilder = new ODataConventionModelBuilder();
@@ -198,6 +263,8 @@ var app = builder.Build();
 app.UseExceptionHandler();
 
 app.UseCors("AllowAll");
+
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
