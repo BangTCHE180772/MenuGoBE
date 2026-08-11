@@ -33,36 +33,43 @@ namespace MenuGoBE.Controllers.Document
             if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
                 return errorResult!;
 
-            var list = await _context.CashFlows
+            // Fetch raw entities first (avoid SQL cast of string-stored enum to int)
+            var raw = await _context.CashFlows
                 .AsNoTracking()
                 .Where(c => c.BranchId == branchId && !c.IsDeleted)
                 .Include(c => c.Partner)
                 .Include(c => c.Document)
                 .OrderByDescending(c => c.BusinessDate)
                 .ThenByDescending(c => c.PostingSequence)
-                .Select(c => new
-                {
-                    c.Id,
-                    c.Code,
-                    c.BranchId,
-                    c.DocumentId,
-                    DocumentCode = c.Document != null ? c.Document.Code : null,
-                    c.PartnerId,
-                    PartnerName = c.Partner != null ? c.Partner.Name : null,
-                    Direction = c.Direction.ToString(),
-                    DirectionValue = (int)c.Direction,
-                    Type = c.Type.ToString(),
-                    TypeValue = (int)c.Type,
-                    PaymentMethod = c.PaymentMethod.ToString(),
-                    Status = c.Status.ToString(),
-                    StatusValue = (int)c.Status,
-                    c.TotalAmount,
-                    c.Note,
-                    BusinessDate = c.BusinessDate,
-                    c.CreatedAt,
-                    c.IsDeleted,
-                })
                 .ToListAsync();
+
+            // Project in-memory to avoid EF translating (int)enum as ::int on string column in PostgreSQL
+            var list = raw.Select(c => new
+            {
+                c.Id,
+                c.Code,
+                c.BranchId,
+                c.DocumentId,
+                DocumentCode = c.Document?.Code,
+                c.PartnerId,
+                PartnerName = c.Partner?.Name,
+                Direction = c.Direction.ToString(),
+                DirectionValue = (int)c.Direction,
+                Type = c.Type.ToString(),
+                TypeValue = (int)c.Type,
+                PaymentMethod = c.PaymentMethod.ToString(),
+                Status = c.Status.ToString(),
+                StatusValue = (int)c.Status,
+                c.TotalAmount,
+                c.Note,
+                c.BusinessDate,
+                c.CreatedAt,
+                c.IsDeleted,
+                SourceType = c.Document != null ? c.Document.Type.ToString() : null,
+                SourceId = c.DocumentId,
+                SourceCode = c.Document?.Code,
+                OrderId = c.Document?.OrderId
+            }).ToList();
 
             return Ok(list);
         }
@@ -75,38 +82,42 @@ namespace MenuGoBE.Controllers.Document
             if (!ValidateUserToken(out _, out var errorResult))
                 return errorResult!;
 
-            var item = await _context.CashFlows
+            // Fetch raw entity first to avoid SQL cast error on string-stored enum
+            var c = await _context.CashFlows
                 .AsNoTracking()
-                .Where(c => c.Id == id && !c.IsDeleted)
-                .Include(c => c.Partner)
-                .Include(c => c.Document)
-                .Select(c => new
-                {
-                    c.Id,
-                    c.Code,
-                    c.BranchId,
-                    c.DocumentId,
-                    DocumentCode = c.Document != null ? c.Document.Code : null,
-                    c.PartnerId,
-                    PartnerName = c.Partner != null ? c.Partner.Name : null,
-                    Direction = c.Direction.ToString(),
-                    DirectionValue = (int)c.Direction,
-                    Type = c.Type.ToString(),
-                    TypeValue = (int)c.Type,
-                    PaymentMethod = c.PaymentMethod.ToString(),
-                    Status = c.Status.ToString(),
-                    StatusValue = (int)c.Status,
-                    c.TotalAmount,
-                    c.Note,
-                    BusinessDate = c.BusinessDate,
-                    c.CreatedAt,
-                })
+                .Where(cf => cf.Id == id && !cf.IsDeleted)
+                .Include(cf => cf.Partner)
+                .Include(cf => cf.Document)
                 .FirstOrDefaultAsync();
 
-            if (item == null)
+            if (c == null)
                 return NotFound(new { message = $"Không tìm thấy phiếu thu chi ID: {id}" });
 
-            return Ok(item);
+            return Ok(new
+            {
+                c.Id,
+                c.Code,
+                c.BranchId,
+                c.DocumentId,
+                DocumentCode = c.Document?.Code,
+                c.PartnerId,
+                PartnerName = c.Partner?.Name,
+                Direction = c.Direction.ToString(),
+                DirectionValue = (int)c.Direction,
+                Type = c.Type.ToString(),
+                TypeValue = (int)c.Type,
+                PaymentMethod = c.PaymentMethod.ToString(),
+                Status = c.Status.ToString(),
+                StatusValue = (int)c.Status,
+                c.TotalAmount,
+                c.Note,
+                c.BusinessDate,
+                c.CreatedAt,
+                SourceType = c.Document != null ? c.Document.Type.ToString() : null,
+                SourceId = c.DocumentId,
+                SourceCode = c.Document?.Code,
+                OrderId = c.Document?.OrderId
+            });
         }
         #endregion
 
@@ -171,6 +182,11 @@ namespace MenuGoBE.Controllers.Document
             var item = await _context.CashFlows.FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
             if (item == null)
                 return NotFound(new { message = $"Không tìm thấy phiếu thu chi ID: {id}" });
+
+            if (item.DocumentId.HasValue)
+            {
+                return BadRequest(new { message = "Không thể hủy/xóa phiếu thu chi được sinh ra tự động từ chứng từ gốc (Nhập hàng, Trả hàng NCC, Bán hàng). Hãy hủy hoặc điều chỉnh chứng từ gốc." });
+            }
 
             item.IsDeleted = true;
             item.DeletedBy = userId;
