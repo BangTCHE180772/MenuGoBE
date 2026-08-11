@@ -12,6 +12,7 @@ namespace MenuGoBE.Interface.Repository
         Task DeleteAsync(long id);
         Task<bool> UpdateStatusAsync(long id, string status);
         Task<bool> UpdateCookingStatusAsync(long id, string cookingStatus);
+        Task<int> GetPendingQuantityAsync(long productId, long branchId);
         Task SaveChangesAsync();
     }
 }

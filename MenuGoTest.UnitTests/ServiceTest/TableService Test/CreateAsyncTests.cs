@@ -71,7 +71,7 @@ public class CreateAsyncTests
     public async Task ThrowsException_WhenNameAlreadyExistsAndActive()
     {
         var dto = new TableCreateDto { AreaId = 1, Name = "Bàn 1" };
-        _repoMock.Setup(r => r.GetByNameAndAreaAsync("Bàn 1", 1)).ReturnsAsync(new Table { Status = "Empty" });
+        _repoMock.Setup(r => r.GetByNameAndAreaAsync("Bàn 1", 1)).ReturnsAsync(new Table { Status = "Empty", IsActive = true });
         
         var exception = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateAsync(dto));
         Assert.Equal("Đã tồn tại bàn với tên này trong khu vực.", exception.Message);
@@ -81,14 +81,14 @@ public class CreateAsyncTests
     public async Task RestoresTable_WhenNameMatchesDeletedTable()
     {
         var dto = new TableCreateDto { AreaId = 1, Name = "Bàn 1" };
-        var existing = new Table { Id = 1, Name = "Bàn 1", AreaId = 1, Status = "Deleted" };
+        var existing = new Table { Id = 1, Name = "Bàn 1", AreaId = 1, Status = "Empty", IsActive = false };
         _repoMock.Setup(r => r.GetByNameAndAreaAsync("Bàn 1", 1)).ReturnsAsync(existing);
         _repoMock.Setup(r => r.UpdateAsync(It.IsAny<Table>())).Returns(Task.CompletedTask);
         _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
         
         var result = await _service.CreateAsync(dto);
         
-        Assert.Equal("Empty", existing.Status);
+        Assert.True(existing.IsActive);
         _repoMock.Verify(r => r.UpdateAsync(existing), Times.Once);
     }
 }

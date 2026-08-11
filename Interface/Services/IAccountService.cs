@@ -12,6 +12,7 @@ namespace MenuGoBE.Interface.Services
         Task<AccountViewDto> CreateAsync(AccountCreateDto dto, long creatorAccountId = 0);
         Task<bool> UpdateAsync(AccountUpdateDto dto);
         Task<bool> DeleteAsync(long id);
+        Task ChangePasswordAsync(long accountId, string currentPassword, string newPassword);
         Task<(bool IsAdmin, bool IsManager, List<long> BranchIds)> GetAccountPermissionsAsync(long accountId);
         Task<bool> CanManagerAccessAccountAsync(long targetAccountId, List<long> managerBranchIds, long managerAccountId);
     }

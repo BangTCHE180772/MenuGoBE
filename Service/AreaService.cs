@@ -29,14 +29,14 @@ namespace MenuGoBE.Service
         public async Task<List<AreaViewDto>> GetAllAsync()
         {
             var data = await _repo.GetAllAsync();
-            var filtered = data.Where(a => a.Status != "Internal" && a.Status != "Deleted").ToList();
+            var filtered = data.Where(a => a.Status != "Internal" && a.IsActive).ToList();
             return _mapper.Map<List<AreaViewDto>>(filtered);
         }
 
         public async Task<AreaViewDto?> GetByIdAsync(long id)
         {
             var data = await _repo.GetByIdAsync(id);
-            if (data == null || data.Status == "Internal" || data.Status == "Deleted") return null;
+            if (data == null || data.Status == "Internal" || !data.IsActive) return null;
 
             return _mapper.Map<AreaViewDto>(data);
         }
@@ -44,7 +44,7 @@ namespace MenuGoBE.Service
         public async Task<List<AreaViewDto>> GetByBranchIdAsync(long branchId)
         {
             var data = await _repo.GetByBranchIdAsync(branchId);
-            var filtered = data.Where(a => a.Status != "Internal" && a.Status != "Deleted").ToList();
+            var filtered = data.Where(a => a.Status != "Internal" && a.IsActive).ToList();
             return _mapper.Map<List<AreaViewDto>>(filtered);
         }
 
@@ -61,7 +61,7 @@ namespace MenuGoBE.Service
             
             if (existing != null)
             {
-                if (existing.Status != "Deleted")
+                if (existing.IsActive)
                 {
                     throw new MenuGoException(new ErrorResult(400, "Đã tồn tại khu vực với tên này trong chi nhánh.", 400));
                 }
@@ -93,12 +93,12 @@ namespace MenuGoBE.Service
             dto.Name = dto.Name.Trim();
 
             var entity = await _repo.GetByIdAsync(dto.Id);
-            if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
+            if (entity == null || entity.Status == "Internal" || !entity.IsActive) return false;
 
             if (dto.Name.ToLower() != entity.Name.ToLower())
             {
                 var existing = await _repo.GetByNameAndBranchAsync(dto.Name, entity.BranchId);
-                if (existing != null && existing.Status != "Deleted")
+                if (existing != null && existing.IsActive)
                 {
                     throw new MenuGoException(new ErrorResult(400, "Đã tồn tại khu vực với tên này trong chi nhánh.", 400));
                 }
@@ -115,10 +115,10 @@ namespace MenuGoBE.Service
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
-            if (entity == null || entity.Status == "Internal" || entity.Status == "Deleted") return false;
+            if (entity == null || entity.Status == "Internal" || !entity.IsActive) return false;
 
             var allTables = await _tableRepo.GetAllAsync();
-            var areaTables = allTables.Where(t => t.AreaId == id && t.Status != "Deleted" && t.Status != "Internal").ToList();
+            var areaTables = allTables.Where(t => t.AreaId == id && t.IsActive && t.Status != "Internal").ToList();
 
             foreach (var table in areaTables)
             {
@@ -144,11 +144,11 @@ namespace MenuGoBE.Service
 
             foreach (var table in areaTables)
             {
-                table.Status = "Deleted";
+                table.IsActive = false;
                 await _tableRepo.UpdateAsync(table);
             }
 
-            entity.Status = "Deleted";
+            entity.IsActive = false;
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync(); 
 
@@ -158,7 +158,7 @@ namespace MenuGoBE.Service
         public async Task<List<TableViewDto>> GetTablesByAreaIdAsync(long areaId)
         {
             var tables = await _tableRepo.GetAllAsync();
-            var filtered = tables.Where(t => t.AreaId == areaId && t.Status != "Internal" && t.Status != "Deleted").ToList();
+            var filtered = tables.Where(t => t.AreaId == areaId && t.Status != "Internal" && t.IsActive).ToList();
             return _mapper.Map<List<TableViewDto>>(filtered);
         }
     }
