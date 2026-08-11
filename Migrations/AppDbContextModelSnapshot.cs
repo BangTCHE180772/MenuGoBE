@@ -187,9 +187,6 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(51,3)");
 
-                    b.Property<decimal>("ReservedQuantity")
-                        .HasColumnType("decimal(51,3)");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("text");
@@ -550,6 +547,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("OrderId")
+                        .HasColumnType("bigint");
 
                     b.Property<long?>("ParentDocumentId")
                         .HasColumnType("bigint");
@@ -959,6 +959,63 @@ namespace MenuGoBE.Migrations
                     b.ToTable("NewWards");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Notification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsImportant")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RedirectUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<long?>("ReferenceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.ToTable("Notifications");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.OldDistrict", b =>
                 {
                     b.Property<long>("Id")
@@ -1112,6 +1169,22 @@ namespace MenuGoBE.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
+                    b.Property<long?>("ReturnConfirmedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("ReturnIsIntact")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ReturnReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ReturnedQuantity")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1120,7 +1193,8 @@ namespace MenuGoBE.Migrations
 
                     b.HasIndex("OrderId");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductId", "Status", "CookingStatus")
+                        .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
 
                     b.ToTable("OrderDetails");
                 });
@@ -2127,6 +2201,17 @@ namespace MenuGoBE.Migrations
                         .IsRequired();
 
                     b.Navigation("NewProvince");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Notification", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.OldDistrict", b =>

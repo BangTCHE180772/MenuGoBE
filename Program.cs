@@ -18,17 +18,18 @@ using Microsoft.AspNetCore.OData;
 using Microsoft.OData.ModelBuilder;
 using MenuGoBE.Models;
 using MenuGoBE.Helpers;
-using MenuGoBE.BackgroundServices;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using PayOS;
-using StackExchange.Redis;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
-System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
+// System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -48,18 +49,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsqlOptionsAction: sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorCodesToAdd: null);
+        }));
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
-{
-    var configuration = builder.Configuration.GetConnectionString("Redis");
-    return ConnectionMultiplexer.Connect(configuration ?? "localhost:6379");
-});
+
 builder.Services.AddAutoMapper(cfg => { }, typeof(AutoMapperProfiles));
 
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+builder.Services.AddMemoryCache();
 
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -99,9 +104,10 @@ builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 // Service
-builder.Services.AddScoped<IRedisInventoryService, RedisInventoryService>();
+
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
 builder.Services.AddScoped<ITableService, TableService>();
@@ -145,12 +151,13 @@ builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection(
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // SignalR
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IDictionary<string, string>>(opts => new Dictionary<string, string>());
 builder.Services.AddSingleton<IDictionary<string, long>>(opts => new Dictionary<string, long>());
-builder.Services.AddHostedService<InventorySyncWorker>();
+
 
 // Signal & Monitor Services for Reservation
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
@@ -188,6 +195,62 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        await context.HttpContext.Response.WriteAsJsonAsync(new { message = "Thao tác quá nhanh. Vui lòng thử lại sau." }, token);
+    };
+
+    options.AddPolicy("CustomerActionPolicy", httpContext =>
+    {
+        var user = httpContext.User;
+        bool isStaff = user.Identity != null && user.Identity.IsAuthenticated && 
+                       user.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && 
+                                    (c.Value == "Admin" || c.Value == "Cashier" || c.Value == "Waiter"));
+        if (isStaff)
+        {
+            return RateLimitPartition.GetNoLimiter("NoLimit");
+        }
+
+        var tableId = httpContext.Request.RouteValues["tableId"]?.ToString();
+        var partitionKey = !string.IsNullOrEmpty(tableId) ? $"Table_{tableId}" : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 1,
+                Window = TimeSpan.FromSeconds(10)
+            });
+    });
+
+    options.AddPolicy("CustomerOrderPolicy", httpContext =>
+    {
+        var user = httpContext.User;
+        bool isStaff = user.Identity != null && user.Identity.IsAuthenticated && 
+                       user.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && 
+                                    (c.Value == "Admin" || c.Value == "Cashier" || c.Value == "Waiter"));
+        if (isStaff)
+        {
+            return RateLimitPartition.GetNoLimiter("NoLimit");
+        }
+
+        var tableId = httpContext.Request.RouteValues["tableId"]?.ToString();
+        var partitionKey = !string.IsNullOrEmpty(tableId) ? $"Table_{tableId}" : (httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: partitionKey,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 30,
+                Window = TimeSpan.FromSeconds(30)
+            });
+    });
+});
+
 builder.Services.AddControllers().AddOData(options =>
 {
     var odataBuilder = new ODataConventionModelBuilder();
@@ -202,6 +265,8 @@ var app = builder.Build();
 app.UseExceptionHandler();
 
 app.UseCors("AllowAll");
+
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {

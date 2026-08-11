@@ -15,6 +15,11 @@ public class Document
     public long? PartnerId { get; set; }
     public long? ParentDocumentId { get; set; }
 
+    /// <summary>
+    /// Liên kết trực tiếp với Order (dùng cho Sale/CustomerReturn documents)
+    /// </summary>
+    public long? OrderId { get; set; }
+
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public long PostingSequence { get; set; }
 

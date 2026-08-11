@@ -17,7 +17,7 @@ public class Setup2FAAsyncTests
         _accountRepoMock = new Mock<IAccountRepository>();
         var configMock = new Mock<IConfiguration>();
         configMock.Setup(c => c["Jwt:Key"]).Returns("SuperSecretTestKeyForUnitTestThatIsLongEnough123");
-        _service = new AuthService(_accountRepoMock.Object, configMock.Object);
+        _service = new AuthService(_accountRepoMock.Object, configMock.Object, new Mock<Microsoft.Extensions.Caching.Memory.IMemoryCache>().Object, new Mock<MenuGoBE.Interface.Services.IEmailService>().Object);
     }
 
     [Fact]

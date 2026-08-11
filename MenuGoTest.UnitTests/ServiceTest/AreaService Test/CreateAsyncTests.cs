@@ -80,7 +80,7 @@ public class CreateAsyncTests
     public async Task ThrowsException_WhenNameAlreadyExistsAndActive()
     {
         var dto = new AreaCreateDto { BranchId = 1, Name = "Khu 1", Status = "Active", IsActive = true };
-        _repoMock.Setup(r => r.GetByNameAndBranchAsync("Khu 1", 1)).ReturnsAsync(new Area { Status = "Active" });
+        _repoMock.Setup(r => r.GetByNameAndBranchAsync("Khu 1", 1)).ReturnsAsync(new Area { Status = "Active", IsActive = true });
         
         var exception = await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateAsync(dto));
         Assert.Equal("Đã tồn tại khu vực với tên này trong chi nhánh.", exception.Message);
@@ -90,7 +90,7 @@ public class CreateAsyncTests
     public async Task RestoresArea_WhenNameMatchesDeletedArea()
     {
         var dto = new AreaCreateDto { BranchId = 1, Name = "Khu 1", Status = "Active", IsActive = true };
-        var existing = new Area { Id = 1, BranchId = 1, Name = "Khu 1", Status = "Deleted" };
+        var existing = new Area { Id = 1, BranchId = 1, Name = "Khu 1", Status = "Active", IsActive = false };
         
         _repoMock.Setup(r => r.GetByNameAndBranchAsync("Khu 1", 1)).ReturnsAsync(existing);
         _repoMock.Setup(r => r.UpdateAsync(It.IsAny<Area>())).Returns(Task.CompletedTask);
@@ -98,7 +98,7 @@ public class CreateAsyncTests
         
         var result = await _service.CreateAsync(dto);
         
-        Assert.Equal("Active", existing.Status);
+        Assert.True(existing.IsActive);
         _repoMock.Verify(r => r.UpdateAsync(existing), Times.Once);
     }
 }

@@ -42,7 +42,7 @@ public class DeleteAsyncTests
 
         // Assert
         Assert.True(result);
-        Assert.Equal("Deleted", existing.Status);
+        Assert.False(existing.IsActive);
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class DeleteAsyncTests
         
         var tables = new List<Table>
         {
-            new Table { Id = 1, AreaId = 1, Status = "Empty", Name = "Bàn 1" }
+            new Table { Id = 1, AreaId = 1, Status = "Empty", Name = "Bàn 1", IsActive = true }
         };
         _tableRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(tables);
         
@@ -106,7 +106,7 @@ public class DeleteAsyncTests
         
         var tables = new List<Table>
         {
-            new Table { Id = 1, AreaId = 1, Status = "Empty", Name = "Bàn 1" }
+            new Table { Id = 1, AreaId = 1, Status = "Empty", Name = "Bàn 1", IsActive = true }
         };
         _tableRepoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(tables);
         
