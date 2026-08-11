@@ -65,6 +65,10 @@ namespace MenuGoBE.Controllers.Document
                 c.BusinessDate,
                 c.CreatedAt,
                 c.IsDeleted,
+                SourceType = c.Document != null ? c.Document.Type.ToString() : null,
+                SourceId = c.DocumentId,
+                SourceCode = c.Document?.Code,
+                OrderId = c.Document?.OrderId
             }).ToList();
 
             return Ok(list);
@@ -109,6 +113,10 @@ namespace MenuGoBE.Controllers.Document
                 c.Note,
                 c.BusinessDate,
                 c.CreatedAt,
+                SourceType = c.Document != null ? c.Document.Type.ToString() : null,
+                SourceId = c.DocumentId,
+                SourceCode = c.Document?.Code,
+                OrderId = c.Document?.OrderId
             });
         }
         #endregion
