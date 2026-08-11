@@ -257,6 +257,21 @@ namespace MenuGoBE.Mapper
                             : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
                         ))
                         : 0m)));
+
+            CreateMap<Models.CashFlow, Dtos.Document.CashFlowResponseDto>()
+                .ForMember(dest => dest.DocumentCode, opt => opt.MapFrom(src => src.Document != null ? src.Document.Code : null))
+                .ForMember(dest => dest.PartnerName, opt => opt.MapFrom(src => src.Partner != null ? src.Partner.Name : null))
+                .ForMember(dest => dest.Direction, opt => opt.MapFrom(src => src.Direction.ToString()))
+                .ForMember(dest => dest.DirectionValue, opt => opt.MapFrom(src => (int)src.Direction))
+                .ForMember(dest => dest.Type, opt => opt.MapFrom(src => src.Type.ToString()))
+                .ForMember(dest => dest.TypeValue, opt => opt.MapFrom(src => (int)src.Type))
+                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.PaymentMethod.ToString()))
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()))
+                .ForMember(dest => dest.StatusValue, opt => opt.MapFrom(src => (int)src.Status))
+                .ForMember(dest => dest.SourceType, opt => opt.MapFrom(src => src.Document != null ? src.Document.Type.ToString() : null))
+                .ForMember(dest => dest.SourceId, opt => opt.MapFrom(src => src.DocumentId))
+                .ForMember(dest => dest.SourceCode, opt => opt.MapFrom(src => src.Document != null ? src.Document.Code : null))
+                .ForMember(dest => dest.OrderId, opt => opt.MapFrom(src => src.Document != null ? src.Document.OrderId : null));
         }
     }
 }
