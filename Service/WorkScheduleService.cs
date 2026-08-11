@@ -6,6 +6,8 @@ using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
+using Microsoft.AspNetCore.SignalR;
+using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Service
 {
@@ -16,19 +18,22 @@ namespace MenuGoBE.Service
         private readonly IBranchRepository _branchRepo;
         private readonly IShiftRepository _shiftRepo;
         private readonly IAccountRepository _accountRepo;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
         public WorkScheduleService(
             IWorkScheduleRepository repo, 
             IMapper mapper,
             IBranchRepository branchRepo,
             IShiftRepository shiftRepo,
-            IAccountRepository accountRepo)
+            IAccountRepository accountRepo,
+            IHubContext<NotificationHub> hubContext)
         {
             _repo = repo;
             _mapper = mapper;
             _branchRepo = branchRepo;
             _shiftRepo = shiftRepo;
             _accountRepo = accountRepo;
+            _hubContext = hubContext;
         }
 
         public async Task<List<WorkScheduleViewDto>> GetAllAsync()
@@ -199,6 +204,10 @@ namespace MenuGoBE.Service
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
 
+            // Báo cho nhân viên và các quản lý chi nhánh
+            await _hubContext.Clients.Group($"user_{entity.AccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Lịch làm việc của bạn vừa được cập nhật." });
+            await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Lịch làm việc của chi nhánh vừa được cập nhật." });
+
             return true;
         }
 
@@ -359,12 +368,29 @@ namespace MenuGoBE.Service
             var entity = await _repo.GetByIdAsync(dto.WorkScheduleId);
             if (entity == null || entity.AccountId != accountId) return false;
 
+            var shift = await _shiftRepo.GetByIdAsync(entity.ShiftId);
+            if (shift != null)
+            {
+                var localNow = DateTime.UtcNow.AddHours(7);
+                var today = DateOnly.FromDateTime(localNow);
+                var currentTime = TimeOnly.FromDateTime(localNow);
+
+                if (entity.WorkDate < today || (entity.WorkDate == today && shift.EndTime <= currentTime))
+                {
+                    throw new InvalidOperationException("Không thể xin nghỉ ca làm việc đã kết thúc trong quá khứ.");
+                }
+            }
+
             var reasonStr = string.IsNullOrWhiteSpace(dto.Reason) ? "Xin nghỉ ca" : dto.Reason;
             entity.Status = $"LEAVE_REQUEST:{reasonStr}";
             entity.ManagerApproved = false;
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
+
+            // Gửi thông báo đến quản lý chi nhánh
+            await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có đơn xin nghỉ phép mới cần duyệt." });
+
             return true;
         }
 
@@ -375,6 +401,19 @@ namespace MenuGoBE.Service
 
             var targetAccount = await _accountRepo.GetByIdAsync(dto.TargetAccountId);
             if (targetAccount == null) return false;
+
+            var shift = await _shiftRepo.GetByIdAsync(entity.ShiftId);
+            if (shift != null)
+            {
+                var localNow = DateTime.UtcNow.AddHours(7);
+                var today = DateOnly.FromDateTime(localNow);
+                var currentTime = TimeOnly.FromDateTime(localNow);
+
+                if (entity.WorkDate < today || (entity.WorkDate == today && shift.EndTime <= currentTime))
+                {
+                    throw new InvalidOperationException("Không thể đổi ca làm việc đã kết thúc trong quá khứ.");
+                }
+            }
 
             var noteStr = string.IsNullOrWhiteSpace(dto.Note) ? "Đổi ca" : dto.Note;
             
@@ -388,6 +427,11 @@ namespace MenuGoBE.Service
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
+
+            // Gửi thông báo cho nhân viên được nhờ nhận ca và quản lý
+            await _hubContext.Clients.Group($"user_{dto.TargetAccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Bạn có lời mời nhận ca làm việc mới." });
+            await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có yêu cầu đổi ca mới đang được xử lý." });
+
             return true;
         }
     }
