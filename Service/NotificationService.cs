@@ -24,12 +24,12 @@ namespace MenuGoBE.Service
             _context = context;
         }
 
-        public async Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query)
+        public async Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null)
         {
             await SyncBranchAlertsAsync(branchIds);
 
-            var notifications = await _repo.GetPagedNotificationsAsync(branchIds, query);
-            var totalCount = await _repo.GetTotalCountAsync(branchIds, query);
+            var notifications = await _repo.GetPagedNotificationsAsync(branchIds, query, userRole);
+            var totalCount = await _repo.GetTotalCountAsync(branchIds, query, userRole);
 
             var items = notifications.Select(MapToViewDto).ToList();
 
@@ -42,17 +42,17 @@ namespace MenuGoBE.Service
             };
         }
 
-        public async Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds)
+        public async Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null)
         {
             await SyncBranchAlertsAsync(branchIds);
 
-            var notifications = await _repo.GetRecentNotificationsAsync(branchIds, 5);
+            var notifications = await _repo.GetRecentNotificationsAsync(branchIds, 5, userRole);
             return notifications.Select(MapToViewDto).ToList();
         }
 
-        public async Task<int> GetUnreadCountAsync(long[] branchIds)
+        public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null)
         {
-            return await _repo.GetUnreadCountAsync(branchIds);
+            return await _repo.GetUnreadCountAsync(branchIds, userRole);
         }
 
         public async Task<bool> MarkAsReadAsync(long id, long[] branchIds)
