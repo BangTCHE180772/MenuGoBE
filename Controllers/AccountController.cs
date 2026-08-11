@@ -88,6 +88,62 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("me")]
+        public async Task<IActionResult> GetMe()
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var result = await _service.GetByIdAsync(currentUserId.Value);
+            if (result == null)
+                return NotFound(new { message = "Không tìm thấy Account" });
+
+            return Ok(result);
+        }
+
+        [HttpPut("me")]
+        public async Task<IActionResult> UpdateMe([FromBody] AccountUpdateDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            // Always update the caller's own account, regardless of whatever Id was sent in the body.
+            dto.Id = currentUserId.Value;
+
+            try
+            {
+                var result = await _service.UpdateAsync(dto);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy Account để cập nhật" });
+
+                return Ok(new { message = "Cập nhật thành công" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                await _service.ChangePasswordAsync(currentUserId.Value, dto.CurrentPassword, dto.NewPassword);
+                return Ok(new { message = "Đổi mật khẩu thành công" });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpGet("{id:long}")]
         public async Task<IActionResult> GetById(long id)
         {

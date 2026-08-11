@@ -118,6 +118,21 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        public async Task ChangePasswordAsync(long accountId, string currentPassword, string newPassword)
+        {
+            var entity = await _repo.GetByIdAsync(accountId);
+            if (entity == null)
+                throw new InvalidOperationException("Không tìm thấy tài khoản.");
+
+            if (!HashHelper.VerifyPassword(currentPassword, entity.HashedPassword))
+                throw new InvalidOperationException("Mật khẩu hiện tại không đúng.");
+
+            entity.HashedPassword = HashHelper.HashPassword(newPassword);
+
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync();
+        }
+
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
