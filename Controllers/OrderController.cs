@@ -3,6 +3,7 @@ using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MenuGoBE.Controllers
 {
@@ -44,6 +45,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost]
+        [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
             var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
@@ -182,6 +184,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPost("{orderId}/details")]
+        [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> CreateDetail(long orderId, [FromBody] OrderDetailCreateDto dto)
         {
             dto.OrderId = orderId;
@@ -225,6 +228,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPut("{orderId}/details/{id}")]
+        [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> UpdateDetail(long orderId, long id, [FromBody] OrderDetailUpdateDto dto)
         {
             dto.Id = id;
@@ -256,9 +260,10 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpPut("details/{id}/confirm")]
-        public async Task<IActionResult> ConfirmOrderDetail(long id)
+        public async Task<IActionResult> ConfirmOrderDetail(long id, [FromBody] ConfirmRequestDto? dto = null)
         {
-            var result = await _detailService.ConfirmAsync(id);
+            var quantity = dto?.Quantity;
+            var result = await _detailService.ConfirmAsync(id, quantity);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
             
@@ -302,6 +307,55 @@ namespace MenuGoBE.Controllers
             }
 
             return Ok(new { message = "Xác nhận món thành công" });
+        }
+
+        [HttpPut("details/{id}/reject")]
+        public async Task<IActionResult> RejectOrderDetail(long id, [FromBody] RejectRequestDto dto)
+        {
+            try
+            {
+                var result = await _detailService.RejectAsync(id, dto.Reason);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc từ chối thất bại" });
+
+                var detail = await _detailService.GetByIdAsync(id);
+                if (detail != null)
+                {
+                    var order = await _service.GetByIdAsync(detail.OrderId);
+                    if (order != null)
+                    {
+                        var table = await _tableService.GetByIdAsync(order.TableId);
+                        if (table != null)
+                        {
+                            var product = await _productService.GetByIdAsync(detail.ProductId);
+                            string productName = product?.Name ?? "Món";
+
+                            var payload = new
+                            {
+                                type = "item-rejected",
+                                branchId = table.BranchId,
+                                orderDetailId = id,
+                                orderId = order.Id,
+                                tableId = table.Id,
+                                tableName = table.Name,
+                                productName = productName,
+                                reason = dto.Reason,
+                                message = $"{table.Name}: Từ chối món {productName} (Lý do: {dto.Reason})",
+                                timestamp = System.DateTime.UtcNow
+                            };
+
+                            await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
+                            await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                        }
+                    }
+                }
+
+                return Ok(new { message = "Từ chối món thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut("details/{id}/request-return")]
