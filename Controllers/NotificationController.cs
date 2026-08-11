@@ -66,7 +66,8 @@ namespace MenuGoBE.Controllers
                     : allowedBranchIds;
             }
 
-            var result = await _service.GetPagedNotificationsAsync(targetBranchIds, query);
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var result = await _service.GetPagedNotificationsAsync(targetBranchIds, query, userRole);
             return Ok(result);
         }
 
@@ -96,7 +97,8 @@ namespace MenuGoBE.Controllers
                 ? new[] { branchId.Value }
                 : allowedBranchIds;
 
-            var result = await _service.GetRecentNotificationsAsync(targetBranchIds);
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var result = await _service.GetRecentNotificationsAsync(targetBranchIds, userRole);
             return Ok(result);
         }
 
@@ -126,7 +128,8 @@ namespace MenuGoBE.Controllers
                 ? new[] { branchId.Value }
                 : allowedBranchIds;
 
-            var count = await _service.GetUnreadCountAsync(targetBranchIds);
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            var count = await _service.GetUnreadCountAsync(targetBranchIds, userRole);
             return Ok(new { count });
         }
 

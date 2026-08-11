@@ -33,6 +33,33 @@ namespace MenuGoBE.Controllers
             return null;
         }
 
+        [HttpGet("role-range")]
+        public async Task<IActionResult> GetAllAccountsRoleRange([FromQuery] long? branchId)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+            
+            List<long>? filterBranchIds = null;
+            if (branchId.HasValue)
+            {
+                if (!isAdmin && !branchIds.Contains(branchId.Value))
+                {
+                    return StatusCode(403, new { message = "Bạn không có quyền xem tài khoản của chi nhánh này." });
+                }
+                filterBranchIds = new List<long> { branchId.Value };
+            }
+            else
+            {
+                filterBranchIds = isAdmin ? null : branchIds; // Admin gets all, others get their branches
+            }
+
+            var result = await _service.GetAccountsExcludeRolesAsync(new List<long>(), filterBranchIds, currentUserId.Value);
+            return Ok(result);
+        }
+
         [HttpGet("exclude-roles")]
         public async Task<IActionResult> GetAccountsExcludeRoles([FromQuery] long? branchId)
         {
