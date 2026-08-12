@@ -73,7 +73,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CreateSaleCompletedAsync_NullDocument_ThrowsArgumentNullException()
         {
-            await Assert.ThrowsAsync<ArgumentNullException>(() => _service.CreateSaleCompletedAsync(null!, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(null!, 1));
         }
 
         [Fact]
@@ -82,7 +82,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var saleDoc = CreateValidSaleDocument();
             saleDoc.DocumentDetails = new List<DocumentDetail>();
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]
@@ -93,7 +93,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(bInv);
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]
@@ -104,7 +104,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(CreateValidBInventory(10));
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]
@@ -115,7 +115,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(CreateValidBInventory(10));
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
         #endregion
 
@@ -179,7 +179,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.GetBInventoryByBranchAndProductAsync(1, 1000)).ReturnsAsync(bInv);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]
@@ -204,7 +204,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.GetRecipesByParentProductIdAsync(It.IsAny<long>())).ReturnsAsync(new List<RecipesDetailed>());
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]
@@ -229,7 +229,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1000)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.GetRecipesByParentProductIdAsync(1000)).ReturnsAsync(recipes);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]
@@ -290,7 +290,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByBranchAndProductAsync(1, 2000)).ReturnsAsync(bInvIngredient);
             _mockRepo.Setup(r => r.GetRecipesByParentProductIdAsync(1000)).ReturnsAsync(recipes);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateSaleCompletedAsync(saleDoc, 1));
         }
 
         [Fact]

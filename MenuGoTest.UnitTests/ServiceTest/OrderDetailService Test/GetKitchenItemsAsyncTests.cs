@@ -38,8 +38,8 @@ public class GetKitchenItemsAsyncTests
                 Table = new Table { Id = 10, Name = "Bàn 1", AreaId = 1, Area = new Area { Id = 1, Name = "T1", BranchId = 1 } },
                 OrderDetails = new List<OrderDetail>
                 {
-                    new OrderDetail { Id = 1, OrderId = 1, ProductId = 1, Quantity = 1, Price = 50000, Status = "Confirmed", CookingStatus = "Waiting", CreatedAt = DateTime.UtcNow.AddMinutes(-10), Product = new Product { Name = "Phở" } },
-                    new OrderDetail { Id = 2, OrderId = 1, ProductId = 2, Quantity = 2, Price = 30000, Status = "Confirmed", CookingStatus = "Cooking", CreatedAt = DateTime.UtcNow.AddMinutes(-5), Product = new Product { Name = "Trà đá" } }
+                    new OrderDetail { Id = 1, OrderId = 1, ProductId = 1, Quantity = 1, Price = 50000, Status = "Confirmed", CookingStatus = "Waiting", CreatedAt = DateTime.UtcNow.AddMinutes(-10), Product = new Product { Name = "Phở", Type = MenuGoBE.Models.Enums.ProductType.Processed } },
+                    new OrderDetail { Id = 2, OrderId = 1, ProductId = 2, Quantity = 2, Price = 30000, Status = "Confirmed", CookingStatus = "Cooking", CreatedAt = DateTime.UtcNow.AddMinutes(-5), Product = new Product { Name = "Trà đá", Type = MenuGoBE.Models.Enums.ProductType.Processed } }
                 }
             }
         };
@@ -65,7 +65,7 @@ public class GetKitchenItemsAsyncTests
                 Table = new Table { Id = 10, Name = "Bàn 1", AreaId = 1, Area = new Area { Id = 1, Name = "T1", BranchId = 1 } },
                 OrderDetails = new List<OrderDetail>
                 {
-                    new OrderDetail { Id = 1, OrderId = 1, Quantity = 1, Price = 50000, Status = "Confirmed", CookingStatus = "Waiting", CreatedAt = DateTime.UtcNow, Product = new Product { Name = "Phở" } },
+                    new OrderDetail { Id = 1, OrderId = 1, Quantity = 1, Price = 50000, Status = "Confirmed", CookingStatus = "Waiting", CreatedAt = DateTime.UtcNow, Product = new Product { Name = "Phở", Type = MenuGoBE.Models.Enums.ProductType.Processed } },
                     new OrderDetail { Id = 2, OrderId = 1, Quantity = 2, Price = 30000, Status = "Cancelled", CookingStatus = "Waiting", CreatedAt = DateTime.UtcNow, Product = new Product { Name = "Cancelled Item" } }
                 }
             }
@@ -106,7 +106,7 @@ public class GetKitchenItemsAsyncTests
                 Table = new Table { Id = 10, Name = "Bàn 1", AreaId = 1, Area = new Area { Id = 1, Name = "T1", BranchId = 1 } },
                 OrderDetails = new List<OrderDetail>
                 {
-                    new OrderDetail { Id = 1, OrderId = 1, Quantity = 1, Price = 50000, Status = "Confirmed", CookingStatus = "", CreatedAt = DateTime.UtcNow, Product = new Product { Name = "Phở" } }
+                    new OrderDetail { Id = 1, OrderId = 1, Quantity = 1, Price = 50000, Status = "Confirmed", CookingStatus = "", CreatedAt = DateTime.UtcNow, Product = new Product { Name = "Phở", Type = MenuGoBE.Models.Enums.ProductType.Processed } }
                 }
             }
         };

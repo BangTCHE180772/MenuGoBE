@@ -77,7 +77,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CreateTransferPendingAsync_NullDocument_ThrowsArgumentNullException()
         {
-            await Assert.ThrowsAsync<ArgumentNullException>(() => _service.CreateTransferPendingAsync(null!, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateTransferPendingAsync(null!, 1));
         }
 
         [Fact]
@@ -86,7 +86,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var doc = CreateValidTransferDocument();
             doc.ToBranchId = null; // Missing
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateTransferPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateTransferPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -95,7 +95,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var doc = CreateValidTransferDocument();
             doc.ToBranchId = 1; // Same as BranchId
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateTransferPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateTransferPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -106,7 +106,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(CreateValidBInventory(10));
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateTransferPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateTransferPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -117,7 +117,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(CreateValidBInventory(10));
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateTransferPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateTransferPendingAsync(doc, 1));
         }
         #endregion
 
@@ -131,7 +131,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(bInvSender);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CompleteTransferAsync(50, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteTransferAsync(50, 1));
         }
 
         [Fact]
@@ -197,7 +197,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
                 _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Ghi chú", 2));
         }
 
@@ -210,7 +210,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
 
-            await Assert.ThrowsAsync<ArgumentException>(() =>
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
                 _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "   ", 2)); // Empty note
         }
 
@@ -251,7 +251,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
                 new DocumentDetail { Id = 501, Quantity = 15 } // Sent 10, wants to receive 15 -> Exceeds
             };
 
-            await Assert.ThrowsAsync<ArgumentException>(() =>
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
                 _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.PartialReceived, receivedDetails, "Ghi chú", 2));
         }
 
@@ -314,7 +314,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
 
-            await Assert.ThrowsAsync<ArgumentException>(() =>
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
                 _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Rejected, null, "   ", 2)); // Empty note
         }
 
@@ -367,7 +367,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         {
             _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Document?)null);
 
-            await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
                 _service.ProcessTransferReceiptAsync(999, DocumentTransferStatus.Received, null, "Ghi chú", 2));
         }
 

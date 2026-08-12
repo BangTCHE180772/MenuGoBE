@@ -67,5 +67,6 @@ public abstract class OrderServiceTestBase
 
         var transactionMock = new Mock<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>();
         _orderRepoMock.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(transactionMock.Object);
+        _orderRepoMock.Setup(r => r.CreateExecutionStrategy()).Returns(dbContext.Database.CreateExecutionStrategy());
     }
 }
