@@ -121,7 +121,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(100)).ReturnsAsync(bInv);
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateProductionPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateProductionPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -134,7 +134,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(100)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.GetRecipesByParentProductIdAsync(7000)).ReturnsAsync(new List<RecipesDetailed>()); // Recipe missing
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CompleteProductionAsync(70, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteProductionAsync(70, 1));
         }
 
         [Fact]
@@ -147,7 +147,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(100)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.GetRecipesByParentProductIdAsync(7000)).ReturnsAsync(new List<RecipesDetailed>()); // Empty ingredients
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CompleteProductionAsync(70, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteProductionAsync(70, 1));
         }
 
         [Fact]
@@ -164,7 +164,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetRecipesByParentProductIdAsync(7000)).ReturnsAsync(recipes);
             _mockRepo.Setup(r => r.GetBInventoryByBranchAndProductAsync(1, 8001)).ReturnsAsync(bInvCaiThao);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CompleteProductionAsync(70, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteProductionAsync(70, 1));
         }
         #endregion
 

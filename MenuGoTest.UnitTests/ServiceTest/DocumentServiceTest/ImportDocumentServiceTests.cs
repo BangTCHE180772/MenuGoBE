@@ -78,7 +78,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CreateImportPendingAsync_NullDocument_ThrowsArgumentNullException()
         {
-            await Assert.ThrowsAsync<ArgumentNullException>(() => _service.CreateImportPendingAsync(null!, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(null!, 1));
         }
 
         [Fact]
@@ -86,7 +86,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         {
             var doc = CreateValidImportDocument();
             doc.Note = new string('A', 256);
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -94,7 +94,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         {
             var doc = CreateValidImportDocument();
             doc.DeleteNote = new string('B', 256);
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -102,7 +102,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         {
             var doc = CreateValidImportDocument();
             doc.DocumentDetails = new List<DocumentDetail>();
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -115,7 +115,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
                 Quantity = 5,
                 UnitPrice = 10000
             });
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
         #endregion
 
@@ -129,7 +129,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(CreateValidBInventory());
             _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 });
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -141,7 +141,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(CreateValidBInventory());
             _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 });
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -153,7 +153,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(CreateValidBInventory());
             _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 });
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -165,7 +165,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(bInv);
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -176,7 +176,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(bInv);
             _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync((UnitConversion?)null);
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
         #endregion
 
@@ -211,7 +211,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(unitConv);
             _mockRepo.Setup(r => r.IsCodeExistsAsync("NH000001", doc.Id)).ReturnsAsync(true);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateImportPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateImportPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -262,7 +262,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync(CreateValidBInventory());
             _mockRepo.Setup(r => r.GetUnitConversionByIdAsync(1)).ReturnsAsync(new UnitConversion { Id = 1, ProductId = 100, ConversionPoint = 1 });
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CompleteImportAsync(1, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteImportAsync(1, 1));
         }
 
         [Fact]
@@ -273,7 +273,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CompleteImportAsync(1, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteImportAsync(1, 1));
         }
 
         [Fact]
@@ -425,7 +425,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(1)).ReturnsAsync((BInventory?)null);
 
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.CompleteImportAsync(1, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteImportAsync(1, 1));
         }
 
         [Fact]

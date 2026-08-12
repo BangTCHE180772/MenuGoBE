@@ -123,6 +123,36 @@ namespace MenuGoBE.Interface.Services.Document
         Task<Models.Document> CreateSaleCompletedAsync(Models.Document document, long userId);
         #endregion
 
+        #region Tạo phiếu Xuất bán chỉ ghi nhận tài chính (không trừ kho)
+        /// <summary>
+        /// Tạo phiếu Xuất bán chỉ ghi nhận tài chính, KHÔNG trừ kho (dùng khi kho đã được trừ tại Confirm/Cooking).
+        /// </summary>
+        Task<Models.Document> CreateSaleRecordOnlyAsync(Models.Document document, long userId);
+        #endregion
+
+        #region Real-time Incremental Documents cho Order
+        /// <summary>
+        /// Lấy Document Pending của Order (Sale hoặc CustomerReturn). Nếu chưa có thì tạo mới.
+        /// </summary>
+        Task<Models.Document> GetOrCreatePendingDocumentAsync(long branchId, long orderId, DocumentType type, long userId);
+
+        /// <summary>
+        /// Thêm 1 item vào Sale Document (Pending). Thực hiện TRỪ KHO và Ghi Sổ Kho ngay lập tức.
+        /// </summary>
+        Task AppendItemToSaleDocumentAsync(long documentId, Product product, decimal baseQuantity, long parentDetailId, long userId);
+
+        /// <summary>
+        /// Thêm 1 item vào CustomerReturn Document (Pending). Thực hiện CỘNG KHO (nếu isIntact) và Ghi Sổ Kho ngay lập tức.
+        /// </summary>
+        Task AppendItemToReturnDocumentAsync(long documentId, Product product, decimal baseQuantity, bool isIntact, long parentDetailId, long userId);
+
+        /// <summary>
+        /// Chốt (Complete) tất cả Pending Documents của một Order khi thanh toán.
+        /// Gán Customer, TotalAmount và ghi CashFlow.
+        /// </summary>
+        Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long? userId);
+        #endregion
+
         /// <summary>
         /// Lấy danh sách phiếu Xuất bán hàng thuộc chi nhánh.
         /// </summary>
