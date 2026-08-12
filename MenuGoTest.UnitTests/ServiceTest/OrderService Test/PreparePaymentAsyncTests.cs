@@ -146,7 +146,7 @@ public class PreparePaymentAsyncTests : OrderServiceTestBase
         _orderRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
         var dto = new OrderPayDto { CustomerPhone = "0987654321", PointsUsed = 200 };
-        var result = await _service.PreparePaymentAsync(1, dto);
+        var result = await _service.PreparePaymentAsync(1, dto, paymentMethod: "PayOS");
 
         // 216000 - 200 points = 215800
         Assert.Equal(215800, result);
