@@ -98,7 +98,13 @@ namespace MenuGoBE.Mapper
 
             //account
             CreateMap<Account, AccountViewDto>()
-                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()))
+                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src =>
+                    src.Contracts.Any(c => c.Status == "Active")
+                        ? src.Contracts.Where(c => c.Status == "Active").Select(c => c.RoleId).Distinct().ToList()
+                        : src.Contracts.Any(c => c.Status == "Expired")
+                            ? src.Contracts.Where(c => c.Status == "Expired").Select(c => c.RoleId).Distinct().ToList()
+                            : src.Contracts.Where(c => c.Status == "Terminated").Select(c => c.RoleId).Distinct().ToList()
+                ))
                 .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Contracts.Where(c => c.Status == "Active").Select(c => (long?)c.BranchId).FirstOrDefault() ?? src.Contracts.Select(c => (long?)c.BranchId).FirstOrDefault()));
 
             CreateMap<AccountCreateDto, Account>();
