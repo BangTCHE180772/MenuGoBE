@@ -11,5 +11,7 @@ namespace MenuGoBE.Dtos.Order
         public string Status { get; set; } = string.Empty;
         public string CookingStatus { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
+        public int ReturnedQuantity { get; set; }
+        public string? ReturnReason { get; set; }
     }
 }

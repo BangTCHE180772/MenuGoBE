@@ -39,7 +39,7 @@ public class DeleteAsyncTests
 
         // Assert
         Assert.True(result);
-        Assert.Equal("Deleted", existing.Status);
+        Assert.False(existing.IsActive);
     }
 
     [Fact]

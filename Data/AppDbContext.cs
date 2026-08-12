@@ -61,6 +61,7 @@ public class AppDbContext : DbContext
     public DbSet<Device> Devices { get; set; } = null!;
 
     // 9. Inventory Module
+    public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<BInventory> BInventories { get; set; } = null!;
     public DbSet<InventoryLedger> InventoryLedgers { get; set; } = null!;
     public DbSet<Document> Documents { get; set; } = null!;
@@ -133,6 +134,11 @@ public class AppDbContext : DbContext
             .WithMany(p => p.UsedInRecipeItems)
             .HasForeignKey(rd => rd.IngredientProductId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Optimize Virtual Stock calculation
+        modelBuilder.Entity<OrderDetail>()
+            .HasIndex(od => new { od.ProductId, od.Status, od.CookingStatus })
+            .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
 
         // ── 9. Inventory Module ─────────────────────────────────────────────
 

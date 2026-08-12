@@ -88,6 +88,26 @@ public abstract class BaseApiController : ControllerBase
             return false;
         }
 
+        // Block write operations if the branch is "Ngừng kinh doanh"
+        string method = HttpContext.Request.Method;
+        bool isWriteOperation = method == "POST" || method == "PUT" || method == "DELETE" || method == "PATCH";
+        if (isWriteOperation)
+        {
+            var dbContext = HttpContext.RequestServices.GetService(typeof(MenuGoBE.Data.AppDbContext)) as MenuGoBE.Data.AppDbContext;
+            if (dbContext != null)
+            {
+                var branch = dbContext.Branches.Find(targetBranchId);
+                if (branch != null && branch.Status == "Ngừng kinh doanh")
+                {
+                    errorResult = BadRequest(new {
+                        success = false,
+                        message = "Truy cập bị từ chối: Chi nhánh này đã ngừng kinh doanh. Không thể thực hiện các thao tác thay đổi dữ liệu."
+                    });
+                    return false;
+                }
+            }
+        }
+
         // 1. Vai trò Admin và Owner: Cho phép thao tác với kho dựa trên branchid truyền vào từ bên ngoài
         bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") ||
                              User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
