@@ -1909,7 +1909,7 @@ namespace MenuGoBE.Service.Document
             await _repo.SaveChangesAsync();
         }
 
-        public async Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long userId)
+        public async Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long? userId)
         {
             var saleDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, DocumentType.Sale);
             if (saleDoc != null)

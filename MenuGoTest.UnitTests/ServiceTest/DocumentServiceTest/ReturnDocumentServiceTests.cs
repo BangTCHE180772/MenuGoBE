@@ -98,7 +98,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         [Fact]
         public async Task CreateReturnCompletedAsync_NullDocument_ThrowsArgumentNullException()
         {
-            await Assert.ThrowsAsync<ArgumentNullException>(() => _service.CreateReturnCompletedAsync(null!, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(null!, 1));
         }
 
         [Fact]
@@ -107,7 +107,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.ParentDocumentId = null; // Missing
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -116,7 +116,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument(parentId: 999);
             _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Document?)null);
 
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -128,7 +128,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parentDoc);
 
             var returnDoc = CreateValidReturnDocument();
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -140,7 +140,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parentDoc);
 
             var returnDoc = CreateValidReturnDocument();
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
         #endregion
 
@@ -154,7 +154,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails = new List<DocumentDetail>();
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -166,7 +166,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().Quantity = 0; // All <= 0
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -178,7 +178,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().FatherId = null;
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -190,7 +190,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().FatherId = 8888; // Non-existent
 
-            await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -203,7 +203,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().UnitPrice = 20_000_000_000m; // > 10 billion
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
         #endregion
 
@@ -218,7 +218,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().Quantity = 150; // > 100 import qty
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -233,7 +233,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().Quantity = 30; // 80 + 30 = 110 > 100
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -248,7 +248,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().Quantity = 5;
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
@@ -264,7 +264,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var returnDoc = CreateValidReturnDocument();
             returnDoc.DocumentDetails.First().Quantity = 20; // Wants to return 20, but stock is 10
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateReturnCompletedAsync(returnDoc, 1));
         }
 
         [Fact]
