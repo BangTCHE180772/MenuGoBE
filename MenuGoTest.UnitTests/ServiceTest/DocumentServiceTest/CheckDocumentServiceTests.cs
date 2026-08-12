@@ -94,7 +94,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var doc = CreateValidCheckDocument();
             doc.Note = new string('C', 256);
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateCheckPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateCheckPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -105,7 +105,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(5)).ReturnsAsync(CreateValidBInventory(5));
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateCheckPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateCheckPendingAsync(doc, 1));
         }
 
         [Fact]
