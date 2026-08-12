@@ -128,5 +128,10 @@ namespace MenuGoBE.Repositories
         {
             return await _context.Database.BeginTransactionAsync();
         }
+
+        public Microsoft.EntityFrameworkCore.Storage.IExecutionStrategy CreateExecutionStrategy()
+        {
+            return _context.Database.CreateExecutionStrategy();
+        }
     }
 }

@@ -451,11 +451,14 @@ namespace MenuGoBE.Service
             return order.TotalAmount;
         }
 
-        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long userId = 1)
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long? userId = null)
         {
-            using var transaction = await _repo.BeginTransactionAsync();
-            try
+            var strategy = _repo.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
+                using var transaction = await _repo.BeginTransactionAsync();
+                try
+                {
                 var paidTableIds = new List<long>();
                 var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
                 if (orderWithDetails == null) return paidTableIds;
@@ -594,6 +597,19 @@ namespace MenuGoBE.Service
 
                     if (targetPartner == null)
                     {
+                        long validCreatedBy = order.CreatedBy ?? 1;
+                        if (userId.HasValue)
+                        {
+                            var userExists = await _context.Accounts.AnyAsync(a => a.Id == userId.Value);
+                            if (userExists) validCreatedBy = userId.Value;
+                        }
+
+                        if (!await _context.Accounts.AnyAsync(a => a.Id == validCreatedBy))
+                        {
+                            var firstAccount = await _context.Accounts.Select(a => a.Id).FirstOrDefaultAsync();
+                            if (firstAccount > 0) validCreatedBy = firstAccount;
+                        }
+
                         targetPartner = new Partner
                         {
                             BranchId = branchId.Value,
@@ -601,7 +617,7 @@ namespace MenuGoBE.Service
                             Name = partnerName,
                             Phone = searchPhone,
                             Email = string.Empty,
-                            CreatedBy = order.CreatedBy ?? 1,
+                            CreatedBy = validCreatedBy,
                             CreatedAt = DateTime.UtcNow
                         };
                         targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
@@ -627,6 +643,7 @@ namespace MenuGoBE.Service
                 await transaction.RollbackAsync();
                 throw;
             }
+            });
         }
 
 
