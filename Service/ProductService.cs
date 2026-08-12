@@ -81,6 +81,7 @@ namespace MenuGoBE.Service
                 IsSellable = dto.IsSellable,
                 IsManageQuantity = false,
                 SellPrice = dto.SellPrice,
+                UnitConversions = dto.UnitConversions,
                 Recipe = dto.Recipe,
                 MenuIds = dto.MenuIds
             };
@@ -189,6 +190,7 @@ namespace MenuGoBE.Service
                 IsSellable = dto.IsSellable,
                 IsManageQuantity = false,
                 SellPrice = dto.SellPrice,
+                UnitConversions = dto.UnitConversions,
                 Recipe = dto.Recipe,
                 MenuIds = dto.MenuIds
             };
