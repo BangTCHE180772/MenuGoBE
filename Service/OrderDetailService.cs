@@ -78,11 +78,13 @@ namespace MenuGoBE.Service
                     return 0;
                 }
 
-                int maxProcessable = 999999;
+                int maxProcessable = int.MaxValue;
+                bool hasValidRecipe = false;
                 foreach (var recipe in recipes)
                 {
                     if (recipe.Quantity > 0)
                     {
+                        hasValidRecipe = true;
                         int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId);
                         int possibleQty = (int)(ingredientQty / recipe.Quantity);
                         if (possibleQty < maxProcessable)
@@ -91,7 +93,7 @@ namespace MenuGoBE.Service
                         }
                     }
                 }
-                return maxProcessable == 999999 ? 0 : maxProcessable;
+                return hasValidRecipe ? maxProcessable : 0;
             }
 
             var binv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
