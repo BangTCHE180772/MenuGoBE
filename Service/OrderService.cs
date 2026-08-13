@@ -312,7 +312,8 @@ namespace MenuGoBE.Service
                     CookingStatus = od.CookingStatus,
                     CreatedAt = od.CreatedAt,
                     ReturnedQuantity = od.ReturnedQuantity,
-                    ReturnReason = od.ReturnReason
+                    ReturnReason = od.ReturnReason,
+                    ProductType = od.Product != null ? od.Product.Type.ToString() : string.Empty
                 }).ToList();
             foreach (var child in childOrders)
             {
@@ -330,7 +331,8 @@ namespace MenuGoBE.Service
                         CookingStatus = od.CookingStatus,
                         CreatedAt = od.CreatedAt,
                         ReturnedQuantity = od.ReturnedQuantity,
-                        ReturnReason = od.ReturnReason
+                        ReturnReason = od.ReturnReason,
+                        ProductType = od.Product != null ? od.Product.Type.ToString() : string.Empty
                     });
                 items.AddRange(childItems);
             }

@@ -92,7 +92,8 @@ namespace MenuGoBE.Mapper
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
             CreateMap<OrderDetail, OrderDetailViewDto>()
-                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty));
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty))
+                .ForMember(dest => dest.ProductType, opt => opt.MapFrom(src => src.Product != null ? src.Product.Type.ToString() : string.Empty));
             CreateMap<OrderDetailCreateDto, OrderDetail>();
             CreateMap<OrderDetailUpdateDto, OrderDetail>();
 
