@@ -14,5 +14,6 @@ namespace MenuGoBE.Dtos.Order
         public DateTime CreatedAt { get; set; }
         public int ReturnedQuantity { get; set; }
         public string? ReturnReason { get; set; }
+        public string ProductType { get; set; } = string.Empty;
     }
 }
