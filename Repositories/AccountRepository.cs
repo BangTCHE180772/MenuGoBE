@@ -166,12 +166,10 @@ namespace MenuGoBE.Repositories
 
             bool isAdmin = allRoleIds.Contains(1) || allRoleIds.Contains(2) ||
                            allRoleNames.Any(r => string.Equals(r, "Admin", StringComparison.OrdinalIgnoreCase) ||
-                                                 string.Equals(r, "OWNER", StringComparison.OrdinalIgnoreCase) ||
-                                                 string.Equals(r, "Quản trị viên", StringComparison.OrdinalIgnoreCase));
+                                                 string.Equals(r, "Owner", StringComparison.OrdinalIgnoreCase));
 
             bool isManager = allRoleIds.Contains(3) ||
-                             allRoleNames.Any(r => string.Equals(r, "Manager", StringComparison.OrdinalIgnoreCase) ||
-                                                   string.Equals(r, "Quản lý", StringComparison.OrdinalIgnoreCase));
+                             allRoleNames.Any(r => string.Equals(r, "Manager", StringComparison.OrdinalIgnoreCase));
 
             var branchIds = activeContracts
                 .Where(c => c.BranchId > 0)

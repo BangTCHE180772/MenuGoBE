@@ -140,7 +140,7 @@ namespace MenuGoBE.Service
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
             var hasActiveContract = entity.Contracts != null && entity.Contracts.Any(c =>
-                (string.Equals(c.Status, "Active", StringComparison.OrdinalIgnoreCase) || c.Status == "1" || string.Equals(c.Status, "Đang hiệu lực", StringComparison.OrdinalIgnoreCase))
+                string.Equals(c.Status, "Active", StringComparison.OrdinalIgnoreCase)
                 && c.StartDate <= today
                 && (!c.EndDate.HasValue || c.EndDate.Value >= today));
 
