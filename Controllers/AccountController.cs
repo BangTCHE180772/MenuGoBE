@@ -268,11 +268,18 @@ namespace MenuGoBE.Controllers
                     return StatusCode(403, new { message = "Bạn không có quyền xóa tài khoản thuộc chi nhánh khác." });
             }
 
-            var result = await _service.DeleteAsync(id);
-            if (!result)
-                return NotFound(new { message = "Không tìm thấy Account để xóa" });
+            try
+            {
+                var result = await _service.DeleteAsync(id);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy Account để xóa" });
 
-            return Ok(new { message = "Xóa thành công" });
+                return Ok(new { message = "Xóa thành công" });
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }
