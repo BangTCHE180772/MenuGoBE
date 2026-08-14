@@ -6,7 +6,7 @@ namespace MenuGoBE.Interface.Services.Document
 {
     public interface ICashFlowService
     {
-        Task<IEnumerable<CashFlowResponseDto>> GetCashFlowsAsync(long branchId);
+        Task<IEnumerable<CashFlowResponseDto>> GetCashFlowsAsync(long? branchId);
 
         Task<CashFlowResponseDto?> GetByIdAsync(long id);
 
