@@ -281,7 +281,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
 
             _repoMock.Verify(r => r.CreateAsync(It.Is<WorkSchedule>(ws =>
                 ws.AccountId == dto.AccountId &&
-                ws.Status == "PENDING" &&
+                ws.Status == "Pending" &&
                 ws.Code == "WS-1-1-10-20260810")), Times.Once);
 
             _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
@@ -379,7 +379,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
             // Assert
             Assert.NotNull(result);
             Assert.Equal(2, result.Count);
-            _repoMock.Verify(r => r.CreateAsync(It.Is<WorkSchedule>(ws => ws.Status == "APPROVED" && ws.ManagerApproved == true)), Times.Exactly(2));
+            _repoMock.Verify(r => r.CreateAsync(It.Is<WorkSchedule>(ws => ws.Status == "Approved" && ws.ManagerApproved == true)), Times.Exactly(2));
             _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
         }
 

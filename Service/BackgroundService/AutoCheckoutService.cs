@@ -89,7 +89,7 @@ namespace MenuGoBE.Service
                     {
                         var checkOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Convert local EndTime to UTC
                         ws.CheckOutAt = checkOutTimeUtc;
-                        ws.Status = "Hoàn thành";
+                        ws.Status = "Completed";
                         if (ws.CheckInAt.HasValue)
                         {
                             ws.ActualHours = (decimal)Math.Max(0, (checkOutTimeUtc - ws.CheckInAt.Value).TotalHours);
@@ -102,7 +102,7 @@ namespace MenuGoBE.Service
                         var nextShiftStartUtc = DateTime.SpecifyKind(nextShiftStartLocal.AddHours(-7), DateTimeKind.Utc);
                         
                         nextSchedule.CheckInAt = nextShiftStartUtc;
-                        nextSchedule.Status = "Đang làm việc";
+                        nextSchedule.Status = "Working";
                         
                         await _repo.UpdateAsync(nextSchedule);
                         _logger.LogInformation($"Auto-Transition: Checked-in AccountId: {nextSchedule.AccountId}, ScheduleId: {nextSchedule.Id} at {nextShiftStartUtc}");
@@ -117,7 +117,7 @@ namespace MenuGoBE.Service
                     {
                         var forcedCheckOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
                         ws.CheckOutAt = forcedCheckOutTimeUtc;
-                        ws.Status = "Hoàn thành";
+                        ws.Status = "Completed";
                         if (ws.CheckInAt.HasValue)
                         {
                             ws.ActualHours = (decimal)Math.Max(0, (forcedCheckOutTimeUtc - ws.CheckInAt.Value).TotalHours);
