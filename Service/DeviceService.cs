@@ -20,6 +20,10 @@ namespace MenuGoBE.Service
 
         public async Task<object> SetupAsync(DeviceSetupDto dto, long branchId, long accountId)
         {
+            var existingDevice = await _context.Devices.FirstOrDefaultAsync(d => d.BranchId == branchId && d.Name.ToLower() == dto.Name.ToLower() && d.IsActive);
+            if (existingDevice != null)
+                throw new Exception("Tên thiết bị đã tồn tại và đang hoạt động trong chi nhánh. Vui lòng chọn tên khác.");
+
             var device = new Device
             {
                 BranchId = branchId,
@@ -92,6 +96,13 @@ namespace MenuGoBE.Service
             var device = await _repo.GetByIdAsync(dto.Id);
             if (device == null)
                 throw new Exception("Không tìm thấy thiết bị.");
+
+            if (dto.IsActive)
+            {
+                var existingDevice = await _context.Devices.FirstOrDefaultAsync(d => d.BranchId == device.BranchId && d.Id != device.Id && d.Name.ToLower() == dto.Name.ToLower() && d.IsActive);
+                if (existingDevice != null)
+                    throw new Exception("Tên thiết bị đã tồn tại và đang hoạt động. Vui lòng chọn tên khác trước khi cập nhật hoặc kích hoạt.");
+            }
 
             device.Name = dto.Name;
             device.DeviceType = dto.DeviceType;

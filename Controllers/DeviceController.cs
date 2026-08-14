@@ -67,8 +67,15 @@ namespace MenuGoBE.Controllers
             if (!validTypes.Contains(dto.DeviceType))
                 return BadRequest(new { message = $"Loại thiết bị không hợp lệ. Chỉ chấp nhận: {string.Join(", ", validTypes)}" });
 
-            var result = await _service.SetupAsync(dto, branchId, accountId);
-            return Ok(result);
+            try
+            {
+                var result = await _service.SetupAsync(dto, branchId, accountId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("validate")]
@@ -122,6 +129,8 @@ namespace MenuGoBE.Controllers
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("tồn tại"))
+                    return BadRequest(new { message = ex.Message });
                 return NotFound(new { message = ex.Message });
             }
         }
