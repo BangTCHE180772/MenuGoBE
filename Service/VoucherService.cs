@@ -130,7 +130,7 @@ public class VoucherService : IVoucherService
         if (v.UsedCount >= v.Quantity)
             return new VoucherCheckResponseDto { IsValid = false, Message = "Voucher đã hết lượt sử dụng." };
 
-        if (v.BranchId.HasValue && v.BranchId.Value != branchId)
+        if (v.BranchId.HasValue && v.BranchId.Value > 0 && branchId > 0 && v.BranchId.Value != branchId)
             return new VoucherCheckResponseDto { IsValid = false, Message = "Voucher không áp dụng tại chi nhánh này." };
 
         if (totalOrderAmount < v.MinOrderValue)

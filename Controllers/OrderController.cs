@@ -33,6 +33,13 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("invoices")]
+        public async Task<IActionResult> GetInvoices([FromQuery] long branchId)
+        {
+            var result = await _service.GetPaidOrdersByBranchAsync(branchId);
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(long id)
         {
