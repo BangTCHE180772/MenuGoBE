@@ -226,11 +226,16 @@ namespace MenuGoBE.Service
                 .Where(w => w.AccountId == dto.AccountId 
                          && w.WorkDate >= startDate 
                          && w.WorkDate <= endDate
-                         && (w.Status == "APPROVED"
-                             || w.Status == "COMPLETED"
+                         && (
+                             w.Status == "COMPLETED"
                              || w.Status == "Hoàn thành"
-                             || w.Status == "Đang làm việc"
-                             || w.ManagerApproved))
+                             || w.Status == "PRESENT"
+                             || w.Status == "PRESENT_APPROVED"
+                             || w.Status == "CÓ MẶT"
+                             || w.Status == "ĐÃ HOÀN THÀNH"
+                             || (w.CheckInAt != null && w.CheckOutAt != null)
+                             || (w.ActualHours.HasValue && w.ActualHours.Value > 0)
+                         ))
                 .ToListAsync();
 
             decimal actualWorkDays = schedules.Select(s => s.WorkDate).Distinct().Count();

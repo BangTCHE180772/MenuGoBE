@@ -493,11 +493,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
 
             var schedules = new List<WorkSchedule>
             {
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "APPROVED" }
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "COMPLETED" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "COMPLETED" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "COMPLETED" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "COMPLETED" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "COMPLETED" }
             };
             await _context.WorkSchedules.AddRangeAsync(schedules);
             await _context.SaveChangesAsync();
