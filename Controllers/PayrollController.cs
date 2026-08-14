@@ -161,6 +161,10 @@ namespace MenuGoBE.Controllers
                 {
                     return StatusCode(403, new { message = "Chủ sở hữu chỉ được tạo bảng lương cho tài khoản có vai trò Quản lý." });
                 }
+                if (targetAcc.BranchId.HasValue && targetAcc.BranchId.Value > 0)
+                {
+                    dto.BranchId = targetAcc.BranchId.Value;
+                }
             }
             else
             {
@@ -217,6 +221,10 @@ namespace MenuGoBE.Controllers
                 if (!targetAcc.RoleIds.Contains(3))
                 {
                     return StatusCode(403, new { message = "Chủ sở hữu chỉ được tự động tính bảng lương cho tài khoản có vai trò Quản lý." });
+                }
+                if (targetAcc.BranchId.HasValue && targetAcc.BranchId.Value > 0)
+                {
+                    dto.BranchId = targetAcc.BranchId.Value;
                 }
             }
             else
