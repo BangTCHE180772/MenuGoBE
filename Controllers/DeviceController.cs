@@ -239,7 +239,9 @@ namespace MenuGoBE.Controllers
 
                 var (success, msg, action) = await _workScheduleService.RecordAttendanceAsync(accountId, device.BranchId);
                 
-                _authService.RemoveChallenge(dto.ChallengeId);
+                // KHÔNG XÓA Challenge ở đây đối với Attendance
+                // Để các nhân viên khác xếp hàng phía sau có thể quét chung 1 mã QR trên màn hình
+                // _authService.RemoveChallenge(dto.ChallengeId);
                 
                 if (success)
                 {
