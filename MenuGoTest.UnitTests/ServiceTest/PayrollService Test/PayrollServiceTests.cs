@@ -441,8 +441,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
 
             var schedules = new List<WorkSchedule>
             {
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), ActualHours = 8, Status = "COMPLETED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), ActualHours = 6, Status = "COMPLETED" }
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), ActualHours = 8, Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), ActualHours = 6, Status = "Completed" }
             };
             await _context.WorkSchedules.AddRangeAsync(schedules);
             await _context.SaveChangesAsync();
@@ -493,11 +493,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
 
             var schedules = new List<WorkSchedule>
             {
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "COMPLETED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "COMPLETED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "COMPLETED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "COMPLETED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "COMPLETED" }
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "Completed" }
             };
             await _context.WorkSchedules.AddRangeAsync(schedules);
             await _context.SaveChangesAsync();

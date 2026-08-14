@@ -271,8 +271,7 @@ namespace MenuGoBE.Service
                          && w.WorkDate >= startDate 
                          && w.WorkDate <= endDate
                          && (
-                             w.Status == "COMPLETED"
-                             || w.Status == "Hoàn thành"
+                             w.Status == "Completed"
                              || w.Status == "PRESENT"
                              || w.Status == "PRESENT_APPROVED"
                              || w.Status == "CÓ MẶT"
