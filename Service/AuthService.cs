@@ -38,7 +38,7 @@ namespace MenuGoBE.Service
 
         public async Task<object> LoginAsync(LoginDto dto)
         {
-            var account = await _accountRepository.GetAccountByEmailAsync(dto.Email);
+            var account = await _accountRepository.GetAccountByEmailAsync(dto.Email.Trim().ToLower());
 
             if (account == null)
             {
