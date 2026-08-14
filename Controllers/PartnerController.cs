@@ -8,7 +8,7 @@ namespace MenuGoBE.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class PartnerController : ControllerBase
+    public class PartnerController : BaseApiController
     {
         private readonly IPartnerService _partnerService;
 
@@ -19,19 +19,37 @@ namespace MenuGoBE.Controllers
 
         // 1. GetAll
         [HttpGet]
-        public async Task<ActionResult<PagedResult<PartnerViewDto>>> GetAll([FromQuery] PartnerQueryDto query)
+        public async Task<IActionResult> GetAll([FromQuery] PartnerQueryDto query)
         {
+            if (query.BranchId.HasValue && query.BranchId.Value > 0)
+            {
+                if (!ValidateUserAndBranchToken(query.BranchId.Value, out _, out var branchError))
+                {
+                    return branchError!;
+                }
+            }
+            else
+            {
+                if (!ValidateUserToken(out _, out var tokenError))
+                {
+                    return tokenError!;
+                }
+            }
             var result = await _partnerService.GetPagedPartnersAsync(query);
             return Ok(result);
         }
 
         // 2. GetByBranchId
         [HttpGet("branch/{branchId}")]
-        public async Task<ActionResult<List<PartnerViewDto>>> GetByBranchId(
+        public async Task<IActionResult> GetByBranchId(
             long branchId,
             [FromQuery] string? search,
             [FromQuery] int? mode)
         {
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
+            {
+                return errorResult!;
+            }
             try
             {
                 var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode);
@@ -45,15 +63,14 @@ namespace MenuGoBE.Controllers
 
         // 2b. GetSuppliers (Mode 1: Supplier)
         [HttpGet("suppliers")]
-        public async Task<ActionResult<List<PartnerViewDto>>> GetSuppliers(
+        public async Task<IActionResult> GetSuppliers(
             [FromQuery] long branchId,
             [FromQuery] string? search)
         {
-            if (branchId <= 0)
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
             {
-                return BadRequest(new { message = "BranchId là bắt buộc." });
+                return errorResult!;
             }
-
             try
             {
                 var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode: 1);
@@ -67,15 +84,14 @@ namespace MenuGoBE.Controllers
 
         // 2c. GetExtraPartners (Mode 2: Transporter & Other)
         [HttpGet("extra-partners")]
-        public async Task<ActionResult<List<PartnerViewDto>>> GetExtraPartners(
+        public async Task<IActionResult> GetExtraPartners(
             [FromQuery] long branchId,
             [FromQuery] string? search)
         {
-            if (branchId <= 0)
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
             {
-                return BadRequest(new { message = "BranchId là bắt buộc." });
+                return errorResult!;
             }
-
             try
             {
                 var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode: 2);
@@ -89,11 +105,15 @@ namespace MenuGoBE.Controllers
 
         // 3. GetByBranchIdAndMode
         [HttpGet("branch/{branchId}/mode/{mode}")]
-        public async Task<ActionResult<List<PartnerViewDto>>> GetByBranchIdAndMode(
+        public async Task<IActionResult> GetByBranchIdAndMode(
             long branchId,
             int mode,
             [FromQuery] string? search)
         {
+            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
+            {
+                return errorResult!;
+            }
             try
             {
                 var result = await _partnerService.GetPartnersByBranchAsync(branchId, search, mode);
@@ -107,16 +127,15 @@ namespace MenuGoBE.Controllers
 
         // 4. Create (NeedToProvide BranchId)
         [HttpPost]
-        public async Task<ActionResult<PartnerViewDto>> Create([FromBody] PartnerCreateDto dto)
+        public async Task<IActionResult> Create([FromBody] PartnerCreateDto dto)
         {
-            if (dto.BranchId <= 0)
+            if (!ValidateUserAndBranchToken(dto.BranchId, out long userId, out var errorResult))
             {
-                return BadRequest(new { message = "BranchId là bắt buộc." });
+                return errorResult!;
             }
-
             try
             {
-                var result = await _partnerService.CreatePartnerAsync(dto, 1); // Mock User ID 1 for now
+                var result = await _partnerService.CreatePartnerAsync(dto, userId);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -127,8 +146,12 @@ namespace MenuGoBE.Controllers
 
         // 4. Update (Chỉ dựa vào partnerId, không cập nhật BranchId & Type)
         [HttpPut("{id}")]
-        public async Task<ActionResult<PartnerViewDto>> Update(long id, [FromBody] PartnerUpdateDto dto)
+        public async Task<IActionResult> Update(long id, [FromBody] PartnerUpdateDto dto)
         {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
             try
             {
                 var result = await _partnerService.UpdatePartnerAsync(id, dto);
@@ -142,8 +165,12 @@ namespace MenuGoBE.Controllers
 
         // 5. Delete By Id
         [HttpDelete("{id}")]
-        public async Task<ActionResult> Delete(long id)
+        public async Task<IActionResult> Delete(long id)
         {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
             try
             {
                 await _partnerService.DeletePartnerAsync(id);
