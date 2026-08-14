@@ -77,7 +77,7 @@ namespace MenuGoBE.Repositories
                 .Where(od => od.ProductId == productId 
                              && od.Order.Table.Area.BranchId == branchId
                              && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
-                .SumAsync(od => od.Quantity);
+                .SumAsync(od => (int?)od.Quantity) ?? 0;
         }
 
         public async Task SaveChangesAsync()
