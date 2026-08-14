@@ -461,5 +461,242 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Lỗi khi lấy dữ liệu thẻ kho lịch sử.", error = ex.Message });
             }
         }
+
+        #region Lấy Báo Cáo Tiêu Thụ Nguyên Liệu
+        /// <summary>
+        /// Lấy báo cáo tiêu thụ nguyên liệu và biến động sai số cho một chi nhánh trong một khoảng thời gian.
+        /// </summary>
+        [HttpGet("branch/{branchId}/consumption-report")]
+        public async Task<IActionResult> GetConsumptionReport(
+            long branchId,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            try
+            {
+                var start = startDate ?? DateTime.UtcNow.AddDays(-30);
+                var end = endDate ?? DateTime.UtcNow;
+
+                // Đồng bộ múi giờ UTC
+                if (start.Kind != DateTimeKind.Utc) start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+                if (end.Kind != DateTimeKind.Utc) end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
+
+                var query = _context.BInventories
+                    .AsNoTracking()
+                    .Include(b => b.Product)
+                    .Where(b => b.BranchId == branchId && b.Product.Type != ProductType.Processed);
+
+                var bInventories = await query.ToListAsync();
+                var bInvIds = bInventories.Select(b => b.Id).ToList();
+
+                // Lấy toàn bộ thẻ kho liên quan để tối ưu hóa truy vấn
+                var ledgers = await _context.InventoryLedgers
+                    .AsNoTracking()
+                    .Where(l => bInvIds.Contains(l.BInventoryId))
+                    .OrderBy(l => l.PostedAt)
+                    .ThenBy(l => l.PostingSequence)
+                    .ToListAsync();
+
+                var report = new List<object>();
+
+                foreach (var bInv in bInventories)
+                {
+                    var itemLedgers = ledgers.Where(l => l.BInventoryId == bInv.Id).ToList();
+
+                    // 1. Tồn đầu kỳ (Opening Stock)
+                    var lastBeforeStart = itemLedgers
+                        .Where(l => l.PostedAt < start)
+                        .OrderByDescending(l => l.PostedAt)
+                        .ThenByDescending(l => l.PostingSequence)
+                        .FirstOrDefault();
+                    decimal openingStock = lastBeforeStart?.RunningQuantity ?? 0;
+
+                    // 2. Tồn cuối kỳ (Closing Stock)
+                    var lastBeforeEnd = itemLedgers
+                        .Where(l => l.PostedAt <= end)
+                        .OrderByDescending(l => l.PostedAt)
+                        .ThenByDescending(l => l.PostingSequence)
+                        .FirstOrDefault();
+                    decimal closingStock = lastBeforeEnd?.RunningQuantity ?? (lastBeforeStart?.RunningQuantity ?? 0);
+
+                    // Danh sách thẻ kho trong kỳ
+                    var periodLedgers = itemLedgers.Where(l => l.PostedAt >= start && l.PostedAt <= end).ToList();
+
+                    // 3. Nhập (Import)
+                    decimal import = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Import)
+                        .Sum(l => l.QuantityDelta);
+
+                    // 4. Chuyển vào (Transfer In)
+                    decimal transferIn = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Transfer && l.QuantityDelta > 0)
+                        .Sum(l => l.QuantityDelta);
+
+                    // 5. Chuyển ra (Transfer Out)
+                    decimal transferOut = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Transfer && l.QuantityDelta < 0)
+                        .Sum(l => Math.Abs(l.QuantityDelta));
+
+                    // 6. Tiêu thụ định mức (Expected Consumption)
+                    decimal expectedConsumption = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Sale)
+                        .Sum(l => Math.Abs(l.QuantityDelta));
+
+                    // 7. Hệ thống ghi nhận tiêu thụ (System Recorded Consumption)
+                    decimal systemConsumption = openingStock + import + transferIn - transferOut - closingStock;
+
+                    // Chuẩn hóa không âm
+                    if (systemConsumption < 0) systemConsumption = 0;
+
+                    // 8. Chênh lệch (Variance)
+                    decimal variance = systemConsumption - expectedConsumption;
+
+                    // 9. Sai số % (Variance %)
+                    decimal variancePercent = 0;
+                    if (expectedConsumption > 0)
+                    {
+                        variancePercent = Math.Round((variance / expectedConsumption) * 100, 2);
+                    }
+                    else if (variance != 0)
+                    {
+                        variancePercent = variance > 0 ? 100 : -100;
+                    }
+
+                    var unitName = bInv.Product.UnitConversions
+                        .Where(uc => uc.BaseId == null)
+                        .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                        .FirstOrDefault() ?? "Đĩa";
+
+                    report.Add(new
+                    {
+                        id = bInv.Product.SKUCode ?? $"SP{bInv.ProductId}",
+                        bInventoryId = bInv.Id,
+                        name = bInv.Product.Name,
+                        category = bInv.Product.Group != null ? bInv.Product.Group.Name : "---",
+                        unit = unitName,
+                        openingStock,
+                        import,
+                        transferIn,
+                        transferOut,
+                        systemConsumption,
+                        expectedConsumption,
+                        variance,
+                        variancePercent,
+                        closingStock
+                    });
+                }
+
+                return Ok(report);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lập báo cáo tiêu hao.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Lấy Nhật Ký Giao Dịch Kho
+        /// <summary>
+        /// Lấy nhật ký giao dịch kho (Inventory Detail Report) cho một chi nhánh trong một khoảng thời gian.
+        /// </summary>
+        [HttpGet("branch/{branchId}/transaction-ledger")]
+        public async Task<IActionResult> GetTransactionLedger(
+            long branchId,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate)
+        {
+            try
+            {
+                var start = startDate ?? DateTime.UtcNow.AddDays(-30);
+                var end = endDate ?? DateTime.UtcNow;
+
+                // Đồng bộ múi giờ UTC
+                if (start.Kind != DateTimeKind.Utc) start = DateTime.SpecifyKind(start, DateTimeKind.Utc);
+                if (end.Kind != DateTimeKind.Utc) end = DateTime.SpecifyKind(end, DateTimeKind.Utc);
+
+                var ledgers = await _context.InventoryLedgers
+                    .AsNoTracking()
+                    .Include(l => l.Document)
+                    .Include(l => l.BInventory)
+                        .ThenInclude(b => b.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                    .Where(l => l.BInventory.BranchId == branchId && l.PostedAt >= start && l.PostedAt <= end)
+                    .OrderByDescending(l => l.PostedAt)
+                    .ThenByDescending(l => l.PostingSequence)
+                    .ToListAsync();
+
+                var list = ledgers.Select(l => {
+                    var docTypeStr = GetTransactionTypeLabel(l.DocumentType, l.QuantityDelta);
+                    decimal importQty = 0;
+                    decimal exportQty = 0;
+                    decimal adjustQty = 0;
+
+                    if (docTypeStr == "Nhập kho" || docTypeStr == "Khách trả hàng")
+                    {
+                        importQty = l.QuantityDelta;
+                    }
+                    else if (docTypeStr == "Xuất kho" || docTypeStr == "Xuất hủy" || docTypeStr == "Trả hàng")
+                    {
+                        exportQty = Math.Abs(l.QuantityDelta);
+                    }
+                    else // Điều chỉnh, Kiểm kho, v.v.
+                    {
+                        adjustQty = l.QuantityDelta;
+                    }
+
+                    var unitName = l.BInventory?.Product?.UnitConversions?
+                        .Where(uc => uc.BaseId == null)
+                        .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                        .FirstOrDefault();
+
+                    if (string.IsNullOrWhiteSpace(unitName))
+                    {
+                        unitName = "Đĩa";
+                    }
+
+                    return new
+                    {
+                        id = l.Id,
+                        time = l.PostedAt.ToString("HH:mm dd/MM/yyyy"),
+                        docCode = l.Document != null ? l.Document.Code : $"SP-LDG-{l.Id}",
+                        transactionType = docTypeStr,
+                        ingredientName = l.SnapshotProductName,
+                        quantity = l.QuantityDelta,
+                        unit = unitName,
+                        importQty,
+                        exportQty,
+                        adjustQty,
+                        createdBy = l.SnapshotPostedByName ?? "Hệ thống",
+                        note = l.Document != null ? l.Document.Note : string.Empty
+                    };
+                }).ToList();
+
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy nhật ký giao dịch kho.", error = ex.Message });
+            }
+        }
+
+        private static string GetTransactionTypeLabel(DocumentType type, decimal delta)
+        {
+            return type switch
+            {
+                DocumentType.Import => "Nhập kho",
+                DocumentType.Return => "Trả hàng",
+                DocumentType.Sale => "Xuất kho",
+                DocumentType.CustomerReturn => "Khách trả hàng",
+                DocumentType.Transfer => "Chuyển kho",
+                DocumentType.Export => "Xuất hủy",
+                DocumentType.ExportDelete => "Xuất hủy",
+                DocumentType.Production => "Sản xuất",
+                DocumentType.Check => "Kiểm kho",
+                DocumentType.CostAdjustment => "Điều chỉnh",
+                _ => delta >= 0 ? "Nhập kho" : "Xuất kho"
+            };
+        }
+        #endregion
     }
 }
