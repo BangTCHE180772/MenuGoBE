@@ -246,7 +246,12 @@ namespace MenuGoBE.Service
             string salaryType = contract?.SalaryType ?? "Monthly";
 
             decimal calculatedSalary = 0;
-            if (salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase))
+            if (contract != null && contract.RoleId == 3)
+            {
+                // Đối với Quản lý (Manager - RoleId 3), Owner tính lương trực tiếp theo Lương cơ bản trong hợp đồng (không tính theo ngày công chuẩn)
+                calculatedSalary = baseSalary;
+            }
+            else if (salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase))
             {
                 calculatedSalary = baseSalary * actualWorkHours;
             }
