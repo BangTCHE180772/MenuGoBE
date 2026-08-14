@@ -416,17 +416,31 @@ namespace MenuGoTest.UnitTests.ServiceTest.AccountServiceTest
         }
 
         [Fact]
-        public async Task DeleteAsync_WhenAccountNotFound_ShouldReturnFalse()
+        public async Task DeleteAsync_WhenAccountHasActiveContract_ShouldThrowInvalidOperationException()
         {
             // Arrange
-            long accountId = 999;
-            _repoMock.Setup(r => r.GetByIdAsync(accountId)).ReturnsAsync((Account?)null);
+            long accountId = 1;
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+            var account = new Account
+            {
+                Id = accountId,
+                Name = "Active Contract User",
+                Contracts = new List<Contract>
+                {
+                    new Contract
+                    {
+                        Status = "Active",
+                        StartDate = today.AddDays(-10),
+                        EndDate = today.AddDays(30)
+                    }
+                }
+            };
 
-            // Act
-            var result = await _service.DeleteAsync(accountId);
+            _repoMock.Setup(r => r.GetByIdAsync(accountId)).ReturnsAsync(account);
 
-            // Assert
-            Assert.False(result);
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(accountId));
+            Assert.Contains("không thể xóa tài khoản", ex.Message.ToLower());
             _repoMock.Verify(r => r.DeleteAsync(It.IsAny<long>()), Times.Never);
         }
 

@@ -138,6 +138,17 @@ namespace MenuGoBE.Service
             var entity = await _repo.GetByIdAsync(id);
             if (entity == null) return false;
 
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+            var hasActiveContract = entity.Contracts != null && entity.Contracts.Any(c =>
+                (string.Equals(c.Status, "Active", StringComparison.OrdinalIgnoreCase) || c.Status == "1" || string.Equals(c.Status, "Đang hiệu lực", StringComparison.OrdinalIgnoreCase))
+                && c.StartDate <= today
+                && (!c.EndDate.HasValue || c.EndDate.Value >= today));
+
+            if (hasActiveContract)
+            {
+                throw new InvalidOperationException($"Không thể xóa tài khoản '{entity.Name}' vì nhân viên đang có hợp đồng làm việc còn hiệu lực.");
+            }
+
             await _repo.DeleteAsync(id);
             await _repo.SaveChangesAsync();
 
