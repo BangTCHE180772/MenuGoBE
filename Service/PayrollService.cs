@@ -285,8 +285,10 @@ namespace MenuGoBE.Service
             decimal actualWorkHours = schedules.Sum(s => s.ActualHours ?? 0);
 
             decimal baseSalary = contract?.BaseSalary ?? 0;
-            int baseWorkDays = (contract?.BaseWorkDay.HasValue == true && contract.BaseWorkDay.Value > 0) ? contract.BaseWorkDay.Value : 26;
             string salaryType = contract?.SalaryType ?? "Monthly";
+            bool isHourly = salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase);
+
+            int baseWorkDays = isHourly ? 0 : ((contract?.BaseWorkDay.HasValue == true && contract.BaseWorkDay.Value > 0) ? contract.BaseWorkDay.Value : 26);
 
             decimal calculatedSalary = 0;
             if (contract != null && contract.RoleId == 3)
@@ -294,7 +296,7 @@ namespace MenuGoBE.Service
                 // Đối với Quản lý (Manager - RoleId 3), Owner tính lương trực tiếp theo Lương cơ bản trong hợp đồng (không tính theo ngày công chuẩn)
                 calculatedSalary = baseSalary;
             }
-            else if (salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase))
+            else if (isHourly)
             {
                 calculatedSalary = baseSalary * actualWorkHours;
             }
