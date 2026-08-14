@@ -131,7 +131,7 @@ namespace MenuGoBE.Service
             entity.BonusAmount = dto.BonusAmount;
             entity.TotalDeduction = dto.TotalDeduction;
             entity.PenaltyAmount = dto.PenaltyAmount;
-            entity.NetSalary = dto.NetSalary;
+            var oldStatus = entity.Status;
             entity.Status = dto.Status;
             entity.PaymentDate = dto.PaymentDate;
             entity.Note = dto.Note;
@@ -159,6 +159,12 @@ namespace MenuGoBE.Service
             RecalculateTotals(entity);
 
             await _payrollRepo.UpdateAsync(entity);
+
+            if (oldStatus != PayrollStatus.Paid && entity.Status == PayrollStatus.Paid)
+            {
+                await CreateCashFlowForPayrollAsync(entity);
+            }
+
             return true;
         }
 
@@ -181,6 +187,7 @@ namespace MenuGoBE.Service
             var entity = await _payrollRepo.GetByIdAsync(id);
             if (entity == null) return false;
 
+            var oldStatus = entity.Status;
             entity.Status = status;
             if (status == PayrollStatus.Paid)
             {
@@ -195,7 +202,44 @@ namespace MenuGoBE.Service
             }
 
             await _payrollRepo.UpdateAsync(entity);
+
+            if (oldStatus != PayrollStatus.Paid && status == PayrollStatus.Paid)
+            {
+                await CreateCashFlowForPayrollAsync(entity);
+            }
+
             return true;
+        }
+
+        private async Task CreateCashFlowForPayrollAsync(Payroll payroll)
+        {
+            if (payroll.NetSalary <= 0) return;
+
+            var account = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == payroll.AccountId);
+            var employeeName = account?.Name ?? $"ID {payroll.AccountId}";
+
+            var tempCode = $"PC{DateTime.UtcNow.Ticks % 1_000_000:D6}";
+            var cashFlow = new CashFlow
+            {
+                BranchId = payroll.BranchId,
+                Code = tempCode,
+                BusinessDate = payroll.PaymentDate ?? DateTime.UtcNow,
+                Direction = CashFlowDirection.Outflow,
+                Type = CashFlowDetailType.Payment,
+                PaymentMethod = PaymentMethod.Cash,
+                Status = CashFlowStatus.Completed,
+                TotalAmount = payroll.NetSalary,
+                Note = $"Chi trả lương tháng {payroll.Month}/{payroll.Year} cho nhân viên {employeeName}",
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            await _context.CashFlows.AddAsync(cashFlow);
+            await _context.SaveChangesAsync();
+
+            cashFlow.Code = $"PC{cashFlow.Id:D6}";
+            _context.CashFlows.Update(cashFlow);
+            await _context.SaveChangesAsync();
         }
 
         public async Task<PayrollViewDto> GenerateEmployeePayrollAsync(PayrollGenerateDto dto)
