@@ -26,7 +26,7 @@ namespace MenuGoBE.Service
             {
                 ChallengeId = challengeId,
                 DeviceToken = deviceToken,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(3) 
+                ExpiresAt = DateTime.UtcNow.AddMinutes(5) 
             };
 
             _challenges.TryAdd(challengeId, challenge);
