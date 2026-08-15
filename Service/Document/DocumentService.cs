@@ -1777,22 +1777,24 @@ namespace MenuGoBE.Service.Document
                 if (binventory == null)
                     throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Mặt hàng '{item.Product.Name}' chưa có trong kho.");
 
-                if (binventory.Quantity < item.TotalRequiredQuantity)
-                    throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Không đủ tồn kho '{item.Product.Name}'. Yêu cầu: {item.TotalRequiredQuantity:N3}, Tồn: {binventory.Quantity:N3}");
-
-                decimal leftover_old = binventory.LeftOver;
-                decimal val_delta;
-
-                binventory.Quantity -= item.TotalRequiredQuantity;
-
-                if (binventory.Quantity == 0)
+                decimal val_delta = 0m;
+                if (binventory.IsManageQuantity)
                 {
-                    val_delta = -((item.TotalRequiredQuantity * binventory.Avg) + leftover_old);
-                    binventory.LeftOver = 0;
-                }
-                else
-                {
-                    val_delta = -(item.TotalRequiredQuantity * binventory.Avg);
+                    if (binventory.Quantity < item.TotalRequiredQuantity)
+                        throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Không đủ tồn kho '{item.Product.Name}'. Yêu cầu: {item.TotalRequiredQuantity:N3}, Tồn: {binventory.Quantity:N3}");
+
+                    decimal leftover_old = binventory.LeftOver;
+                    binventory.Quantity -= item.TotalRequiredQuantity;
+
+                    if (binventory.Quantity == 0)
+                    {
+                        val_delta = -((item.TotalRequiredQuantity * binventory.Avg) + leftover_old);
+                        binventory.LeftOver = 0;
+                    }
+                    else
+                    {
+                        val_delta = -(item.TotalRequiredQuantity * binventory.Avg);
+                    }
                 }
 
                 var account = await _repo.GetAccountByIdAsync(userId);
@@ -1850,8 +1852,8 @@ namespace MenuGoBE.Service.Document
                 string note = "";
                 
                 // Logic kiểm tra Regular và IsIntact nằm ở đây
-                if (product.Type == ProductType.Regular && isIntact)
-                {
+                // if (product.Type == ProductType.Regular && isIntact)
+                // {
                     // Cộng lại tồn kho
                     binventory.Quantity += baseQuantity;
                     
@@ -1882,12 +1884,12 @@ namespace MenuGoBE.Service.Document
                     await _repo.AddInventoryLedgerAsync(ledger);
                     
                     note = "Trả lại nguyên vẹn - Đã cộng tồn kho";
-                }
-                else
-                {
-                    // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho
-                    note = "Hàng lỗi/Đã chế biến - Không cộng tồn kho";
-                }
+                // }
+                // else
+                // {
+                //     // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho
+                //     note = "Hàng lỗi/Đã chế biến - Không cộng tồn kho";
+                // }
 
                 // LUÔN LUÔN ghi nhận vào chi tiết phiếu trả (DocumentDetail)
                 var childDetail = new DocumentDetail

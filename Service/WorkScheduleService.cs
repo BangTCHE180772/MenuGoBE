@@ -451,7 +451,17 @@ namespace MenuGoBE.Service
             var targetAccount = await _accountRepo.GetByIdAsync(dto.TargetAccountId);
             if (targetAccount == null) return false;
 
+            if (await _repo.ExistsAsync(dto.TargetAccountId, entity.ShiftId, entity.WorkDate))
+            {
+                throw new InvalidOperationException($"Nhân viên nhận ca ({targetAccount.Name}) đã được phân công ca làm việc này vào ngày {entity.WorkDate:dd/MM/yyyy}.");
+            }
+
             var shift = await _shiftRepo.GetByIdAsync(entity.ShiftId);
+            if (shift != null && await _repo.HasOverlappingScheduleAsync(dto.TargetAccountId, entity.WorkDate, shift.StartTime, shift.EndTime))
+            {
+                throw new InvalidOperationException($"Nhân viên nhận ca ({targetAccount.Name}) đã có ca làm việc trùng giờ trong ngày {entity.WorkDate:dd/MM/yyyy}.");
+            }
+
             if (shift != null)
             {
                 var localNow = DateTime.UtcNow.AddHours(7);

@@ -96,7 +96,47 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
+                        .ThenInclude(a => a.Branch)
+                            .ThenInclude(b => b.Address)
+                                .ThenInclude(addr => addr.NewWard)
+                                    .ThenInclude(w => w.NewProvince)
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                        .ThenInclude(a => a.Branch)
+                            .ThenInclude(b => b.Address)
+                                .ThenInclude(addr => addr.OldWard)
+                                    .ThenInclude(w => w.OldDistrict)
+                                        .ThenInclude(d => d.OldProvince)
+                .Include(o => o.Customer)
+                .Include(o => o.Voucher)
+                .Include(o => o.Payments)
                 .FirstOrDefaultAsync();
+        }
+
+        public async Task<List<Order>> GetPaidOrdersByBranchAsync(long branchId)
+        {
+            return await _context.Orders
+                .Where(o => (branchId <= 0 || (o.Table != null && o.Table.Area != null && o.Table.Area.BranchId == branchId)) && o.Status == "Paid")
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                        .ThenInclude(a => a.Branch)
+                            .ThenInclude(b => b.Address)
+                                .ThenInclude(addr => addr.NewWard)
+                                    .ThenInclude(w => w.NewProvince)
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                        .ThenInclude(a => a.Branch)
+                            .ThenInclude(b => b.Address)
+                                .ThenInclude(addr => addr.OldWard)
+                                    .ThenInclude(w => w.OldDistrict)
+                                        .ThenInclude(d => d.OldProvince)
+                .Include(o => o.Customer)
+                .Include(o => o.Voucher)
+                .Include(o => o.Payments)
+                .OrderByDescending(o => o.CreatedAt)
+                .ToListAsync();
         }
 
         public async Task CreateAsync(Order entity)

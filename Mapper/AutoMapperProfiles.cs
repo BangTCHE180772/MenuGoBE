@@ -88,11 +88,20 @@ namespace MenuGoBE.Mapper
             //order
             CreateMap<Order, OrderViewDto>()
                 .ForMember(dest => dest.TableName, opt => opt.MapFrom(src => src.Table != null ? (src.ChildOrders.Any() ? src.Table.Name + ", " + string.Join(", ", src.ChildOrders.Select(c => c.Table.Name)) : src.Table.Name) : null))
-                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.Payments.OrderByDescending(p => p.CreatedAt).Select(p => p.Method).FirstOrDefault()));
+                .ForMember(dest => dest.AreaName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? src.Table.Area.Name : null))
+                .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? (long?)src.Table.Area.BranchId : (long?)null))
+                .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null ? src.Table.Area.Branch.Name : null))
+                .ForMember(dest => dest.BranchAddress, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null && src.Table.Area.Branch.Address != null ? (src.Table.Area.Branch.Address.NewWard != null ? src.Table.Area.Branch.Address.NewWard.Name + ", " + src.Table.Area.Branch.Address.NewWard.NewProvince.Name : (src.Table.Area.Branch.Address.OldWard != null ? src.Table.Area.Branch.Address.OldWard.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict.OldProvince.Name : null)) : null))
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
+                .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
+                .ForMember(dest => dest.VoucherCode, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Code : null))
+                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.Payments.OrderByDescending(p => p.CreatedAt).Select(p => p.Method).FirstOrDefault()))
+                .ForMember(dest => dest.OrderDetails, opt => opt.MapFrom(src => src.OrderDetails));
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
             CreateMap<OrderDetail, OrderDetailViewDto>()
-                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty));
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty))
+                .ForMember(dest => dest.ProductType, opt => opt.MapFrom(src => src.Product != null ? src.Product.Type.ToString() : string.Empty));
             CreateMap<OrderDetailCreateDto, OrderDetail>();
             CreateMap<OrderDetailUpdateDto, OrderDetail>();
 

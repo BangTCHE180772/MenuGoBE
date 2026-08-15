@@ -45,6 +45,7 @@ namespace MenuGoBE.Service
 
         public async Task<AccountViewDto> CreateAsync(AccountCreateDto dto, long creatorAccountId = 0)
         {
+            dto.Email = dto.Email.Trim().ToLower();
             // Validate uniqueness
             if (await _repo.ExistsByEmailAsync(dto.Email))
                 throw new InvalidOperationException("Email đã được sử dụng.");
@@ -99,6 +100,7 @@ namespace MenuGoBE.Service
 
         public async Task<bool> UpdateAsync(AccountUpdateDto dto)
         {
+            dto.Email = dto.Email.Trim().ToLower();
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
 

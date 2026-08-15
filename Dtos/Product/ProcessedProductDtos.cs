@@ -12,6 +12,7 @@ namespace MenuGoBE.Dtos.Product
         public bool IsSellable { get; set; } = true;
         public decimal SellPrice { get; set; }
         public List<ProductRecipeDetailedDto>? Recipe { get; set; }
+        public List<ProductUnitConversionDto>? UnitConversions { get; set; }
         public List<long>? MenuIds { get; set; }
     }
 
