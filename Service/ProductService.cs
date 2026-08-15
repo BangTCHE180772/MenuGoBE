@@ -564,11 +564,7 @@ namespace MenuGoBE.Service
             // Sync unit conversions if unit conversions array is provided in request
             if (dto.UnitConversions != null)
             {
-                await _repo.ClearUnitConversionsAsync(targetProduct.Id);
-                if (dto.UnitConversions.Count > 0)
-                {
-                    await SaveUnitConversionsAsync(targetProduct.Id, dto.UnitConversions);
-                }
+                await _repo.SyncUnitConversionsAsync(targetProduct.Id, dto.UnitConversions);
             }
 
             // Sync direct recipe items

@@ -1,4 +1,6 @@
 using MenuGoBE.Data;
+using MenuGoBE.Dtos.Product;
+using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
@@ -137,7 +139,145 @@ namespace MenuGoBE.Repositories
             var conversions = await _context.UnitConversions
                 .Where(uc => uc.ProductId == productId)
                 .ToListAsync();
-            _context.UnitConversions.RemoveRange(conversions);
+
+            if (conversions.Count > 0)
+            {
+                var derived = conversions.Where(uc => uc.BaseId != null).ToList();
+                if (derived.Count > 0)
+                {
+                    _context.UnitConversions.RemoveRange(derived);
+                    await _context.SaveChangesAsync();
+                }
+
+                var bases = conversions.Where(uc => uc.BaseId == null).ToList();
+                if (bases.Count > 0)
+                {
+                    _context.UnitConversions.RemoveRange(bases);
+                    await _context.SaveChangesAsync();
+                }
+            }
+        }
+
+        public async Task SyncUnitConversionsAsync(long productId, List<ProductUnitConversionDto> conversions)
+        {
+            var existingConversions = await _context.UnitConversions
+                .Where(uc => uc.ProductId == productId)
+                .ToListAsync();
+
+            if (conversions == null || conversions.Count == 0)
+            {
+                if (existingConversions.Count > 0)
+                {
+                    foreach (var existing in existingConversions)
+                    {
+                        bool isUsed = await _context.DocumentDetails.AnyAsync(dd => dd.UnitConversionId == existing.Id);
+                        if (isUsed)
+                        {
+                            throw new MenuGoException(ErrorCodes.UnitConversionInUseCannotBeDeleted);
+                        }
+                    }
+
+                    var derived = existingConversions.Where(uc => uc.BaseId != null).ToList();
+                    if (derived.Count > 0)
+                    {
+                        _context.UnitConversions.RemoveRange(derived);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    var bases = existingConversions.Where(uc => uc.BaseId == null).ToList();
+                    if (bases.Count > 0)
+                    {
+                        _context.UnitConversions.RemoveRange(bases);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                return;
+            }
+
+            var baseDto = conversions.First(c => c.IsBase);
+            var derivedDtos = conversions.Where(c => !c.IsBase).ToList();
+
+            // 1. Base Unit Conversion
+            var existingBase = existingConversions.FirstOrDefault(uc => uc.UnitId == baseDto.UnitId);
+            if (existingBase == null)
+            {
+                existingBase = new UnitConversion
+                {
+                    ProductId = productId,
+                    UnitId = baseDto.UnitId,
+                    BaseId = null,
+                    ConversionPoint = 1.0m,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _context.UnitConversions.AddAsync(existingBase);
+            }
+            else
+            {
+                existingBase.BaseId = null;
+                existingBase.ConversionPoint = 1.0m;
+                _context.UnitConversions.Update(existingBase);
+            }
+
+            await _context.SaveChangesAsync();
+
+            // 2. Derived Unit Conversions
+            var targetDerivedUnitIds = derivedDtos.Select(d => d.UnitId).ToHashSet();
+
+            foreach (var derivedDto in derivedDtos)
+            {
+                var existingDerived = existingConversions.FirstOrDefault(uc => uc.UnitId == derivedDto.UnitId);
+                if (existingDerived == null)
+                {
+                    var newDerived = new UnitConversion
+                    {
+                        ProductId = productId,
+                        UnitId = derivedDto.UnitId,
+                        BaseId = existingBase.Id,
+                        ConversionPoint = derivedDto.ConversionPoint,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _context.UnitConversions.AddAsync(newDerived);
+                }
+                else
+                {
+                    existingDerived.BaseId = existingBase.Id;
+                    existingDerived.ConversionPoint = derivedDto.ConversionPoint;
+                    _context.UnitConversions.Update(existingDerived);
+                }
+            }
+
+            // 3. Remove conversions that are no longer present in payload
+            var conversionsToRemove = existingConversions
+                .Where(uc => uc.UnitId != baseDto.UnitId && !targetDerivedUnitIds.Contains(uc.UnitId))
+                .ToList();
+
+            if (conversionsToRemove.Count > 0)
+            {
+                foreach (var toRemove in conversionsToRemove)
+                {
+                    bool isUsed = await _context.DocumentDetails.AnyAsync(dd => dd.UnitConversionId == toRemove.Id);
+                    if (isUsed)
+                    {
+                        throw new MenuGoException(ErrorCodes.UnitConversionInUseCannotBeDeleted);
+                    }
+                }
+
+                var derivedToRemove = conversionsToRemove.Where(uc => uc.BaseId != null).ToList();
+                if (derivedToRemove.Count > 0)
+                {
+                    _context.UnitConversions.RemoveRange(derivedToRemove);
+                    await _context.SaveChangesAsync();
+                }
+
+                var baseToRemove = conversionsToRemove.Where(uc => uc.BaseId == null).ToList();
+                if (baseToRemove.Count > 0)
+                {
+                    _context.UnitConversions.RemoveRange(baseToRemove);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<ProductType?> GetProductTypeEnumAsync(long id)
