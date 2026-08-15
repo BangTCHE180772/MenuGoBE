@@ -19,7 +19,7 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<List<Notification>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null)
+        public async Task<List<Notification>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0)
         {
             var dbQuery = _context.Notifications
                 .Include(n => n.Branch)
@@ -27,6 +27,11 @@ namespace MenuGoBE.Repositories
 
             dbQuery = ApplyFilters(dbQuery, query);
             dbQuery = ApplyRoleFilter(dbQuery, userRole);
+            
+            if (accountId > 0)
+            {
+                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
+            }
 
             return await dbQuery
                 .OrderByDescending(n => n.IsImportant)
@@ -36,21 +41,29 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
-        public async Task<int> GetTotalCountAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null)
+        public async Task<int> GetTotalCountAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0)
         {
             var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId));
             dbQuery = ApplyFilters(dbQuery, query);
             dbQuery = ApplyRoleFilter(dbQuery, userRole);
+            if (accountId > 0)
+            {
+                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
+            }
             return await dbQuery.CountAsync();
         }
 
-        public async Task<List<Notification>> GetRecentNotificationsAsync(long[] branchIds, int limit, string? userRole = null)
+        public async Task<List<Notification>> GetRecentNotificationsAsync(long[] branchIds, int limit, string? userRole = null, long accountId = 0)
         {
             var dbQuery = _context.Notifications
                 .Include(n => n.Branch)
                 .Where(n => branchIds.Contains(n.BranchId));
 
             dbQuery = ApplyRoleFilter(dbQuery, userRole);
+            if (accountId > 0)
+            {
+                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
+            }
 
             var list = await dbQuery.ToListAsync();
 
@@ -62,12 +75,14 @@ namespace MenuGoBE.Repositories
                 .ToList();
         }
 
-        public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null)
+        public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null, long accountId = 0)
         {
-            var dbQuery = _context.Notifications
-                .Where(n => branchIds.Contains(n.BranchId) && !n.IsRead);
-
+            var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId) && !n.IsRead);
             dbQuery = ApplyRoleFilter(dbQuery, userRole);
+            if (accountId > 0)
+            {
+                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
+            }
 
             return await dbQuery.CountAsync();
         }

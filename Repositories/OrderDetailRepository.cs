@@ -97,6 +97,22 @@ namespace MenuGoBE.Repositories
             return directPending + ingredientPending;
         }
 
+        public async Task<List<OrderDetail>> GetPendingByProductIdAsync(long productId, long[] branchIds)
+        {
+            var query = _context.OrderDetails
+                .Include(od => od.Order)
+                .ThenInclude(o => o.Table)
+                .ThenInclude(t => t.Area)
+                .Where(od => od.ProductId == productId &&
+                             od.Order.Table != null &&
+                             od.Order.Table.Area != null &&
+                             branchIds.Contains(od.Order.Table.Area.BranchId) &&
+                             (od.Status.ToLower() == "confirmed" || od.Status.ToLower() == "partialreturned") &&
+                             (string.IsNullOrEmpty(od.CookingStatus) || od.CookingStatus.ToLower() == "waiting" || od.CookingStatus.ToLower() == "accepted"));
+                             
+            return await query.ToListAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

@@ -13,6 +13,8 @@ namespace MenuGoBE.Models
         [Required]
         public long BranchId { get; set; }
 
+        public long? AccountId { get; set; }
+
         [Required]
         [MaxLength(50)]
         public string Type { get; set; } = string.Empty; // e.g. Operational, ShelfLife, Quality, Order, Inventory, Other
