@@ -557,7 +557,7 @@ namespace MenuGoBE.Controllers
                 if (product != null) productName = product.Name;
             }
 
-            var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus);
+            var result = await _detailService.UpdateCookingStatusAsync(id, dto.CookingStatus, dto.Quantity);
             if (!result)
                 return NotFound(new { message = "Không tìm thấy chi tiết đơn hoặc cập nhật thất bại" });
 
@@ -614,6 +614,39 @@ namespace MenuGoBE.Controllers
             });
 
             return Ok(new { message = "Hủy món thành công" });
+        }
+        [HttpPut("batch-cooking-status")]
+        public async Task<IActionResult> BatchUpdateCookingStatus([FromBody] BatchUpdateCookingStatusDto dto)
+        {
+            var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId"));
+            var allowedBranchIds = branchClaims
+                .Select(c => long.TryParse(c.Value, out var bid) ? bid : 0)
+                .Where(bid => bid > 0)
+                .Distinct()
+                .ToArray();
+
+            if (!allowedBranchIds.Any())
+            {
+                return Forbid();
+            }
+
+            var result = await _detailService.BatchUpdateCookingStatusAsync(dto.ProductId, dto.CookingStatus, allowedBranchIds);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy món ăn nào đang chờ xác nhận hoặc cập nhật thất bại." });
+
+            var product = await _productService.GetByIdAsync(dto.ProductId);
+            string productName = product?.Name ?? "Món ăn";
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                type = "cooking-status-changed",
+                cookingStatus = dto.CookingStatus,
+                productName = productName,
+                message = $"Đã cập nhật mẻ món {productName} sang {dto.CookingStatus}",
+                timestamp = DateTime.UtcNow
+            });
+
+            return Ok(new { message = "Cập nhật trạng thái mẻ thành công" });
         }
     }
 }

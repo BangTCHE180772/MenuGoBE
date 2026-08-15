@@ -24,6 +24,9 @@ public class OrderDetail
 
     public string CookingStatus { get; set; } = string.Empty;
 
+    [MaxLength(50)]
+    public string? BatchId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
