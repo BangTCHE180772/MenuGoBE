@@ -66,9 +66,20 @@ namespace MenuGoBE.Service
             {
                 throw new ArgumentException($"Tài khoản với ID {dto.AccountId} không tồn tại.");
             }
-            if (account.Contracts == null || !account.Contracts.Any(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "1")))
+            var activeContract = account.Contracts?
+                .Where(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "Hiệu lực"))
+                .OrderByDescending(c => c.StartDate)
+                .FirstOrDefault();
+
+            if (activeContract == null)
             {
                 throw new ArgumentException($"Nhân viên '{account.Name}' (ID: {dto.AccountId}) chưa có hợp đồng làm việc còn hiệu lực tại chi nhánh này.");
+            }
+
+            if (dto.WorkDate < activeContract.StartDate || (activeContract.EndDate.HasValue && dto.WorkDate > activeContract.EndDate.Value))
+            {
+                var endStr = activeContract.EndDate.HasValue ? activeContract.EndDate.Value.ToString("dd/MM/yyyy") : "Vô hạn";
+                throw new ArgumentException($"Nhân viên '{account.Name}' chỉ được phân công ca làm việc trong thời hạn hợp đồng ({activeContract.StartDate:dd/MM/yyyy} - {endStr}). Ngày chọn ({dto.WorkDate:dd/MM/yyyy}) nằm ngoài thời hạn hợp đồng!");
             }
 
             if (await _repo.ExistsAsync(dto.AccountId, dto.ShiftId, dto.WorkDate))
@@ -98,7 +109,7 @@ namespace MenuGoBE.Service
             }
             if (string.IsNullOrWhiteSpace(entity.Status))
             {
-                entity.Status = "PENDING";
+                entity.Status = "Pending";
             }
             entity.CreatedAt = DateTime.UtcNow;
 
@@ -125,7 +136,7 @@ namespace MenuGoBE.Service
             foreach (var accountId in dto.AccountIds)
             {
                 var acc = await _accountRepo.GetByIdAsync(accountId);
-                if (acc != null && acc.Contracts != null && acc.Contracts.Any(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "1")))
+                if (acc != null && acc.Contracts != null && acc.Contracts.Any(c => c.BranchId == dto.BranchId && c.Status == "Active"))
                 {
                     validAccountIdsWithContracts.Add(accountId);
                 }
@@ -137,11 +148,28 @@ namespace MenuGoBE.Service
             }
 
             var createdSchedules = new List<WorkSchedule>();
+            int totalValidContractDays = 0;
 
             foreach (var accountId in validAccountIdsWithContracts)
             {
+                var acc = await _accountRepo.GetByIdAsync(accountId);
+                var activeContract = acc?.Contracts?
+                    .Where(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "Hiệu lực"))
+                    .OrderByDescending(c => c.StartDate)
+                    .FirstOrDefault();
+
                 foreach (var workDate in dto.WorkDates)
                 {
+                    if (activeContract != null)
+                    {
+                        if (workDate < activeContract.StartDate || (activeContract.EndDate.HasValue && workDate > activeContract.EndDate.Value))
+                        {
+                            continue;
+                        }
+                    }
+
+                    totalValidContractDays++;
+
                     if (await _repo.ExistsAsync(accountId, dto.ShiftId, workDate))
                     {
                         continue;
@@ -160,7 +188,7 @@ namespace MenuGoBE.Service
                         ShiftId = dto.ShiftId,
                         WorkDate = workDate,
                         Code = $"WS-{dto.BranchId}-{dto.ShiftId}-{accountId}-{workDate:yyyyMMdd}",
-                        Status = "APPROVED",
+                        Status = "Approved",
                         ManagerApproved = true,
                         CreatedBy = dto.CreatedBy,
                         CreatedAt = DateTime.UtcNow
@@ -168,6 +196,18 @@ namespace MenuGoBE.Service
 
                     await _repo.CreateAsync(schedule);
                     createdSchedules.Add(schedule);
+                }
+            }
+
+            if (createdSchedules.Count == 0)
+            {
+                if (totalValidContractDays == 0)
+                {
+                    throw new ArgumentException("Tất cả các ngày phân ca được chọn đều nằm ngoài thời hạn hợp đồng của nhân viên! Chỉ được phân ca trong thời hạn hợp đồng.");
+                }
+                else
+                {
+                    throw new ArgumentException("Tất cả lịch làm việc trong thời hạn hợp đồng của nhân viên đã được phân công trước đó!");
                 }
             }
 
@@ -185,9 +225,18 @@ namespace MenuGoBE.Service
             if (entity == null) return false;
 
             var account = await _accountRepo.GetByIdAsync(dto.AccountId);
-            if (account == null || account.Contracts == null || !account.Contracts.Any(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "1")))
+            if (account == null || account.Contracts == null || !account.Contracts.Any(c => c.BranchId == dto.BranchId && c.Status == "Active"))
             {
                 throw new ArgumentException($"Nhân viên này chưa có hợp đồng làm việc còn hiệu lực tại chi nhánh này.");
+            }
+
+            if (entity.AccountId != dto.AccountId || entity.ShiftId != dto.ShiftId || entity.WorkDate != dto.WorkDate)
+            {
+                var allSchedules = await _repo.GetByAccountIdAsync(dto.AccountId);
+                if (allSchedules.Any(ws => ws.Id != dto.Id && ws.ShiftId == dto.ShiftId && ws.WorkDate == dto.WorkDate))
+                {
+                    throw new ArgumentException($"Nhân viên {account.Name} đã được phân công ca làm việc này vào ngày {dto.WorkDate:dd/MM/yyyy}.");
+                }
             }
 
             _mapper.Map(dto, entity);
@@ -241,7 +290,7 @@ namespace MenuGoBE.Service
                 return (false, "Bạn không có ca làm việc hôm nay tại chi nhánh này.", "");
             }
 
-            var workingIndex = schedules.FindIndex(s => s.Status == "Đang làm việc");
+            var workingIndex = schedules.FindIndex(s => s.Status == "Working");
 
             if (workingIndex >= 0)
             {
@@ -264,7 +313,7 @@ namespace MenuGoBE.Service
                         currentWs.CheckOutAt = utcEndTime;
                         var duration1 = currentWs.CheckOutAt.Value - currentWs.CheckInAt.Value;
                         currentWs.ActualHours = (decimal)duration1.TotalHours;
-                        currentWs.Status = "Hoàn thành";
+                        currentWs.Status = "Completed";
                         await _repo.UpdateAsync(currentWs);
                         
                         // Mở ca tiếp theo ở đúng giờ StartTime
@@ -272,7 +321,7 @@ namespace MenuGoBE.Service
                         var utcStartTime = DateTime.SpecifyKind(localStartTime.AddHours(-7), DateTimeKind.Utc);
                         
                         nextWs.CheckInAt = utcStartTime;
-                        nextWs.Status = "Đang làm việc";
+                        nextWs.Status = "Working";
                         await _repo.UpdateAsync(nextWs);
                         
                         autoSplitOccurred = true;
@@ -289,7 +338,7 @@ namespace MenuGoBE.Service
                 finalWorking.CheckOutAt = now;
                 var duration = finalWorking.CheckOutAt.Value - finalWorking.CheckInAt.Value;
                 finalWorking.ActualHours = (decimal)duration.TotalHours;
-                finalWorking.Status = "Hoàn thành";
+                finalWorking.Status = "Completed";
                 await _repo.UpdateAsync(finalWorking);
                 
                 await _repo.SaveChangesAsync();
@@ -304,7 +353,7 @@ namespace MenuGoBE.Service
             {
                 // Không có ca nào đang Working -> Tìm ca đầu tiên chưa check-in và chưa kết thúc
                 var nextSchedule = schedules
-                    .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING"))
+                    .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
                     .OrderBy(s => s.Shift.StartTime)
                     .FirstOrDefault(s => currentTimeOnly < s.Shift.EndTime);
 
@@ -312,7 +361,7 @@ namespace MenuGoBE.Service
                 {
                     // Nếu đã qua giờ kết thúc của TẤT CẢ các ca, lấy ca cuối cùng trong ngày
                     nextSchedule = schedules
-                        .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING"))
+                        .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
                         .OrderBy(s => s.Shift.StartTime)
                         .LastOrDefault();
                 }
@@ -322,19 +371,19 @@ namespace MenuGoBE.Service
                     // Đánh dấu các ca trước đó là "Absent" (vắng mặt)
                     var missedSchedules = schedules
                         .Where(s => s.CheckInAt == null 
-                                 && (s.Status == "Scheduled" || s.Status == "APPROVED" || s.Status == "PENDING")
+                                 && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending")
                                  && s.Id != nextSchedule.Id
                                  && s.Shift.EndTime <= currentTimeOnly)
                         .ToList();
 
                     foreach (var missed in missedSchedules)
                     {
-                        missed.Status = "Vắng mặt";
+                        missed.Status = "Absent";
                         await _repo.UpdateAsync(missed);
                     }
 
                     nextSchedule.CheckInAt = now;
-                    nextSchedule.Status = "Đang làm việc";
+                    nextSchedule.Status = "Working";
                     await _repo.UpdateAsync(nextSchedule);
                     await _repo.SaveChangesAsync();
                     return (true, "Check-in thành công", "checkin");
@@ -342,7 +391,7 @@ namespace MenuGoBE.Service
                 else
                 {
                     // Nếu tất cả đã Completed, cập nhật lại giờ Check-out cho ca cuối cùng
-                    var lastCompleted = schedules.LastOrDefault(s => s.Status == "Hoàn thành");
+                    var lastCompleted = schedules.LastOrDefault(s => s.Status == "Completed");
                     if (lastCompleted != null)
                     {
                         lastCompleted.CheckOutAt = now;

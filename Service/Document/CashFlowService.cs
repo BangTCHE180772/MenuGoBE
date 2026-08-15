@@ -22,7 +22,7 @@ namespace MenuGoBE.Service.Document
             _mapper = mapper;
         }
 
-        public async Task<IEnumerable<CashFlowResponseDto>> GetCashFlowsAsync(long branchId)
+        public async Task<IEnumerable<CashFlowResponseDto>> GetCashFlowsAsync(long? branchId)
         {
             var rawList = await _cashFlowRepo.GetByBranchIdAsync(branchId);
             return _mapper.Map<IEnumerable<CashFlowResponseDto>>(rawList);

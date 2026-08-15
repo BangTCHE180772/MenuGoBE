@@ -11,6 +11,7 @@ public class ReservationViewDto
     public string Note { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public long? OrderId { get; set; }
+    public long? BranchId { get; set; }
     public DateTime CreatedAt { get; set; }
     
     public List<string> TableNames { get; set; } = new List<string>();

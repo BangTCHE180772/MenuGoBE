@@ -441,8 +441,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
 
             var schedules = new List<WorkSchedule>
             {
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), ActualHours = 8, Status = "COMPLETED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), ActualHours = 6, Status = "COMPLETED" }
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), ActualHours = 8, Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), ActualHours = 6, Status = "Completed" }
             };
             await _context.WorkSchedules.AddRangeAsync(schedules);
             await _context.SaveChangesAsync();
@@ -493,11 +493,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
 
             var schedules = new List<WorkSchedule>
             {
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "APPROVED" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "APPROVED" }
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "Completed" }
             };
             await _context.WorkSchedules.AddRangeAsync(schedules);
             await _context.SaveChangesAsync();
@@ -593,12 +593,53 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
                     }
                 }
             };
-            await _context.Accounts.AddAsync(account);
-            await _context.SaveChangesAsync();
-
             // Act & Assert
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.GenerateEmployeePayrollAsync(dto));
             Assert.Contains("không có hợp đồng hợp lệ trong tháng 8/2026", ex.Message);
+        }
+
+        [Fact]
+        public async Task GenerateEmployeePayrollAsync_WhenManagerRole_ShouldCalculateDirectBaseSalary()
+        {
+            // Arrange
+            long accountId = 60;
+            var dto = new PayrollGenerateDto { AccountId = accountId, Month = 8, Year = 2026 };
+
+            var account = new Account
+            {
+                Id = accountId,
+                Name = "Manager Worker",
+                Contracts = new List<Contract>
+                {
+                    new Contract { Id = 16, BranchId = 1, RoleId = 3, SalaryType = "Monthly", BaseSalary = 10000000, BaseWorkDay = 26, Status = "Active" }
+                }
+            };
+            await _context.Accounts.AddAsync(account);
+            await _context.SaveChangesAsync();
+
+            _payrollRepoMock.Setup(r => r.GetByAccountMonthYearAsync(accountId, 8, 2026)).ReturnsAsync((Payroll?)null);
+            _payrollRepoMock.Setup(r => r.CreateAsync(It.IsAny<Payroll>()))
+                            .Callback<Payroll>(p => p.Id = 600)
+                            .Returns(Task.CompletedTask);
+            _payrollRepoMock.Setup(r => r.GetByIdAsync(600))
+                            .ReturnsAsync((long id) => new Payroll
+                            {
+                                Id = id,
+                                AccountId = accountId,
+                                CalculatedSalary = 10000000,
+                                NetSalary = 10000000
+                            });
+
+            // Act
+            var result = await _service.GenerateEmployeePayrollAsync(dto);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.Equal(10000000, result.CalculatedSalary);
+
+            _payrollRepoMock.Verify(r => r.CreateAsync(It.Is<Payroll>(p =>
+                p.AccountId == accountId &&
+                p.CalculatedSalary == 10000000)), Times.Once);
         }
 
         #endregion
