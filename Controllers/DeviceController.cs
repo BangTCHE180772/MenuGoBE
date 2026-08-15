@@ -67,8 +67,15 @@ namespace MenuGoBE.Controllers
             if (!validTypes.Contains(dto.DeviceType))
                 return BadRequest(new { message = $"Loại thiết bị không hợp lệ. Chỉ chấp nhận: {string.Join(", ", validTypes)}" });
 
-            var result = await _service.SetupAsync(dto, branchId, accountId);
-            return Ok(result);
+            try
+            {
+                var result = await _service.SetupAsync(dto, branchId, accountId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("validate")]
@@ -122,6 +129,8 @@ namespace MenuGoBE.Controllers
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("tồn tại"))
+                    return BadRequest(new { message = ex.Message });
                 return NotFound(new { message = ex.Message });
             }
         }
@@ -239,7 +248,9 @@ namespace MenuGoBE.Controllers
 
                 var (success, msg, action) = await _workScheduleService.RecordAttendanceAsync(accountId, device.BranchId);
                 
-                _authService.RemoveChallenge(dto.ChallengeId);
+                // KHÔNG XÓA Challenge ở đây đối với Attendance
+                // Để các nhân viên khác xếp hàng phía sau có thể quét chung 1 mã QR trên màn hình
+                // _authService.RemoveChallenge(dto.ChallengeId);
                 
                 if (success)
                 {

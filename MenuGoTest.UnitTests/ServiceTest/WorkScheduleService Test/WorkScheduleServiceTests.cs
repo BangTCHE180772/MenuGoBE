@@ -35,12 +35,15 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
             }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = config.CreateMapper();
 
+            var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>();
+
             _service = new WorkScheduleService(
                 _repoMock.Object,
                 _mapper,
                 _branchRepoMock.Object,
                 _shiftRepoMock.Object,
-                _accountRepoMock.Object);
+                _accountRepoMock.Object,
+                hubContextMock.Object);
         }
 
         #region GetAllAsync
