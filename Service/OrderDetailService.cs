@@ -111,6 +111,19 @@ namespace MenuGoBE.Service
             return (int)binv.Quantity - pendingQty;
         }
 
+        public async Task<Dictionary<long, int>> GetAvailableQuantitiesAsync(long branchId, List<long> productIds)
+        {
+            var result = new Dictionary<long, int>();
+            if (productIds == null || !productIds.Any()) return result;
+
+            foreach (var productId in productIds.Distinct())
+            {
+                result[productId] = await GetAvailableQuantityAsync(productId, branchId);
+            }
+
+            return result;
+        }
+
         public async Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto)
         {
             var order = await _orderRepo.GetByIdAsync(dto.OrderId);
