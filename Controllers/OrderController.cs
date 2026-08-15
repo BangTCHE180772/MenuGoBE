@@ -97,6 +97,20 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpPost("available-quantities/{branchId}")]
+        public async Task<IActionResult> GetAvailableQuantities(long branchId, [FromBody] List<long> productIds)
+        {
+            try
+            {
+                var result = await _detailService.GetAvailableQuantitiesAsync(branchId, productIds);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost]
         [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
