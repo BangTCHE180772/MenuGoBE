@@ -160,17 +160,20 @@ namespace MenuGoBE.Service
                         var area = await _areaRepo.GetByIdAsync(table.AreaId);
                         if (area != null)
                         {
-                            var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                            if (binv != null && binv.IsManageQuantity)
+                            branchId = area.BranchId;
+                            try
                             {
-                                if (binv.Quantity < entity.Quantity)
+                                var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                if (product != null)
                                 {
-                                    await SendStockAlertAsync(branchId, entity.ProductId, "Sản phẩm đã hết hàng trong kho.");
-                                    throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
+                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.Sale, order.CreatedBy ?? 1);
+                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, entity.Quantity, entity.Id, order.CreatedBy ?? 1);
                                 }
-                                binv.Quantity -= entity.Quantity;
-                                await _bInventoryRepo.UpdateAsync(binv);
-                                await _bInventoryRepo.SaveChangesAsync();
+                            }
+                            catch (Exception ex)
+                            {
+                                await SendStockAlertAsync(branchId, entity.ProductId, ex.Message);
+                                throw new InvalidOperationException(ex.Message);
                             }
                         }
                     }
@@ -218,12 +221,11 @@ namespace MenuGoBE.Service
                             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
                             if (productType == "Regular" || productType == "Manufactured" && oldStatus == "Confirmed")
                             {
-                                var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                                if (binv != null && binv.IsManageQuantity)
+                                var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                if (product != null)
                                 {
-                                    binv.Quantity -= quantityDiff;
-                                    await _bInventoryRepo.UpdateAsync(binv);
-                                    await _bInventoryRepo.SaveChangesAsync();
+                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, entity.OrderId, MenuGoBE.Models.Enums.DocumentType.Sale, order_check.CreatedBy ?? 1);
+                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, quantityDiff, entity.Id, order_check.CreatedBy ?? 1);
                                 }
                             }
                         }
@@ -246,12 +248,11 @@ namespace MenuGoBE.Service
                             if (area != null)
                             {
                                 long branchId = area.BranchId;
-                                var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                                if (binv != null && binv.IsManageQuantity)
+                                var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                if (product != null)
                                 {
-                                    binv.Quantity += quantityDiff;
-                                    await _bInventoryRepo.UpdateAsync(binv);
-                                    await _bInventoryRepo.SaveChangesAsync();
+                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, entity.OrderId, MenuGoBE.Models.Enums.DocumentType.Sale, order_check.CreatedBy ?? 1);
+                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, -quantityDiff, entity.Id, order_check.CreatedBy ?? 1);
                                 }
                             }
                         }
@@ -301,12 +302,11 @@ namespace MenuGoBE.Service
                             if (area != null)
                             {
                                 long branchId = area.BranchId;
-                                var binv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
-                                if (binv != null && binv.IsManageQuantity)
+                                var product = await _productRepo.GetByIdAsync(productId);
+                                if (product != null)
                                 {
-                                    binv.Quantity += quantity;
-                                    await _bInventoryRepo.UpdateAsync(binv);
-                                    await _bInventoryRepo.SaveChangesAsync();
+                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, orderId, MenuGoBE.Models.Enums.DocumentType.Sale, order?.CreatedBy ?? 1);
+                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, -quantity, entity.Id, order?.CreatedBy ?? 1);
                                 }
                             }
                         }
