@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Interface.Repository;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using MenuGoBE.Models;
 
 namespace MenuGoBE.Service
 {
@@ -52,80 +53,102 @@ namespace MenuGoBE.Service
             var localNow = utcNow.AddHours(7);
             var today = DateOnly.FromDateTime(localNow);
 
-            // Lấy TẤT CẢ các ca đang làm (kể cả những ca vắt qua đêm của ngày hôm trước)
-            var openSchedules = await _repo.GetOpenSchedulesAsync();
-
-            if (!openSchedules.Any()) return;
-
-            var accountIds = openSchedules.Select(ws => ws.AccountId).Distinct().ToList();
-            
-            // Lấy các ca đang chờ để Auto-Transition
-            var pendingSchedules = await _repo.GetPendingSchedulesByAccountIdsAsync(accountIds);
-            
             bool hasChanges = false;
 
-            foreach (var ws in openSchedules)
+            // 1. Xử lý các ca đã quá hạn giờ/ngày kết thúc mà nhân viên chưa Check-in -> Tự động chuyển thành "ABSENT"
+            var expiredUncheckedSchedules = (await _repo.GetExpiredUncheckedInSchedulesAsync()) ?? new List<WorkSchedule>();
+            foreach (var ws in expiredUncheckedSchedules)
             {
-                // Tính giờ kết thúc local của ca làm việc
+                if (ws.Shift == null) continue;
+
                 var shiftEndLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
                 if (ws.Shift.EndTime < ws.Shift.StartTime)
                 {
-                    // Ca kết thúc vào sáng hôm sau
                     shiftEndLocal = shiftEndLocal.AddDays(1);
                 }
-                
-                // Tìm ca nối tiếp (nếu có)
-                var nextSchedule = pendingSchedules.FirstOrDefault(s => 
-                {
-                    if (s.AccountId != ws.AccountId || s.BranchId != ws.BranchId) return false;
-                    var nextStartLocal = s.WorkDate.ToDateTime(s.Shift.StartTime);
-                    return Math.Abs((nextStartLocal - shiftEndLocal).TotalMinutes) <= 30;
-                });
 
-                if (nextSchedule != null)
+                if (shiftEndLocal <= localNow)
                 {
-                    // Tình huống A: Có ca nối tiếp -> Transition NGAY LẬP TỨC khi hết ca
-                    if (shiftEndLocal <= localNow)
-                    {
-                        var checkOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Convert local EndTime to UTC
-                        ws.CheckOutAt = checkOutTimeUtc;
-                        ws.Status = "Completed";
-                        if (ws.CheckInAt.HasValue)
-                        {
-                            ws.ActualHours = (decimal)Math.Max(0, (checkOutTimeUtc - ws.CheckInAt.Value).TotalHours);
-                        }
-                        
-                        await _repo.UpdateAsync(ws);
-                        _logger.LogInformation($"Auto-Transition: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {checkOutTimeUtc}");
-
-                        var nextShiftStartLocal = nextSchedule.WorkDate.ToDateTime(nextSchedule.Shift.StartTime);
-                        var nextShiftStartUtc = DateTime.SpecifyKind(nextShiftStartLocal.AddHours(-7), DateTimeKind.Utc);
-                        
-                        nextSchedule.CheckInAt = nextShiftStartUtc;
-                        nextSchedule.Status = "Working";
-                        
-                        await _repo.UpdateAsync(nextSchedule);
-                        _logger.LogInformation($"Auto-Transition: Checked-in AccountId: {nextSchedule.AccountId}, ScheduleId: {nextSchedule.Id} at {nextShiftStartUtc}");
-                        
-                        hasChanges = true;
-                    }
+                    ws.Status = "ABSENT";
+                    await _repo.UpdateAsync(ws);
+                    _logger.LogInformation($"Auto-Absent: Marked ScheduleId: {ws.Id}, AccountId: {ws.AccountId} as ABSENT (expired at {shiftEndLocal})");
+                    hasChanges = true;
                 }
-                else
+            }
+
+            // 2. Lấy TẤT CẢ các ca đang làm (kể cả những ca vắt qua đêm của ngày hôm trước) để Auto-Checkout
+            var openSchedules = await _repo.GetOpenSchedulesAsync();
+
+            if (openSchedules.Any())
+            {
+                var accountIds = openSchedules.Select(ws => ws.AccountId).Distinct().ToList();
+                
+                // Lấy các ca đang chờ để Auto-Transition
+                var pendingSchedules = await _repo.GetPendingSchedulesByAccountIdsAsync(accountIds);
+
+                foreach (var ws in openSchedules)
                 {
-                    // Tình huống B: KHÔNG có ca nối tiếp (tan làm) -> Chờ 2 tiếng mới ép check-out (Grace period)
-                    if (shiftEndLocal.AddHours(2) <= localNow)
+                    // Tính giờ kết thúc local của ca làm việc
+                    var shiftEndLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
+                    if (ws.Shift.EndTime < ws.Shift.StartTime)
                     {
-                        var forcedCheckOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
-                        ws.CheckOutAt = forcedCheckOutTimeUtc;
-                        ws.Status = "Completed";
-                        if (ws.CheckInAt.HasValue)
+                        // Ca kết thúc vào sáng hôm sau
+                        shiftEndLocal = shiftEndLocal.AddDays(1);
+                    }
+                    
+                    // Tìm ca nối tiếp (nếu có)
+                    var nextSchedule = pendingSchedules.FirstOrDefault(s => 
+                    {
+                        if (s.AccountId != ws.AccountId || s.BranchId != ws.BranchId) return false;
+                        var nextStartLocal = s.WorkDate.ToDateTime(s.Shift.StartTime);
+                        return Math.Abs((nextStartLocal - shiftEndLocal).TotalMinutes) <= 30;
+                    });
+
+                    if (nextSchedule != null)
+                    {
+                        // Tình huống A: Có ca nối tiếp -> Transition NGAY LẬP TỨC khi hết ca
+                        if (shiftEndLocal <= localNow)
                         {
-                            ws.ActualHours = (decimal)Math.Max(0, (forcedCheckOutTimeUtc - ws.CheckInAt.Value).TotalHours);
+                            var checkOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Convert local EndTime to UTC
+                            ws.CheckOutAt = checkOutTimeUtc;
+                            ws.Status = "Completed";
+                            if (ws.CheckInAt.HasValue)
+                            {
+                                ws.ActualHours = WorkScheduleService.CalculateBoundedActualHours(ws);
+                            }
+                            
+                            await _repo.UpdateAsync(ws);
+                            _logger.LogInformation($"Auto-Transition: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {checkOutTimeUtc}");
+
+                            var nextShiftStartLocal = nextSchedule.WorkDate.ToDateTime(nextSchedule.Shift.StartTime);
+                            var nextShiftStartUtc = DateTime.SpecifyKind(nextShiftStartLocal.AddHours(-7), DateTimeKind.Utc);
+                            
+                            nextSchedule.CheckInAt = nextShiftStartUtc;
+                            nextSchedule.Status = "Working";
+                            
+                            await _repo.UpdateAsync(nextSchedule);
+                            _logger.LogInformation($"Auto-Transition: Checked-in AccountId: {nextSchedule.AccountId}, ScheduleId: {nextSchedule.Id} at {nextShiftStartUtc}");
+                            
+                            hasChanges = true;
                         }
-                        
-                        await _repo.UpdateAsync(ws);
-                        _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
-                        hasChanges = true;
+                    }
+                    else
+                    {
+                        // Tình huống B: KHÔNG có ca nối tiếp (tan làm) -> Chờ 2 tiếng mới ép check-out (Grace period)
+                        if (shiftEndLocal.AddHours(2) <= localNow)
+                        {
+                            var forcedCheckOutTimeUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc); // Giữ nguyên giờ chốt ca là đúng EndTime theo UTC
+                            ws.CheckOutAt = forcedCheckOutTimeUtc;
+                            ws.Status = "Completed";
+                            if (ws.CheckInAt.HasValue)
+                            {
+                                ws.ActualHours = WorkScheduleService.CalculateBoundedActualHours(ws);
+                            }
+                            
+                            await _repo.UpdateAsync(ws);
+                            _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
+                            hasChanges = true;
+                        }
                     }
                 }
             }
