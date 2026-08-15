@@ -6,5 +6,6 @@ namespace MenuGoBE.Dtos.Order
     {
         [Required]
         public string CookingStatus { get; set; } = string.Empty;
+        public int? Quantity { get; set; }
     }
 }

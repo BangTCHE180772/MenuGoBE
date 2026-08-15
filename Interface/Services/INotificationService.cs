@@ -7,9 +7,9 @@ namespace MenuGoBE.Interface.Services
 {
     public interface INotificationService
     {
-        Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null);
-        Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null);
-        Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null);
+        Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0);
+        Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null, long accountId = 0);
+        Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null, long accountId = 0);
         Task<bool> MarkAsReadAsync(long id, long[] branchIds);
         Task SyncBranchAlertsAsync(long[] branchIds);
     }

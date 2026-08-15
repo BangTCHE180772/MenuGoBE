@@ -24,7 +24,7 @@ namespace MenuGoBE.Service
             _context = context;
         }
 
-        public async Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null)
+        public async Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0)
         {
             await SyncBranchAlertsAsync(branchIds);
 
@@ -42,7 +42,7 @@ namespace MenuGoBE.Service
             };
         }
 
-        public async Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null)
+        public async Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null, long accountId = 0)
         {
             await SyncBranchAlertsAsync(branchIds);
 
@@ -50,7 +50,7 @@ namespace MenuGoBE.Service
             return notifications.Select(MapToViewDto).ToList();
         }
 
-        public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null)
+        public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null, long accountId = 0)
         {
             return await _repo.GetUnreadCountAsync(branchIds, userRole);
         }
