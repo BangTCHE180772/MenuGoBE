@@ -12,7 +12,7 @@ namespace MenuGoBE.Interface.Services
         Task DeleteAsync(long id);
         Task RevokeAsync(long id);
         Task<object?> EmployeeLoginAsync(DeviceEmployeeLoginDto dto);
-        Task<object?> PersonalLoginAsync(string challengeId);
+        Task<object?> PersonalLoginAsync(string deviceToken, string email);
         Task<Device?> GetDeviceByTokenAsync(string token);
     }
 }
