@@ -70,6 +70,12 @@ public static class ErrorCodes
         409
     );
 
+    public static readonly ErrorResult UnitConversionInUseCannotBeDeleted = new(
+        1042,
+        "Đơn vị quy đổi đã phát sinh chứng từ kho, không thể xóa.",
+        400
+    );
+
     public static readonly ErrorResult InvalidConversionPoint = new(
         1016,
         "Giá trị quy đổi của đơn vị phụ phải là số nguyên từ 2 đến 1.000.000 (1 triệu).",

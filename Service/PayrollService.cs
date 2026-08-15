@@ -47,6 +47,12 @@ namespace MenuGoBE.Service
 
         public async Task<PayrollViewDto> CreateAsync(PayrollCreateDto dto)
         {
+            var now = DateTime.UtcNow;
+            if (dto.Year > now.Year || (dto.Year == now.Year && dto.Month > now.Month))
+            {
+                throw new InvalidOperationException($"Không thể tạo bảng lương cho các tháng trong tương lai (tháng {dto.Month}/{dto.Year}).");
+            }
+
             var existing = await _payrollRepo.GetByAccountMonthYearAsync(dto.AccountId, dto.Month, dto.Year);
             if (existing != null)
             {
@@ -139,6 +145,11 @@ namespace MenuGoBE.Service
             // Update salary details
             if (dto.SalaryDetails != null)
             {
+                if (entity.SalaryDetails != null && entity.SalaryDetails.Any())
+                {
+                    _context.SalaryDetails.RemoveRange(entity.SalaryDetails);
+                }
+
                 entity.SalaryDetails.Clear();
                 foreach (var item in dto.SalaryDetails)
                 {
@@ -244,6 +255,12 @@ namespace MenuGoBE.Service
 
         public async Task<PayrollViewDto> GenerateEmployeePayrollAsync(PayrollGenerateDto dto)
         {
+            var now = DateTime.UtcNow;
+            if (dto.Year > now.Year || (dto.Year == now.Year && dto.Month > now.Month))
+            {
+                throw new InvalidOperationException($"Không thể tự động tính bảng lương cho các tháng trong tương lai (tháng {dto.Month}/{dto.Year}).");
+            }
+
             var startDate = new DateOnly(dto.Year, dto.Month, 1);
             var endDate = startDate.AddMonths(1).AddDays(-1);
 
@@ -288,7 +305,7 @@ namespace MenuGoBE.Service
             string salaryType = contract?.SalaryType ?? "Monthly";
             bool isHourly = salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase);
 
-            int baseWorkDays = isHourly ? 0 : ((contract?.BaseWorkDay.HasValue == true && contract.BaseWorkDay.Value > 0) ? contract.BaseWorkDay.Value : 26);
+            int baseWorkDays = (isHourly || (contract != null && contract.RoleId == 3)) ? 0 : (contract?.BaseWorkDay ?? 0);
 
             decimal calculatedSalary = 0;
             if (contract != null && contract.RoleId == 3)
@@ -308,6 +325,11 @@ namespace MenuGoBE.Service
             var existingPayroll = await _payrollRepo.GetByAccountMonthYearAsync(dto.AccountId, dto.Month, dto.Year);
             if (existingPayroll != null)
             {
+                if (existingPayroll.Status == PayrollStatus.Paid)
+                {
+                    throw new InvalidOperationException($"Bảng lương tháng {dto.Month}/{dto.Year} của nhân viên này đã ở trạng thái ĐÃ THANH TOÁN. Không thể tính toán lại.");
+                }
+
                 if (contract != null && contract.BranchId > 0)
                 {
                     existingPayroll.BranchId = contract.BranchId;
@@ -356,6 +378,12 @@ namespace MenuGoBE.Service
 
         public async Task<List<PayrollViewDto>> GenerateBatchPayrollAsync(PayrollBatchGenerateDto dto, bool isAdmin, bool isManager, List<long> managerBranchIds)
         {
+            var now = DateTime.UtcNow;
+            if (dto.Year > now.Year || (dto.Year == now.Year && dto.Month > now.Month))
+            {
+                throw new InvalidOperationException($"Không thể tính lương hàng loạt cho các tháng trong tương lai (tháng {dto.Month}/{dto.Year}).");
+            }
+
             var results = new List<PayrollViewDto>();
 
             var accountsQuery = _context.Accounts
@@ -404,6 +432,12 @@ namespace MenuGoBE.Service
                     .FirstOrDefault();
 
                 if (contract == null) continue;
+
+                var existingPayroll = await _payrollRepo.GetByAccountMonthYearAsync(acc.Id, dto.Month, dto.Year);
+                if (existingPayroll != null && existingPayroll.Status == PayrollStatus.Paid)
+                {
+                    continue;
+                }
 
                 var singleDto = new PayrollGenerateDto
                 {

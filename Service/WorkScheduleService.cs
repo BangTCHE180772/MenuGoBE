@@ -36,14 +36,51 @@ namespace MenuGoBE.Service
             _hubContext = hubContext;
         }
 
+        private async Task CheckAndMarkExpiredAbsentSchedulesAsync()
+        {
+            try
+            {
+                var localNow = DateTime.UtcNow.AddHours(7);
+                var expiredSchedules = (await _repo.GetExpiredUncheckedInSchedulesAsync()) ?? new List<WorkSchedule>();
+                bool hasChanges = false;
+                foreach (var ws in expiredSchedules)
+                {
+                    if (ws.Shift == null) continue;
+
+                    var shiftEndLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
+                    if (ws.Shift.EndTime < ws.Shift.StartTime)
+                    {
+                        shiftEndLocal = shiftEndLocal.AddDays(1);
+                    }
+
+                    if (shiftEndLocal <= localNow)
+                    {
+                        ws.Status = "ABSENT";
+                        await _repo.UpdateAsync(ws);
+                        hasChanges = true;
+                    }
+                }
+                if (hasChanges)
+                {
+                    await _repo.SaveChangesAsync();
+                }
+            }
+            catch
+            {
+                // Fail-safe
+            }
+        }
+
         public async Task<List<WorkScheduleViewDto>> GetAllAsync()
         {
+            await CheckAndMarkExpiredAbsentSchedulesAsync();
             var data = await _repo.GetAllAsync();
             return _mapper.Map<List<WorkScheduleViewDto>>(data);
         }
 
         public async Task<WorkScheduleViewDto?> GetByIdAsync(long id)
         {
+            await CheckAndMarkExpiredAbsentSchedulesAsync();
             var data = await _repo.GetByIdAsync(id);
             if (data == null) return null;
             return _mapper.Map<WorkScheduleViewDto>(data);
@@ -219,6 +256,32 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<WorkScheduleViewDto>>(createdSchedules);
         }
 
+        public static decimal CalculateBoundedActualHours(WorkSchedule ws)
+        {
+            if (!ws.CheckInAt.HasValue || !ws.CheckOutAt.HasValue || ws.Shift == null)
+                return 0;
+
+            var shiftStartLocal = ws.WorkDate.ToDateTime(ws.Shift.StartTime);
+            var shiftEndLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
+            if (ws.Shift.EndTime < ws.Shift.StartTime)
+            {
+                shiftEndLocal = shiftEndLocal.AddDays(1);
+            }
+
+            var shiftStartUtc = DateTime.SpecifyKind(shiftStartLocal.AddHours(-7), DateTimeKind.Utc);
+            var shiftEndUtc = DateTime.SpecifyKind(shiftEndLocal.AddHours(-7), DateTimeKind.Utc);
+
+            var effectiveCheckIn = ws.CheckInAt.Value > shiftStartUtc ? ws.CheckInAt.Value : shiftStartUtc;
+            var effectiveCheckOut = ws.CheckOutAt.Value < shiftEndUtc ? ws.CheckOutAt.Value : shiftEndUtc;
+
+            if (effectiveCheckOut > effectiveCheckIn)
+            {
+                return (decimal)Math.Max(0, Math.Round((effectiveCheckOut - effectiveCheckIn).TotalHours, 2));
+            }
+
+            return 0;
+        }
+
         public async Task<bool> UpdateAsync(WorkScheduleUpdateDto dto)
         {
             var entity = await _repo.GetByIdAsync(dto.Id);
@@ -239,6 +302,15 @@ namespace MenuGoBE.Service
                 }
             }
 
+            if (entity.ManagerApproved != dto.ManagerApproved)
+            {
+                var normStatus = (entity.Status ?? "").Trim().ToLower();
+                if (normStatus == "working" || normStatus == "completed" || normStatus == "absent" || normStatus == "đang làm việc" || normStatus == "hoàn thành" || normStatus == "vắng mặt")
+                {
+                    throw new ArgumentException("Không thể sửa trạng thái Quản lý duyệt đối với ca làm việc đang ở trạng thái Đang làm việc, Hoàn thành hoặc Vắng mặt.");
+                }
+            }
+
             _mapper.Map(dto, entity);
 
             if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
@@ -250,12 +322,25 @@ namespace MenuGoBE.Service
                 entity.CheckOutAt = DateTime.SpecifyKind(entity.CheckOutAt.Value, DateTimeKind.Utc);
             }
 
+            if (entity.Shift == null && entity.ShiftId > 0)
+            {
+                entity.Shift = await _shiftRepo.GetByIdAsync(entity.ShiftId);
+            }
+
+            if (entity.CheckInAt.HasValue && entity.CheckOutAt.HasValue)
+            {
+                entity.ActualHours = CalculateBoundedActualHours(entity);
+            }
+
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
 
             // Báo cho nhân viên và các quản lý chi nhánh
-            await _hubContext.Clients.Group($"user_{entity.AccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Lịch làm việc của bạn vừa được cập nhật." });
-            await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Lịch làm việc của chi nhánh vừa được cập nhật." });
+            if (_hubContext?.Clients != null)
+            {
+                await _hubContext.Clients.Group($"user_{entity.AccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Lịch làm việc của bạn vừa được cập nhật." });
+                await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Lịch làm việc của chi nhánh vừa được cập nhật." });
+            }
 
             return true;
         }
@@ -273,6 +358,7 @@ namespace MenuGoBE.Service
 
         public async Task<List<WorkScheduleViewDto>> GetByAccountIdAsync(long accountId)
         {
+            await CheckAndMarkExpiredAbsentSchedulesAsync();
             var data = await _repo.GetByAccountIdAsync(accountId);
             return _mapper.Map<List<WorkScheduleViewDto>>(data);
         }
@@ -311,8 +397,7 @@ namespace MenuGoBE.Service
                         var utcEndTime = DateTime.SpecifyKind(localEndTime.AddHours(-7), DateTimeKind.Utc);
                         
                         currentWs.CheckOutAt = utcEndTime;
-                        var duration1 = currentWs.CheckOutAt.Value - currentWs.CheckInAt.Value;
-                        currentWs.ActualHours = (decimal)duration1.TotalHours;
+                        currentWs.ActualHours = CalculateBoundedActualHours(currentWs);
                         currentWs.Status = "Completed";
                         await _repo.UpdateAsync(currentWs);
                         
@@ -336,8 +421,7 @@ namespace MenuGoBE.Service
                 // Chốt ca Working cuối cùng với thời gian quét thực tế
                 var finalWorking = schedules[workingIndex];
                 finalWorking.CheckOutAt = now;
-                var duration = finalWorking.CheckOutAt.Value - finalWorking.CheckInAt.Value;
-                finalWorking.ActualHours = (decimal)duration.TotalHours;
+                finalWorking.ActualHours = CalculateBoundedActualHours(finalWorking);
                 finalWorking.Status = "Completed";
                 await _repo.UpdateAsync(finalWorking);
                 
@@ -395,8 +479,7 @@ namespace MenuGoBE.Service
                     if (lastCompleted != null)
                     {
                         lastCompleted.CheckOutAt = now;
-                        var duration = lastCompleted.CheckOutAt.Value - lastCompleted.CheckInAt.Value;
-                        lastCompleted.ActualHours = (decimal)duration.TotalHours;
+                        lastCompleted.ActualHours = CalculateBoundedActualHours(lastCompleted);
                         await _repo.UpdateAsync(lastCompleted);
                         await _repo.SaveChangesAsync();
                         return (true, "Đã cập nhật giờ Check-out", "checkout");

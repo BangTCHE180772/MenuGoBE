@@ -1,3 +1,4 @@
+using MenuGoBE.Dtos.Product;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 
@@ -18,6 +19,7 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> ExistsBySKUAsync(string sku);
         Task<bool> ExistsBySKUExcludeIdAsync(string sku, long id);
         Task ClearUnitConversionsAsync(long productId);
+        Task SyncUnitConversionsAsync(long productId, List<ProductUnitConversionDto> conversions);
         Task<ProductType?> GetProductTypeEnumAsync(long id);
         Task<string?> GetProductTypeAsync(long id);
         Task SaveChangesAsync();

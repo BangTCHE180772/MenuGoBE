@@ -101,5 +101,17 @@ namespace MenuGoBE.Repositories
                           && (ws.Status.ToUpper() == "APPROVED" || ws.Status.ToUpper() == "PENDING" || ws.Status.ToUpper() == "SCHEDULED"))
                 .ToListAsync();
         }
+
+        public async Task<List<WorkSchedule>> GetExpiredUncheckedInSchedulesAsync()
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => ws.CheckInAt == null
+                          && ws.Status != "ABSENT"
+                          && ws.Status != "Absent"
+                          && ws.Status != "Completed"
+                          && !ws.Status.StartsWith("LEAVE_APPROVED"))
+                .ToListAsync();
+        }
     }
 }
