@@ -131,7 +131,7 @@ namespace MenuGoBE.Service
             entity.BonusAmount = dto.BonusAmount;
             entity.TotalDeduction = dto.TotalDeduction;
             entity.PenaltyAmount = dto.PenaltyAmount;
-            entity.NetSalary = dto.NetSalary;
+            var oldStatus = entity.Status;
             entity.Status = dto.Status;
             entity.PaymentDate = dto.PaymentDate;
             entity.Note = dto.Note;
@@ -159,6 +159,12 @@ namespace MenuGoBE.Service
             RecalculateTotals(entity);
 
             await _payrollRepo.UpdateAsync(entity);
+
+            if (oldStatus != PayrollStatus.Paid && entity.Status == PayrollStatus.Paid)
+            {
+                await CreateCashFlowForPayrollAsync(entity);
+            }
+
             return true;
         }
 
@@ -181,6 +187,7 @@ namespace MenuGoBE.Service
             var entity = await _payrollRepo.GetByIdAsync(id);
             if (entity == null) return false;
 
+            var oldStatus = entity.Status;
             entity.Status = status;
             if (status == PayrollStatus.Paid)
             {
@@ -195,7 +202,44 @@ namespace MenuGoBE.Service
             }
 
             await _payrollRepo.UpdateAsync(entity);
+
+            if (oldStatus != PayrollStatus.Paid && status == PayrollStatus.Paid)
+            {
+                await CreateCashFlowForPayrollAsync(entity);
+            }
+
             return true;
+        }
+
+        private async Task CreateCashFlowForPayrollAsync(Payroll payroll)
+        {
+            if (payroll.NetSalary <= 0) return;
+
+            var account = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == payroll.AccountId);
+            var employeeName = account?.Name ?? $"ID {payroll.AccountId}";
+
+            var tempCode = $"PC{DateTime.UtcNow.Ticks % 1_000_000:D6}";
+            var cashFlow = new CashFlow
+            {
+                BranchId = payroll.BranchId,
+                Code = tempCode,
+                BusinessDate = payroll.PaymentDate ?? DateTime.UtcNow,
+                Direction = CashFlowDirection.Outflow,
+                Type = CashFlowDetailType.Payment,
+                PaymentMethod = PaymentMethod.Cash,
+                Status = CashFlowStatus.Completed,
+                TotalAmount = payroll.NetSalary,
+                Note = $"Chi trả lương tháng {payroll.Month}/{payroll.Year} cho nhân viên {employeeName}",
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            await _context.CashFlows.AddAsync(cashFlow);
+            await _context.SaveChangesAsync();
+
+            cashFlow.Code = $"PC{cashFlow.Id:D6}";
+            _context.CashFlows.Update(cashFlow);
+            await _context.SaveChangesAsync();
         }
 
         public async Task<PayrollViewDto> GenerateEmployeePayrollAsync(PayrollGenerateDto dto)
@@ -226,22 +270,33 @@ namespace MenuGoBE.Service
                 .Where(w => w.AccountId == dto.AccountId 
                          && w.WorkDate >= startDate 
                          && w.WorkDate <= endDate
-                         && (w.Status == "APPROVED"
-                             || w.Status == "COMPLETED"
-                             || w.Status == "Hoàn thành"
-                             || w.Status == "Đang làm việc"
-                             || w.ManagerApproved))
+                         && (
+                             w.Status == "Completed"
+                             || w.Status == "PRESENT"
+                             || w.Status == "PRESENT_APPROVED"
+                             || w.Status == "CÓ MẶT"
+                             || w.Status == "ĐÃ HOÀN THÀNH"
+                             || (w.CheckInAt != null && w.CheckOutAt != null)
+                             || (w.ActualHours.HasValue && w.ActualHours.Value > 0)
+                         ))
                 .ToListAsync();
 
             decimal actualWorkDays = schedules.Select(s => s.WorkDate).Distinct().Count();
             decimal actualWorkHours = schedules.Sum(s => s.ActualHours ?? 0);
 
             decimal baseSalary = contract?.BaseSalary ?? 0;
-            int baseWorkDays = (contract?.BaseWorkDay.HasValue == true && contract.BaseWorkDay.Value > 0) ? contract.BaseWorkDay.Value : 26;
             string salaryType = contract?.SalaryType ?? "Monthly";
+            bool isHourly = salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase);
+
+            int baseWorkDays = isHourly ? 0 : ((contract?.BaseWorkDay.HasValue == true && contract.BaseWorkDay.Value > 0) ? contract.BaseWorkDay.Value : 26);
 
             decimal calculatedSalary = 0;
-            if (salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase))
+            if (contract != null && contract.RoleId == 3)
+            {
+                // Đối với Quản lý (Manager - RoleId 3), Owner tính lương trực tiếp theo Lương cơ bản trong hợp đồng (không tính theo ngày công chuẩn)
+                calculatedSalary = baseSalary;
+            }
+            else if (isHourly)
             {
                 calculatedSalary = baseSalary * actualWorkHours;
             }

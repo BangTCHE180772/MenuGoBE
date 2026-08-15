@@ -25,10 +25,18 @@ namespace MenuGoBE.Controllers.Document
         /// Lấy danh sách phiếu thu chi của chi nhánh (chưa bị xóa mềm), sắp xếp theo BusinessDate giảm dần.
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetCashFlows([FromQuery] long branchId)
+        public async Task<IActionResult> GetCashFlows([FromQuery] long? branchId)
         {
-            if (!ValidateUserAndBranchToken(branchId, out _, out var errorResult))
-                return errorResult!;
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                if (!ValidateUserAndBranchToken(branchId.Value, out _, out var errorResult))
+                    return errorResult!;
+            }
+            else
+            {
+                if (!ValidateUserToken(out _, out var errorResult))
+                    return errorResult!;
+            }
 
             var list = await _cashFlowService.GetCashFlowsAsync(branchId);
             return Ok(list);

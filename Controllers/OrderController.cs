@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
+using System.Linq;
 
 namespace MenuGoBE.Controllers
 {
@@ -27,15 +29,59 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] long? branchId)
         {
             var result = await _service.GetAllAsync();
+
+            if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                      User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                      User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                
+                if (!isAdminOrOwner)
+                {
+                    var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                    var branchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                    
+                    if (branchIds.Any())
+                    {
+                        var filteredResult = result.Where(x => x.BranchId.HasValue && branchIds.Contains(x.BranchId.Value)).ToList();
+                        return Ok(filteredResult);
+                    }
+                }
+                else if (branchId.HasValue && branchId.Value > 0)
+                {
+                    // If Admin/Owner explicitly requests a specific branch
+                    var filteredResult = result.Where(x => x.BranchId == branchId.Value).ToList();
+                    return Ok(filteredResult);
+                }
+            }
+
             return Ok(result);
         }
 
         [HttpGet("invoices")]
         public async Task<IActionResult> GetInvoices([FromQuery] long branchId)
         {
+            if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                      User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                      User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                
+                if (!isAdminOrOwner)
+                {
+                    var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                    var userBranchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                    
+                    if (userBranchIds.Any() && !userBranchIds.Contains(branchId))
+                    {
+                        return Forbid();
+                    }
+                }
+            }
+
             var result = await _service.GetPaidOrdersByBranchAsync(branchId);
             return Ok(result);
         }
@@ -49,6 +95,20 @@ namespace MenuGoBE.Controllers
                 return NotFound(new { message = "Không tìm thấy Order" });
 
             return Ok(result);
+        }
+
+        [HttpPost("available-quantities/{branchId}")]
+        public async Task<IActionResult> GetAvailableQuantities(long branchId, [FromBody] List<long> productIds)
+        {
+            try
+            {
+                var result = await _detailService.GetAvailableQuantitiesAsync(branchId, productIds);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost]
@@ -227,6 +287,60 @@ namespace MenuGoBE.Controllers
                 }
 
                 return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{orderId}/details/bulk")]
+        [EnableRateLimiting("CustomerOrderPolicy")]
+        public async Task<IActionResult> CreateBulkDetail(long orderId, [FromBody] List<OrderDetailCreateDto> dtos)
+        {
+            if (dtos == null || !dtos.Any())
+                return BadRequest(new { message = "Không có món nào được chọn." });
+
+            foreach (var dto in dtos)
+            {
+                dto.OrderId = orderId;
+            }
+
+            try
+            {
+                var result = await _detailService.CreateMultipleAsync(dtos);
+                
+                if (!result.Success)
+                {
+                    return BadRequest(new { message = "Một số món không đủ số lượng.", errors = result.Errors });
+                }
+
+                var order = await _service.GetByIdAsync(orderId);
+                if (order != null)
+                {
+                    var table = await _tableService.GetByIdAsync(order.TableId);
+                    if (table != null)
+                    {
+                        var status = dtos.First().Status;
+                        string productsSummary = string.Join(", ", result.Details.Select(d => $"{d.ProductName} (x{d.Quantity})"));
+                        var payload = new 
+                        { 
+                            type = status == "CustomerPending" ? "new-order" : "new-item", 
+                            branchId = table.BranchId,
+                            tableId = table.Id, 
+                            tableName = table.Name,
+                            productName = "Nhiều món",
+                            quantity = dtos.Sum(d => d.Quantity),
+                            message = $"{table.Name} vừa gọi: {productsSummary}",
+                            timestamp = System.DateTime.UtcNow
+                        };
+
+                        await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                    }
+                }
+
+                return Ok(result.Details);
             }
             catch (KeyNotFoundException ex)
             {

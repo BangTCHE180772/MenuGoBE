@@ -16,11 +16,18 @@ namespace MenuGoBE.Repositories.Document
         {
             _context = context;
         }
-        public async Task<IEnumerable<CashFlow>> GetByBranchIdAsync(long branchId)
+        public async Task<IEnumerable<CashFlow>> GetByBranchIdAsync(long? branchId)
         {
-            return await _context.CashFlows
+            var query = _context.CashFlows
                 .AsNoTracking()
-                .Where(c => c.BranchId == branchId && !c.IsDeleted)
+                .Where(c => !c.IsDeleted);
+
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                query = query.Where(c => c.BranchId == branchId.Value);
+            }
+
+            return await query
                 .Include(c => c.Partner)
                 .Include(c => c.Document)
                 .OrderByDescending(c => c.BusinessDate)
