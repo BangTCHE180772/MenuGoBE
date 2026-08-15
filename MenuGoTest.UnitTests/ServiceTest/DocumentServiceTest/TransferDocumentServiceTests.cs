@@ -256,29 +256,22 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         }
 
         [Fact]
-        public async Task ProcessTransferReceiptAsync_PartialReceive_IncreasesReceiverStockAndRestoresRemainingToSender()
+        public async Task ProcessTransferReceiptAsync_PartialReceive_ThrowsDocumentTransferPartialNotAllowed()
         {
             var doc = CreateValidTransferDocument(); // Sent 10 units
             doc.Status = DocumentStatus.Completed;
             doc.TransferStatus = DocumentTransferStatus.InTransit;
 
-            var bInvSender = CreateValidBInventory(10, branchId: 1, qty: 90);
-            var bInvReceiver = CreateValidBInventory(20, branchId: 2, qty: 30);
-
             _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
-            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(bInvSender);
-            _mockRepo.Setup(r => r.GetBInventoryByBranchAndProductAsync(2, 500)).ReturnsAsync(bInvReceiver);
-            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(20)).ReturnsAsync(bInvReceiver);
 
             var receivedDetails = new List<DocumentDetail>
             {
                 new DocumentDetail { Id = 501, Quantity = 7 } // Received 7
             };
 
-            var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.PartialReceived, receivedDetails, "Nhận 7/10", 2);
-
-            Assert.Equal(DocumentTransferStatus.PartialReceived, result.TransferStatus);
-            Assert.Equal(37, bInvReceiver.Quantity); // 30 + 7 = 37
+            var exception = await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
+                _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.PartialReceived, receivedDetails, "Nhận 7/10", 2));
+            Assert.Equal(MenuGoBE.Exceptions.ErrorCodes.DocumentTransferPartialNotAllowed.Code, exception.Code);
         }
 
         [Fact]
@@ -295,7 +288,9 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetBInventoryByBranchAndProductAsync(2, 500)).ReturnsAsync((BInventory?)null); // Receiver has no BInventory yet
 
             var createdBInv = CreateValidBInventory(20, branchId: 2, qty: 10);
-            _mockRepo.Setup(r => r.AddBInventoryAsync(It.IsAny<BInventory>())).Returns(Task.CompletedTask);
+            _mockRepo.Setup(r => r.AddBInventoryAsync(It.IsAny<BInventory>()))
+                .Callback<BInventory>(b => b.Id = 20)
+                .Returns(Task.CompletedTask);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(20)).ReturnsAsync(createdBInv);
 
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Tạo mới kho nhận", 2);

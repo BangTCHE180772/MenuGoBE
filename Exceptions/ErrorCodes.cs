@@ -695,6 +695,12 @@ public static class ErrorCodes
         "Bắt buộc phải nhập Lý do / Ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng.",
         400
     );
+
+    public static readonly ErrorResult DocumentTransferPartialNotAllowed = new(
+        2163,
+        "Không được phép nhận một phần. Vui lòng chọn Nhận đủ hoặc Từ chối nhận.",
+        400
+    );
 }
 
 
