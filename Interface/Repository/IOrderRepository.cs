@@ -11,7 +11,7 @@ namespace MenuGoBE.Interface.Repository
         Task<List<Order>> GetChildOrdersWithDetailsAsync(long fatherId);
         Task<Order?> GetActiveOrderByTableIdAsync(long tableId);
         Task<Order?> GetActiveOrderByIdWithDetailsAsync(long orderId);
-        Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync();
+        Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync(long? branchId = null);
         Task<List<Order>> GetPaidOrdersByBranchAsync(long branchId);
 
         Task CreateAsync(Order entity);

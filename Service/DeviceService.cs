@@ -145,7 +145,7 @@ namespace MenuGoBE.Service
             if (account == null)
                 throw new Exception("Email không tồn tại hoặc tài khoản bị khóa.");
 
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
             var hasValidContract = account.Contracts.Any(c =>
                 c.BranchId == device.BranchId &&
                 c.Status == "Active" &&
@@ -196,8 +196,8 @@ namespace MenuGoBE.Service
                 if (!activeSchedules.Any())
                     throw new Exception("Bạn chưa check-in ca làm việc hôm nay tại chi nhánh này.");
 
-                var nowDateTime = DateTime.Now;
-                var todayDt = DateTime.Today;
+                var nowDateTime = DateTime.UtcNow.AddHours(7);
+                var todayDt = nowDateTime.Date;
 
                 var validSchedule = activeSchedules.FirstOrDefault(s => {
                     var shiftEndDateTime = todayDt.Add(s.Shift.EndTime.ToTimeSpan());
@@ -234,9 +234,93 @@ namespace MenuGoBE.Service
             return await _context.Devices.FirstOrDefaultAsync(d => d.Token == token);
         }
 
-        public Task<object?> PersonalLoginAsync(string challengeId)
+        public async Task<object?> PersonalLoginAsync(string deviceToken, string email)
         {
-            throw new NotImplementedException("Not used, controller handles it directly.");
+            var device = await _repo.GetByTokenAsync(deviceToken);
+            if (device == null || !device.IsActive)
+                throw new Exception("Thiết bị không hợp lệ hoặc đã bị thu hồi.");
+
+            var account = await _context.Accounts
+                .Include(a => a.Contracts)
+                    .ThenInclude(c => c.Role)
+                .FirstOrDefaultAsync(a => a.Email == email && a.IsActive);
+
+            if (account == null)
+                throw new Exception("Email không tồn tại hoặc tài khoản bị khóa.");
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+            var hasValidContract = account.Contracts.Any(c =>
+                c.BranchId == device.BranchId &&
+                c.Status == "Active" &&
+                c.StartDate <= today &&
+                (c.EndDate == null || c.EndDate >= today));
+
+            if (!hasValidContract)
+                throw new Exception("Nhân viên không thuộc chi nhánh của thiết bị này.");
+
+            var roles = account.Contracts
+                .Where(c => c.BranchId == device.BranchId && c.Status == "Active" &&
+                            c.StartDate <= today && (c.EndDate == null || c.EndDate >= today))
+                .Select(c => c.Role.Name)
+                .Distinct()
+                .ToList();
+
+            bool isManagerOrAbove = roles.Any(r => r == "Manager" || r == "Owner" || r == "Admin");
+
+            DateTime? shiftEndTime = null;
+            DateTime? disconnectTime = null;
+
+            if (!isManagerOrAbove)
+            {
+                if (device.DeviceType == "Station" && !roles.Contains("Waiter"))
+                    throw new Exception("Vui lòng vào đúng vị trí làm việc (Thiết bị này dành cho Phục vụ).");
+                if (device.DeviceType == "POS" && !roles.Contains("Cashier"))
+                    throw new Exception("Vui lòng vào đúng vị trí làm việc (Thiết bị này dành cho Thu ngân).");
+                if (device.DeviceType == "Kitchen" && !roles.Contains("Chef"))
+                    throw new Exception("Vui lòng vào đúng vị trí làm việc (Thiết bị này dành cho Bếp).");
+
+                var activeSchedules = await _context.WorkSchedules
+                    .Include(ws => ws.Shift)
+                    .Where(ws => ws.AccountId == account.Id
+                              && ws.BranchId == device.BranchId
+                              && ws.WorkDate == today
+                              && ws.CheckInAt != null)
+                    .ToListAsync();
+
+                if (!activeSchedules.Any())
+                    throw new Exception("Bạn chưa check-in ca làm việc hôm nay tại chi nhánh này.");
+
+                var nowDateTime = DateTime.UtcNow.AddHours(7);
+                var todayDt = nowDateTime.Date;
+
+                var validSchedule = activeSchedules.FirstOrDefault(s => {
+                    var shiftEndDateTime = todayDt.Add(s.Shift.EndTime.ToTimeSpan());
+                    return shiftEndDateTime.AddMinutes(30) >= nowDateTime;
+                });
+
+                if (validSchedule == null)
+                    throw new Exception("Ca làm việc của bạn đã kết thúc quá 30 phút hoặc chưa tới ca.");
+
+                shiftEndTime = todayDt.Add(validSchedule.Shift.EndTime.ToTimeSpan());
+                disconnectTime = shiftEndTime.Value.AddMinutes(30);
+            }
+
+            device.LastActiveAt = DateTime.UtcNow;
+            await _repo.UpdateAsync(device);
+
+            return new
+            {
+                success = true,
+                employee = new
+                {
+                    id = account.Id,
+                    name = account.Name,
+                    email = account.Email,
+                    roles = roles,
+                    shiftEndTime = shiftEndTime,
+                    disconnectTime = disconnectTime
+                }
+            };
         }
     }
 }

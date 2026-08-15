@@ -224,19 +224,28 @@ namespace MenuGoBE.Controllers
 
             if (device.DeviceType == "POS")
             {
-                var success = _authService.MarkAsScanned(dto.ChallengeId, email, name!);
-                if (!success)
-                    return BadRequest(new { message = "Mã QR đã hết hạn." });
-
-                await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
-                    .SendAsync("DeviceAuthScanned", new { email, name });
-
-                return Ok(new
+                try
                 {
-                    success = true,
-                    isPos = true,
-                    message = "Đã gửi yêu cầu đăng nhập POS."
-                });
+                    var result = await _service.PersonalLoginAsync(challenge.DeviceToken, email);
+
+                    var success = _authService.MarkAsScanned(dto.ChallengeId, email, name!);
+                    if (!success)
+                        return BadRequest(new { message = "Mã QR đã hết hạn." });
+
+                    await _hubContext.Clients.Group($"device_{challenge.DeviceToken}")
+                        .SendAsync("DeviceAuthScanned", result);
+
+                    return Ok(new
+                    {
+                        success = true,
+                        isPos = true,
+                        message = "Đã gửi yêu cầu đăng nhập POS."
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
             }
             else if (device.DeviceType == "Attendance")
             {
