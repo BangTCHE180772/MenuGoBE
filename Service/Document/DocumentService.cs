@@ -1850,8 +1850,8 @@ namespace MenuGoBE.Service.Document
                 string note = "";
                 
                 // Logic kiểm tra Regular và IsIntact nằm ở đây
-                if (product.Type == ProductType.Regular && isIntact)
-                {
+                // if (product.Type == ProductType.Regular && isIntact)
+                // {
                     // Cộng lại tồn kho
                     binventory.Quantity += baseQuantity;
                     
@@ -1882,12 +1882,12 @@ namespace MenuGoBE.Service.Document
                     await _repo.AddInventoryLedgerAsync(ledger);
                     
                     note = "Trả lại nguyên vẹn - Đã cộng tồn kho";
-                }
-                else
-                {
-                    // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho
-                    note = "Hàng lỗi/Đã chế biến - Không cộng tồn kho";
-                }
+                // }
+                // else
+                // {
+                //     // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho
+                //     note = "Hàng lỗi/Đã chế biến - Không cộng tồn kho";
+                // }
 
                 // LUÔN LUÔN ghi nhận vào chi tiết phiếu trả (DocumentDetail)
                 var childDetail = new DocumentDetail
@@ -1909,7 +1909,7 @@ namespace MenuGoBE.Service.Document
             await _repo.SaveChangesAsync();
         }
 
-        public async Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long userId)
+        public async Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long? userId)
         {
             var saleDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, DocumentType.Sale);
             if (saleDoc != null)

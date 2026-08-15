@@ -22,6 +22,7 @@ namespace MenuGoBE.Repositories
             var query = _context.SalaryDetails
                 .Include(sd => sd.Account)
                     .ThenInclude(a => a.Contracts)
+                .Include(sd => sd.Creator)
                 .Include(sd => sd.Payroll)
                     .ThenInclude(p => p.Contract)
                 .AsQueryable();
@@ -54,6 +55,7 @@ namespace MenuGoBE.Repositories
         {
             return await _context.SalaryDetails
                 .Include(sd => sd.Account)
+                .Include(sd => sd.Creator)
                 .Include(sd => sd.Payroll)
                 .FirstOrDefaultAsync(sd => sd.Id == id);
         }

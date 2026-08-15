@@ -33,5 +33,9 @@ public class SalaryDetail
     public Payroll Payroll { get; set; } = null!;
 
     [ForeignKey("AccountId")]
+    [InverseProperty("SalaryDetails")]
     public Account Account { get; set; } = null!;
+
+    [ForeignKey("CreatedBy")]
+    public Account? Creator { get; set; }
 }

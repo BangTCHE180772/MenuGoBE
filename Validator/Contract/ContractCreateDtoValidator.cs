@@ -46,7 +46,8 @@ namespace MenuGoBE.Validator.Contract
 
             RuleFor(x => x.BaseWorkDay)
                 .GreaterThanOrEqualTo(0).WithMessage("Số ngày công tiêu chuẩn không được âm.")
-                .LessThanOrEqualTo(31).WithMessage("Số ngày công tiêu chuẩn không được quá 31 ngày.");
+                .LessThanOrEqualTo(31).WithMessage("Số ngày công tiêu chuẩn không được quá 31 ngày.")
+                .When(x => x.BaseWorkDay.HasValue);
 
             RuleFor(x => x.CreatedBy)
                 .GreaterThan(0).WithMessage("CreatedBy không hợp lệ.");

@@ -12,11 +12,13 @@ namespace MenuGoBE.Interface.Repository
         Task<Order?> GetActiveOrderByTableIdAsync(long tableId);
         Task<Order?> GetActiveOrderByIdWithDetailsAsync(long orderId);
         Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync();
+        Task<List<Order>> GetPaidOrdersByBranchAsync(long branchId);
 
         Task CreateAsync(Order entity);
         Task UpdateAsync(Order entity);
         Task DeleteAsync(long id);
         Task SaveChangesAsync();
         Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync();
+        Microsoft.EntityFrameworkCore.Storage.IExecutionStrategy CreateExecutionStrategy();
     }
 }

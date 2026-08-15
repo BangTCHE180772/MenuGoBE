@@ -34,7 +34,7 @@ public class GetAllAsyncTests
         {
             new Area { Id = 1, BranchId = 1, Name = "Tầng 1", Status = "Active", IsActive = true },
             new Area { Id = 2, BranchId = 1, Name = "Tầng 2", Status = "Active", IsActive = true },
-            new Area { Id = 3, BranchId = 2, Name = "Sân vườn", Status = "Active", IsActive = false }
+            new Area { Id = 3, BranchId = 2, Name = "Sân vườn", Status = "Active", IsActive = true }
         };
         _repoMock.Setup(r => r.GetAllAsync()).ReturnsAsync(areas);
 

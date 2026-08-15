@@ -33,6 +33,13 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("invoices")]
+        public async Task<IActionResult> GetInvoices([FromQuery] long branchId)
+        {
+            var result = await _service.GetPaidOrdersByBranchAsync(branchId);
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(long id)
         {
@@ -83,7 +90,7 @@ namespace MenuGoBE.Controllers
         [HttpPost("{id}/pay")]
         public async Task<IActionResult> Pay(long id, [FromBody] OrderPayDto? dto)
         {
-            long currentUserId = 1; // Fallback
+            long? currentUserId = null; // Fallback
             var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
             if (claim != null && long.TryParse(claim.Value, out var parsedId))
             {
