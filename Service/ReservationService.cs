@@ -61,6 +61,7 @@ public class ReservationService : IReservationService
                 Note = r.Note,
                 Status = r.Status,
                 OrderId = r.OrderId,
+                BranchId = r.Order?.Table?.Area?.BranchId,
                 CreatedAt = r.CreatedAt
             };
 
