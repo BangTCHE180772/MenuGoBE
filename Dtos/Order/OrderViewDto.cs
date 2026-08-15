@@ -45,6 +45,10 @@ namespace MenuGoBE.Dtos.Order
 
         public long? BranchId { get; set; }
 
+        public string? BranchName { get; set; }
+
+        public string? BranchAddress { get; set; }
+
         public string? PaymentMethod { get; set; }
 
         public List<OrderDetailViewDto> OrderDetails { get; set; } = new List<OrderDetailViewDto>();

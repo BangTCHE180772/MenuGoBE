@@ -90,6 +90,8 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.TableName, opt => opt.MapFrom(src => src.Table != null ? (src.ChildOrders.Any() ? src.Table.Name + ", " + string.Join(", ", src.ChildOrders.Select(c => c.Table.Name)) : src.Table.Name) : null))
                 .ForMember(dest => dest.AreaName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? src.Table.Area.Name : null))
                 .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? (long?)src.Table.Area.BranchId : (long?)null))
+                .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null ? src.Table.Area.Branch.Name : null))
+                .ForMember(dest => dest.BranchAddress, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null && src.Table.Area.Branch.Address != null ? (src.Table.Area.Branch.Address.NewWard != null ? src.Table.Area.Branch.Address.NewWard.Name + ", " + src.Table.Area.Branch.Address.NewWard.NewProvince.Name : (src.Table.Area.Branch.Address.OldWard != null ? src.Table.Area.Branch.Address.OldWard.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict.OldProvince.Name : null)) : null))
                 .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
                 .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
                 .ForMember(dest => dest.VoucherCode, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Code : null))
