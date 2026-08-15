@@ -125,7 +125,9 @@ namespace MenuGoBE.Mapper
             CreateMap<WorkScheduleUpdateDto, WorkSchedule>();
 
             CreateMap<Contract, ContractViewDto>()
-                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty));
+                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty))
+                .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : string.Empty))
+                .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : string.Empty));
             CreateMap<ContractCreateDto, Contract>();
             CreateMap<ContractUpdateDto, Contract>();
 

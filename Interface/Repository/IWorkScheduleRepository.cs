@@ -18,5 +18,6 @@ namespace MenuGoBE.Interface.Repository
         Task<List<WorkSchedule>> GetByAccountIdAsync(long accountId);
         Task<List<WorkSchedule>> GetOpenSchedulesAsync();
         Task<List<WorkSchedule>> GetPendingSchedulesByAccountIdsAsync(List<long> accountIds);
+        Task<List<WorkSchedule>> GetExpiredUncheckedInSchedulesAsync();
     }
 }

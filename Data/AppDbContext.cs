@@ -304,6 +304,12 @@ public class AppDbContext : DbContext
         {
             foreignKey.DeleteBehavior = DeleteBehavior.Restrict;
         }
+
+        modelBuilder.Entity<Payroll>()
+            .HasMany(p => p.SalaryDetails)
+            .WithOne(sd => sd.Payroll)
+            .HasForeignKey(sd => sd.PayrollId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
     private static ProductType ParseEnumProductType(string value)

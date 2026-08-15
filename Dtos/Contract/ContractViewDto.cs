@@ -19,5 +19,7 @@ namespace MenuGoBE.Dtos.Contract
         public long CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
         public string AccountName { get; set; } = string.Empty;
+        public string BranchName { get; set; } = string.Empty;
+        public string RoleName { get; set; } = string.Empty;
     }
 }
