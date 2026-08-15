@@ -171,15 +171,15 @@ namespace MenuGoBE.Controllers
 
             var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
 
-            if (isAdmin)
-            {
-                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
-            }
             var existing = await _service.GetByIdAsync(dto.Id);
             if (existing == null)
                 return NotFound(new { message = "Không tìm thấy lịch làm việc để cập nhật" });
 
-            if (isManager)
+            if (isAdmin)
+            {
+                // Admin is allowed to update (e.g. to approve leave requests or shift swaps)
+            }
+            else if (isManager)
             {
                 if (!branchIds.Contains(existing.BranchId) || !branchIds.Contains(dto.BranchId))
                 {
