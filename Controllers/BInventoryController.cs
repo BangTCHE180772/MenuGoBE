@@ -484,6 +484,8 @@ namespace MenuGoBE.Controllers
                 var query = _context.BInventories
                     .AsNoTracking()
                     .Include(b => b.Product)
+                        .ThenInclude(p => p.UnitConversions)
+                            .ThenInclude(uc => uc.Unit)
                     .Where(b => b.BranchId == branchId && b.Product.Type != ProductType.Processed);
 
                 var bInventories = await query.ToListAsync();
@@ -537,19 +539,26 @@ namespace MenuGoBE.Controllers
                         .Where(l => l.DocumentType == DocumentType.Transfer && l.QuantityDelta < 0)
                         .Sum(l => Math.Abs(l.QuantityDelta));
 
-                    // 6. Tiêu thụ định mức (Expected Consumption)
+                    // 6. Tiêu thụ định mức (Expected Consumption) / Bán hàng
                     decimal expectedConsumption = periodLedgers
                         .Where(l => l.DocumentType == DocumentType.Sale)
                         .Sum(l => Math.Abs(l.QuantityDelta));
 
-                    // 7. Hệ thống ghi nhận tiêu thụ (System Recorded Consumption)
-                    decimal systemConsumption = openingStock + import + transferIn - transferOut - closingStock;
+                    // 6a. Xuất hủy (Destruction)
+                    decimal destruction = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Export || l.DocumentType == DocumentType.ExportDelete)
+                        .Sum(l => Math.Abs(l.QuantityDelta));
 
-                    // Chuẩn hóa không âm
-                    if (systemConsumption < 0) systemConsumption = 0;
+                    // 6b. Điều chỉnh (Adjustment)
+                    decimal adjustment = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Check)
+                        .Sum(l => l.QuantityDelta);
 
-                    // 8. Chênh lệch (Variance)
-                    decimal variance = systemConsumption - expectedConsumption;
+                    // 7. Tồn lý thuyết (Theoretical Stock)
+                    decimal theoreticalStock = openingStock + import + transferIn - transferOut - expectedConsumption - destruction + adjustment;
+
+                    // 8. Chênh lệch (Variance) = Tồn cuối - Tồn lý thuyết
+                    decimal variance = closingStock - theoreticalStock;
 
                     // 9. Sai số % (Variance %)
                     decimal variancePercent = 0;
@@ -561,6 +570,10 @@ namespace MenuGoBE.Controllers
                     {
                         variancePercent = variance > 0 ? 100 : -100;
                     }
+
+                    // Tiêu hao thực tế ghi nhận
+                    decimal systemConsumption = openingStock + import + transferIn - transferOut - destruction + adjustment - closingStock;
+                    if (systemConsumption < 0) systemConsumption = 0;
 
                     var unitName = bInv.Product.UnitConversions
                         .Where(uc => uc.BaseId == null)
@@ -578,8 +591,11 @@ namespace MenuGoBE.Controllers
                         import,
                         transferIn,
                         transferOut,
+                        destruction,
+                        adjustment,
                         systemConsumption,
                         expectedConsumption,
+                        theoreticalStock,
                         variance,
                         variancePercent,
                         closingStock
