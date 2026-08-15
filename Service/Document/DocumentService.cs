@@ -2207,6 +2207,24 @@ namespace MenuGoBE.Service.Document
                 await _repo.AddInventoryLedgerAsync(ledgerSend);
             }
 
+            // Sinh phiếu CashFlow Thu tiền (Inflow) tự động cho chi nhánh gửi (Bên A)
+            var cashFlowSend = new CashFlow
+            {
+                BranchId = document.BranchId,
+                DocumentId = document.Id,
+                PartnerId = document.PartnerId,
+                Code = $"CF_CK-{document.Code}",
+                BusinessDate = DateTime.UtcNow,
+                Direction = CashFlowDirection.Inflow,
+                Type = CashFlowDetailType.Refund,
+                PaymentMethod = PaymentMethod.Cash,
+                Status = CashFlowStatus.Completed,
+                TotalAmount = document.TotalAmount,
+                Note = $"Thu chuyển kho sang chi nhánh nhận từ phiếu {document.Code}",
+                CreatedAt = DateTime.UtcNow
+            };
+            await _repo.AddCashFlowAsync(cashFlowSend);
+
             document.TransferStatus = DocumentTransferStatus.InTransit;
         }
 
@@ -2308,54 +2326,19 @@ namespace MenuGoBE.Service.Document
                 document.TransferStatus = DocumentTransferStatus.Rejected;
                 #endregion
             }
-            else if (status == DocumentTransferStatus.Received || status == DocumentTransferStatus.PartialReceived)
+            else if (status == DocumentTransferStatus.PartialReceived)
             {
-                #region Kịch bản 2 & 3: Nhận Đủ (Received) hoặc Nhận Một Phần (PartialReceived)
+                throw new MenuGoException(ErrorCodes.DocumentTransferPartialNotAllowed, "Không được phép nhận một phần. Vui lòng chọn Nhận đủ hoặc Từ chối nhận.");
+            }
+            else if (status == DocumentTransferStatus.Received)
+            {
+                #region Kịch bản 2: Nhận Đủ (Received) - Tự động tạo phiếu nhập kho & cashflow chi
+                var newImportDetails = new List<Models.DocumentDetail>();
                 foreach (var detail in document.DocumentDetails)
                 {
-                    // q_received_base: số lượng thực nhận theo đơn vị kho nhỏ nhất
-                    // Khi Received đầy đủ → lấy nguyên BaseQuantity đã lưu
-                    decimal q_received_base = detail.BaseQuantity;
-
-                    if (status == DocumentTransferStatus.PartialReceived && receivedDetails != null)
-                    {
-                        var match = receivedDetails.FirstOrDefault(r => r.Id == detail.Id || r.BInventoryId == detail.BInventoryId);
-                        if (match != null)
-                        {
-                            // ReceivedQuantity từ frontend là số lượng theo đơn vị UNIT (chưa quy đổi)
-                            // → Nhân với ConversionRate để ra đơn vị nhỏ nhất lưu kho
-                            decimal conversionRate = detail.ConversionRate > 0 ? detail.ConversionRate : 1m;
-                            decimal q_received_unit = match.ReceivedQuantity ?? match.Quantity;
-                            q_received_base = q_received_unit * conversionRate;
-                        }
-                    }
-
-                    string productName = detail.SnapshotProductName;
-
-                    // Quy tắc: Số lượng thực nhận không được âm và không được vượt quá số lượng gửi đi
-                    if (q_received_base < 0)
-                    {
-                        throw new MenuGoException(ErrorCodes.DocumentQuantityRangeExceeded, $"Số lượng thực nhận của mặt hàng '{productName}' không được là số âm ({q_received_base}).");
-                    }
-
-                    if (q_received_base > detail.BaseQuantity)
-                    {
-                        throw new MenuGoException(ErrorCodes.DocumentReturnQuantityExceeded, $"Số lượng thực nhận của mặt hàng '{productName}' ({q_received_base:N3}) vượt quá số lượng đã gửi đi ({detail.BaseQuantity:N3}). Phía bên nhận chỉ được nhận tối đa bằng số lượng phía bên gửi.");
-                    }
-
-                    // Lưu số lượng thực nhận theo đơn vị nhỏ nhất vào DB
-                    detail.ReceivedQuantity = q_received_base;
-
-                    if (q_received_base <= 0) continue;
-
                     // Lấy hoặc tạo BInventory tại chi nhánh nhận
                     var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                     if (binventorySend == null) continue;
-
-                    if (string.IsNullOrWhiteSpace(productName) && binventorySend.Product != null)
-                    {
-                        productName = binventorySend.Product.Name;
-                    }
 
                     var binventoryRec = await _repo.GetBInventoryByBranchAndProductAsync(receivingBranchId, binventorySend.ProductId);
                     if (binventoryRec == null)
@@ -2372,56 +2355,54 @@ namespace MenuGoBE.Service.Document
                         await _repo.SaveChangesAsync();
                     }
 
-                    // Quy tắc: Đơn giá UnitPrice luôn được bảo lưu 100% theo bên gửi, bên nhận tuyệt đối không thể thay đổi đơn giá
-                    // UnitPrice đại diện cho giá của 1 đơn vị UNIT (ví dụ: 1 thùng = 24 lon → UnitPrice = giá/thùng)
-                    decimal effectiveUnitPrice = detail.UnitPrice > 0 ? detail.UnitPrice : detail.SnapshotAvgCost;
-
-                    // Tính đơn giá theo đơn vị nhỏ nhất để dùng cho Avg cost
-                    decimal convRate = detail.ConversionRate > 0 ? detail.ConversionRate : 1m;
-                    decimal unitCostBase = effectiveUnitPrice / convRate;
-
-                    // Tổng tiền = số lượng thực nhận (đơn vị unit) × UnitPrice
-                    // = (q_received_base / convRate) × UnitPrice
-                    // = q_received_base × (UnitPrice / convRate)
-                    // = q_received_base × unitCostBase
-                    decimal transfer_value = q_received_base * unitCostBase;
-
-                    decimal q_rec_old = binventoryRec.Quantity;
-                    decimal avg_rec_old = binventoryRec.Avg;
-                    decimal leftover_rec_old = binventoryRec.LeftOver;
-
-                    decimal b1 = (q_rec_old * avg_rec_old) + leftover_rec_old + transfer_value;
-                    decimal b2 = q_rec_old + q_received_base;
-                    decimal avg_rec_new = (b2 > 0) ? Math.Round(b1 / b2, 6) : 0m;
-                    decimal c1 = avg_rec_new * b2;
-                    decimal leftover_rec_new = b1 - c1;
-
-                    binventoryRec.Avg = avg_rec_new;
-                    binventoryRec.LeftOver = leftover_rec_new;
-                    binventoryRec.Quantity = b2;
-
-                    var ledgerRec = new InventoryLedger
+                    var newImportDetail = new Models.DocumentDetail
                     {
                         BInventoryId = binventoryRec.Id,
-                        DocumentId = document.Id,
-                        PostedAt = DateTime.UtcNow,
-                        PostedBy = userId,
-                        DocumentType = DocumentType.Transfer,
-                        SnapshotPostedByName = document.SnapshotPostedByName ?? string.Empty,
-                        SnapshotBranchName = !string.IsNullOrWhiteSpace(document.SnapshotToBranchName) ? document.SnapshotToBranchName : (document.SnapshotBranchName ?? string.Empty),
-                        SnapshotProductName = !string.IsNullOrWhiteSpace(productName) ? productName : (binventorySend.Product?.Name ?? string.Empty),
-                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : (binventorySend.Product?.Name ?? string.Empty),
-                        ConversionRateSnapshot = convRate,
-                        QuantityDelta = +q_received_base,
-                        InventoryValueDelta = +transfer_value,
-                        RunningQuantity = b2,
-                        RunningInventoryValue = c1,
-                        RunningAverageCost = avg_rec_new,
-                        UnitCost = unitCostBase,
-                        CreatedAt = DateTime.UtcNow
+                        Quantity = detail.Quantity,
+                        UnitPrice = detail.UnitPrice,
+                        BaseQuantity = detail.BaseQuantity,
+                        ConversionRate = detail.ConversionRate,
+                        SnapshotProductName = detail.SnapshotProductName,
+                        SnapshotProductCode = detail.SnapshotProductCode,
+                        SnapshotUnitName = detail.SnapshotUnitName,
+                        SnapshotBaseUnitName = detail.SnapshotBaseUnitName
                     };
+                    newImportDetails.Add(newImportDetail);
+                }
 
-                    await _repo.AddInventoryLedgerAsync(ledgerRec);
+                var newImportDoc = new Models.Document
+                {
+                    BranchId = receivingBranchId,
+                    Type = DocumentType.Import,
+                    Status = DocumentStatus.Completed,
+                    CreatedBy = userId,
+                    PostedBy = userId,
+                    CreatedAt = DateTime.UtcNow,
+                    OrderDate = DateTime.UtcNow,
+                    PostedAt = DateTime.UtcNow,
+                    TotalAmount = document.TotalAmount,
+                    AmountPaid = document.TotalAmount,
+                    AmountDue = 0m,
+                    Note = $"Nhập kho tự động từ phiếu chuyển kho #{document.Code} của chi nhánh {document.SnapshotBranchName}",
+                    DocumentDetails = newImportDetails,
+                    ParentDocumentId = document.Id
+                };
+
+                await _repo.AddAsync(newImportDoc);
+                await _repo.SaveChangesAsync();
+
+                await GenerateOrValidateImportCodeAsync(newImportDoc);
+                await FreezeDocumentSnapshotsAsync(newImportDoc, userId, isSoftDelete: false);
+                await ProcessWeightedAvgCostAndLedgerAsync(newImportDoc, userId);
+                await CreateImportCashFlowAsync(newImportDoc);
+
+                _repo.Update(newImportDoc);
+                await _repo.SaveChangesAsync();
+
+                // Cập nhật số lượng thực nhận 100% cho phiếu chuyển kho gốc
+                foreach (var detail in document.DocumentDetails)
+                {
+                    detail.ReceivedQuantity = detail.BaseQuantity;
                 }
 
                 if (!string.IsNullOrWhiteSpace(note))
