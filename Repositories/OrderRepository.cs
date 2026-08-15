@@ -79,10 +79,17 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync();
         }
 
-        public async Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync()
+        public async Task<List<Order>> GetActiveKitchenOrdersWithDetailsAsync(long? branchId = null)
         {
-            return await _context.Orders
-                .Where(o => o.Status == "Active" || o.Status == "Internal")
+            var query = _context.Orders
+                .Where(o => o.Status == "Active" || o.Status == "Internal");
+
+            if (branchId.HasValue)
+            {
+                query = query.Where(o => o.Table.Area.BranchId == branchId.Value);
+            }
+
+            return await query
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                         .ThenInclude(p => p.Image)
