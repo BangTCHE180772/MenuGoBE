@@ -99,6 +99,8 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<OrderDetail>> GetPendingByProductIdAsync(long productId, long[] branchIds)
         {
+            var thirtyMinsAgo = DateTime.UtcNow.AddMinutes(-30);
+
             var query = _context.OrderDetails
                 .Include(od => od.Order)
                 .ThenInclude(o => o.Table)
@@ -108,7 +110,8 @@ namespace MenuGoBE.Repositories
                              od.Order.Table.Area != null &&
                              branchIds.Contains(od.Order.Table.Area.BranchId) &&
                              (od.Status.ToLower() == "confirmed" || od.Status.ToLower() == "partialreturned") &&
-                             (string.IsNullOrEmpty(od.CookingStatus) || od.CookingStatus.ToLower() == "waiting" || od.CookingStatus.ToLower() == "accepted"));
+                             (string.IsNullOrEmpty(od.CookingStatus) || od.CookingStatus.ToLower() == "waiting" || od.CookingStatus.ToLower() == "accepted") &&
+                             od.CreatedAt >= thirtyMinsAgo); // Bỏ qua món chờ quá 30p
                              
             return await query.ToListAsync();
         }
