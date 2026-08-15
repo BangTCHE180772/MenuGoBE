@@ -384,7 +384,7 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("BaseSalary")
                         .HasColumnType("decimal(18,4)");
 
-                    b.Property<int>("BaseWorkDay")
+                    b.Property<int?>("BaseWorkDay")
                         .HasColumnType("integer");
 
                     b.Property<long>("BranchId")
@@ -967,6 +967,9 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("AccountId")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
@@ -1145,6 +1148,10 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BatchId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("CookingStatus")
                         .IsRequired()
@@ -1574,6 +1581,8 @@ namespace MenuGoBE.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId");
+
+                    b.HasIndex("CreatedBy");
 
                     b.HasIndex("PayrollId");
 
@@ -2420,13 +2429,21 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MenuGoBE.Models.Payroll", "Payroll")
-                        .WithMany("SalaryDetails")
-                        .HasForeignKey("PayrollId")
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MenuGoBE.Models.Payroll", "Payroll")
+                        .WithMany("SalaryDetails")
+                        .HasForeignKey("PayrollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Account");
+
+                    b.Navigation("Creator");
 
                     b.Navigation("Payroll");
                 });
