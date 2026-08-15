@@ -717,9 +717,9 @@ namespace MenuGoBE.Service
             return result;
         }
 
-        public async Task<List<KitchenItemDto>> GetKitchenItemsAsync()
+        public async Task<List<KitchenItemDto>> GetKitchenItemsAsync(long? branchId = null)
         {
-            var activeOrders = await _orderRepo.GetActiveKitchenOrdersWithDetailsAsync();
+            var activeOrders = await _orderRepo.GetActiveKitchenOrdersWithDetailsAsync(branchId);
             var result = new List<KitchenItemDto>();
 
             foreach (var order in activeOrders)

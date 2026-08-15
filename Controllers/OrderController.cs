@@ -529,9 +529,9 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet("kitchen-items")]
-        public async Task<IActionResult> GetKitchenItems()
+        public async Task<IActionResult> GetKitchenItems([FromQuery] long? branchId)
         {
-            var result = await _detailService.GetKitchenItemsAsync();
+            var result = await _detailService.GetKitchenItemsAsync(branchId);
             return Ok(result);
         }
 
