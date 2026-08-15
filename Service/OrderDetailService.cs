@@ -111,6 +111,19 @@ namespace MenuGoBE.Service
             return (int)binv.Quantity - pendingQty;
         }
 
+        public async Task<Dictionary<long, int>> GetAvailableQuantitiesAsync(long branchId, List<long> productIds)
+        {
+            var result = new Dictionary<long, int>();
+            if (productIds == null || !productIds.Any()) return result;
+
+            foreach (var productId in productIds.Distinct())
+            {
+                result[productId] = await GetAvailableQuantityAsync(productId, branchId);
+            }
+
+            return result;
+        }
+
         public async Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto)
         {
             var order = await _orderRepo.GetByIdAsync(dto.OrderId);
@@ -187,6 +200,130 @@ namespace MenuGoBE.Service
             await RecalculateTotalAmountAsync(order);
 
             return _mapper.Map<OrderDetailViewDto>(entity);
+        }
+
+        public async Task<BulkOrderResultDto> CreateMultipleAsync(List<OrderDetailCreateDto> dtos)
+        {
+            var result = new BulkOrderResultDto { Success = true };
+            if (dtos == null || !dtos.Any()) return result;
+
+            long orderId = dtos.First().OrderId;
+            var order = await _orderRepo.GetByIdAsync(orderId);
+            if (order == null) throw new KeyNotFoundException("Không tìm thấy Order.");
+
+            var table = await _tableRepo.GetByIdAsync(order.TableId);
+            long branchId = 0;
+            if (table != null)
+            {
+                var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                if (area != null) branchId = area.BranchId;
+            }
+
+            if (branchId > 0)
+            {
+                var groupedProducts = dtos.GroupBy(d => d.ProductId)
+                                          .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(d => d.Quantity) })
+                                          .ToList();
+
+                foreach (var item in groupedProducts)
+                {
+                    int availableQty = await GetAvailableQuantityAsync(item.ProductId, branchId);
+                    if (item.TotalQuantity > availableQty)
+                    {
+                        var product = await _productRepo.GetByIdAsync(item.ProductId);
+                        result.Success = false;
+                        result.Errors.Add(new InsufficientStockDto
+                        {
+                            ProductId = item.ProductId,
+                            ProductName = product?.Name ?? "Món không xác định",
+                            RequestedQuantity = item.TotalQuantity,
+                            AvailableQuantity = availableQty
+                        });
+                    }
+                }
+            }
+
+            if (!result.Success)
+            {
+                return result; // Khong tao Detail nao, bao loi luon
+            }
+
+            // Neu du so luong, tao tung mon
+            var strategy = _orderRepo.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                result.Details.Clear();
+                using var transaction = await _orderRepo.BeginTransactionAsync();
+                try
+                {
+                    var createdEntities = new List<OrderDetail>();
+                    foreach (var dto in dtos)
+                    {
+                        var entity = _mapper.Map<OrderDetail>(dto);
+                        var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+                        
+                        if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "Waiting" || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
+                        {
+                            if (productType == "Regular" || productType == "Manufactured")
+                                entity.CookingStatus = "Ready";
+                            else
+                                entity.CookingStatus = "Waiting";
+                        }
+
+                        if (entity.Status == "Confirmed")
+                        {
+                            if (productType == "Regular" || productType == "Manufactured")
+                            {
+                                if (table != null)
+                                {
+                                    var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                                    if (area != null)
+                                    {
+                                        var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
+                                        if (binv != null && binv.IsManageQuantity)
+                                        {
+                                            if (binv.Quantity < entity.Quantity)
+                                            {
+                                                await SendStockAlertAsync(branchId, entity.ProductId, "Sản phẩm đã hết hàng trong kho.");
+                                                throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
+                                            }
+                                            binv.Quantity -= entity.Quantity;
+                                            await _bInventoryRepo.UpdateAsync(binv);
+                                            await _bInventoryRepo.SaveChangesAsync();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        entity.CreatedAt = DateTime.UtcNow;
+                        await _detailRepo.CreateAsync(entity);
+                        createdEntities.Add(entity);
+                    }
+                    
+                    await _detailRepo.SaveChangesAsync();
+                    await RecalculateTotalAmountAsync(order);
+                    await transaction.CommitAsync();
+
+                    foreach (var entity in createdEntities)
+                    {
+                        var viewDto = _mapper.Map<OrderDetailViewDto>(entity);
+                        var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                        if (product != null)
+                        {
+                            viewDto.ProductName = product.Name;
+                        }
+                        result.Details.Add(viewDto);
+                    }
+                }
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+
+            return result;
         }
 
         public async Task<bool> UpdateAsync(OrderDetailUpdateDto dto)
@@ -345,7 +482,8 @@ namespace MenuGoBE.Service
                         // Khi confirm, món này ĐÃ NẰM trong pendingQty (nếu là CustomerPending). 
                         // Do đó availableQty hiện tại đã bị trừ đi số lượng của chính detail này.
                         // Nếu finalQuantity lớn hơn detail.Quantity ban đầu, ta phải kiểm tra phần chênh lệch.
-                        // Để đơn giản, ta tính lại khoảng chênh lệch hoặc bỏ qua vì lúc Create đã chặn rồi.
+                        // Hệ thống sử dụng GetPendingQuantityAsync để giữ hàng ảo, 
+                        // và chỉ trừ thật sự khi trạng thái là Served.
                     }
                 }
             }
