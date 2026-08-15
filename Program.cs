@@ -253,7 +253,12 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-builder.Services.AddControllers().AddOData(options =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    })
+    .AddOData(options =>
 {
     var odataBuilder = new ODataConventionModelBuilder();
     odataBuilder.EntitySet<Customer>("CustomerOData");
