@@ -20,6 +20,7 @@ public class ReservationRepository : IReservationRepository
             .Include(r => r.Customer)
             .Include(r => r.Order)
                 .ThenInclude(o => o.Table)
+                    .ThenInclude(t => t.Area)
             .Include(r => r.Order)
                 .ThenInclude(o => o.OrderDetails)
             .OrderByDescending(r => r.ReservationTime)
