@@ -78,11 +78,13 @@ namespace MenuGoBE.Service
                     return 0;
                 }
 
-                int maxProcessable = 999999;
+                int maxProcessable = int.MaxValue;
+                bool hasValidRecipe = false;
                 foreach (var recipe in recipes)
                 {
                     if (recipe.Quantity > 0)
                     {
+                        hasValidRecipe = true;
                         int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId);
                         int possibleQty = (int)(ingredientQty / recipe.Quantity);
                         if (possibleQty < maxProcessable)
@@ -91,7 +93,7 @@ namespace MenuGoBE.Service
                         }
                     }
                 }
-                return maxProcessable == 999999 ? 0 : maxProcessable;
+                return hasValidRecipe ? maxProcessable : 0;
             }
 
             var binv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
@@ -643,9 +645,11 @@ namespace MenuGoBE.Service
             if (dto.ReturnQuantity > maxReturnable)
                 throw new InvalidOperationException($"Số lượng trả ({dto.ReturnQuantity}) vượt quá số lượng có thể trả ({maxReturnable}).");
 
-            // Validate: phải có lý do
+            // Validate: phải có lý do (Bỏ qua vì trả hàng nguyên vẹn không cần lý do)
+            /*
             if (string.IsNullOrWhiteSpace(dto.ReturnReason))
                 throw new InvalidOperationException("Phải cung cấp lý do trả món.");
+            */
 
             // Update return fields
             entity.ReturnedQuantity += dto.ReturnQuantity;
@@ -654,6 +658,17 @@ namespace MenuGoBE.Service
             entity.ReturnedAt = DateTime.UtcNow;
             entity.ReturnConfirmedBy = confirmedByUserId;
 
+            var product = await _productRepo.GetByIdAsync(entity.ProductId);
+            if (product == null)
+                throw new InvalidOperationException("Không tìm thấy thông tin sản phẩm.");
+
+            // --- NEW LOGIC: Bắt buộc hàng phải nguyên vẹn (IsIntact = true) và là loại Regular ---
+            if (product.Type != MenuGoBE.Models.Enums.ProductType.Regular)
+                throw new InvalidOperationException("Chỉ cho phép trả hàng đối với sản phẩm loại Thường (Regular).");
+
+            if (dto.IsIntact == false)
+                throw new InvalidOperationException("Chỉ cho phép trả hàng khi hàng còn nguyên vẹn (chưa qua sử dụng/bóc vỏ).");
+            
             // Re-stock logic: CHỈ Regular + còn nguyên vẹn mới cộng lại kho
             // Logic trừ/cộng kho và ghi sổ kho được quản lý tập trung ở DocumentService
             var order = await _orderRepo.GetByIdAsync(entity.OrderId);
@@ -666,12 +681,8 @@ namespace MenuGoBE.Service
                     if (area != null)
                     {
                         long branchId = area.BranchId;
-                        var product = await _productRepo.GetByIdAsync(entity.ProductId);
-                        if (product != null)
-                        {
-                            var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
-                            await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, entity.Id, confirmedByUserId);
-                        }
+                        var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
+                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, entity.Id, confirmedByUserId);
                     }
                 }
             }

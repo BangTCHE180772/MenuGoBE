@@ -126,7 +126,7 @@ public class PayOrderAsyncTests : OrderServiceTestBase
 
         await _service.PayOrderAsync(1, paymentMethod: "Cash");
 
-        _documentServiceMock.Verify(d => d.CreateSaleCompletedAsync(It.IsAny<MenuGoBE.Models.Document>(), It.IsAny<long>()), Times.Once);
+        _documentServiceMock.Verify(d => d.FinalizeOrderDocumentsAsync(It.IsAny<long>(), It.IsAny<decimal>(), It.IsAny<MenuGoBE.Models.Enums.PaymentMethod>(), It.IsAny<long?>(), It.IsAny<long>()), Times.Once);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class PayOrderAsyncTests : OrderServiceTestBase
         Assert.Equal("Cleaning", childTable.Status);
         Assert.Contains(20, result);
         
-        _documentServiceMock.Verify(d => d.CreateSaleCompletedAsync(It.IsAny<MenuGoBE.Models.Document>(), It.IsAny<long>()), Times.Once);
+        _documentServiceMock.Verify(d => d.FinalizeOrderDocumentsAsync(It.IsAny<long>(), It.IsAny<decimal>(), It.IsAny<MenuGoBE.Models.Enums.PaymentMethod>(), It.IsAny<long?>(), It.IsAny<long>()), Times.Once);
     }
 
     [Fact]

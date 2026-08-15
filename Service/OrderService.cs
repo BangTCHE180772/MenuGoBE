@@ -69,10 +69,19 @@ namespace MenuGoBE.Service
 
         public async Task<OrderViewDto?> GetByIdAsync(long id)
         {
-            var data = await _repo.GetByIdAsync(id);
+            var data = await _repo.GetOrderByIdWithDetailsAsync(id);
             if (data == null) return null;
 
-            return _mapper.Map<OrderViewDto>(data);
+            var dto = _mapper.Map<OrderViewDto>(data);
+            if (data.CreatedBy.HasValue)
+            {
+                var account = await _context.Accounts.FindAsync(data.CreatedBy.Value);
+                if (account != null)
+                {
+                    dto.CreatedByName = account.Name;
+                }
+            }
+            return dto;
         }
 
         public async Task<OrderViewDto> CreateAsync(OrderCreateDto dto)
@@ -312,7 +321,8 @@ namespace MenuGoBE.Service
                     CookingStatus = od.CookingStatus,
                     CreatedAt = od.CreatedAt,
                     ReturnedQuantity = od.ReturnedQuantity,
-                    ReturnReason = od.ReturnReason
+                    ReturnReason = od.ReturnReason,
+                    ProductType = od.Product != null ? od.Product.Type.ToString() : string.Empty
                 }).ToList();
             foreach (var child in childOrders)
             {
@@ -330,7 +340,8 @@ namespace MenuGoBE.Service
                         CookingStatus = od.CookingStatus,
                         CreatedAt = od.CreatedAt,
                         ReturnedQuantity = od.ReturnedQuantity,
-                        ReturnReason = od.ReturnReason
+                        ReturnReason = od.ReturnReason,
+                        ProductType = od.Product != null ? od.Product.Type.ToString() : string.Empty
                     });
                 items.AddRange(childItems);
             }
@@ -451,11 +462,14 @@ namespace MenuGoBE.Service
             return order.TotalAmount;
         }
 
-        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long userId = 1)
+        public async Task<List<long>> PayOrderAsync(long orderId, OrderPayDto? dto = null, string paymentMethod = "Cash", long? userId = null)
         {
-            using var transaction = await _repo.BeginTransactionAsync();
-            try
+            var strategy = _repo.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
+                using var transaction = await _repo.BeginTransactionAsync();
+                try
+                {
                 var paidTableIds = new List<long>();
                 var orderWithDetails = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
                 if (orderWithDetails == null) return paidTableIds;
@@ -594,6 +608,19 @@ namespace MenuGoBE.Service
 
                     if (targetPartner == null)
                     {
+                        long validCreatedBy = order.CreatedBy ?? 1;
+                        if (userId.HasValue)
+                        {
+                            var userExists = await _context.Accounts.AnyAsync(a => a.Id == userId.Value);
+                            if (userExists) validCreatedBy = userId.Value;
+                        }
+
+                        if (!await _context.Accounts.AnyAsync(a => a.Id == validCreatedBy))
+                        {
+                            var firstAccount = await _context.Accounts.Select(a => a.Id).FirstOrDefaultAsync();
+                            if (firstAccount > 0) validCreatedBy = firstAccount;
+                        }
+
                         targetPartner = new Partner
                         {
                             BranchId = branchId.Value,
@@ -601,7 +628,7 @@ namespace MenuGoBE.Service
                             Name = partnerName,
                             Phone = searchPhone,
                             Email = string.Empty,
-                            CreatedBy = order.CreatedBy ?? 1,
+                            CreatedBy = validCreatedBy,
                             CreatedAt = DateTime.UtcNow
                         };
                         targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
@@ -627,6 +654,7 @@ namespace MenuGoBE.Service
                 await transaction.RollbackAsync();
                 throw;
             }
+            });
         }
 
 
@@ -664,6 +692,27 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
 
             return true;
+        }
+
+        public async Task<List<OrderViewDto>> GetPaidOrdersByBranchAsync(long branchId)
+        {
+            var orders = await _repo.GetPaidOrdersByBranchAsync(branchId);
+            var dtos = _mapper.Map<List<OrderViewDto>>(orders);
+
+            var creatorIds = orders.Where(o => o.CreatedBy.HasValue).Select(o => o.CreatedBy!.Value).Distinct().ToList();
+            if (creatorIds.Any())
+            {
+                var accounts = await _context.Accounts.Where(a => creatorIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Name);
+                foreach (var dto in dtos)
+                {
+                    if (dto.CreatedBy.HasValue && accounts.TryGetValue(dto.CreatedBy.Value, out var name))
+                    {
+                        dto.CreatedByName = name;
+                    }
+                }
+            }
+
+            return dtos;
         }
     }
 }

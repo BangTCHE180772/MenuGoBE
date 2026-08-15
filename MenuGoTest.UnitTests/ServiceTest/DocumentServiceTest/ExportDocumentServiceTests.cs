@@ -94,7 +94,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetByIdAsync(60)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(15)).ReturnsAsync(bInv);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CompleteExportDeleteAsync(60, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteExportDeleteAsync(60, 1));
         }
 
         [Fact]

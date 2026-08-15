@@ -30,7 +30,7 @@ public class Contract
     [Column(TypeName = "decimal(18,4)")]
     public decimal BaseSalary { get; set; }
 
-    public int BaseWorkDay { get; set; }
+    public int? BaseWorkDay { get; set; }
 
     public long CreatedBy { get; set; }
 

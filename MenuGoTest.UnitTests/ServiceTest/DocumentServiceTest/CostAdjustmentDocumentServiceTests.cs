@@ -95,7 +95,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(CreateValidBInventory());
 
-            await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateCostAdjustmentPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateCostAdjustmentPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -106,7 +106,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(zeroStockInventory);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateCostAdjustmentPendingAsync(doc, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CreateCostAdjustmentPendingAsync(doc, 1));
         }
 
         [Fact]
@@ -182,7 +182,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             _mockRepo.Setup(r => r.GetByIdAsync(90)).ReturnsAsync(doc);
             _mockRepo.Setup(r => r.GetBInventoryByIdAsync(3)).ReturnsAsync(bInv);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CompleteCostAdjustmentAsync(90, 1));
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.CompleteCostAdjustmentAsync(90, 1));
         }
 
         [Fact]

@@ -45,6 +45,7 @@ public class Account
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
     public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
     public ICollection<Payroll> Payrolls { get; set; } = new List<Payroll>();
+    [InverseProperty("Account")]
     public ICollection<SalaryDetail> SalaryDetails { get; set; } = new List<SalaryDetail>();
 
     // 9. Inventory Module – Audit

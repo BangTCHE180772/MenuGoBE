@@ -88,17 +88,30 @@ namespace MenuGoBE.Mapper
             //order
             CreateMap<Order, OrderViewDto>()
                 .ForMember(dest => dest.TableName, opt => opt.MapFrom(src => src.Table != null ? (src.ChildOrders.Any() ? src.Table.Name + ", " + string.Join(", ", src.ChildOrders.Select(c => c.Table.Name)) : src.Table.Name) : null))
-                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.Payments.OrderByDescending(p => p.CreatedAt).Select(p => p.Method).FirstOrDefault()));
+                .ForMember(dest => dest.AreaName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? src.Table.Area.Name : null))
+                .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? (long?)src.Table.Area.BranchId : (long?)null))
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
+                .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
+                .ForMember(dest => dest.VoucherCode, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Code : null))
+                .ForMember(dest => dest.PaymentMethod, opt => opt.MapFrom(src => src.Payments.OrderByDescending(p => p.CreatedAt).Select(p => p.Method).FirstOrDefault()))
+                .ForMember(dest => dest.OrderDetails, opt => opt.MapFrom(src => src.OrderDetails));
             CreateMap<OrderCreateDto, Order>();
             CreateMap<OrderUpdateDto, Order>();
             CreateMap<OrderDetail, OrderDetailViewDto>()
-                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty));
+                .ForMember(dest => dest.ProductName, opt => opt.MapFrom(src => src.Product != null ? src.Product.Name : string.Empty))
+                .ForMember(dest => dest.ProductType, opt => opt.MapFrom(src => src.Product != null ? src.Product.Type.ToString() : string.Empty));
             CreateMap<OrderDetailCreateDto, OrderDetail>();
             CreateMap<OrderDetailUpdateDto, OrderDetail>();
 
             //account
             CreateMap<Account, AccountViewDto>()
-                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src => src.Contracts.Select(c => c.RoleId).ToList()))
+                .ForMember(dest => dest.RoleIds, opt => opt.MapFrom(src =>
+                    src.Contracts.Any(c => c.Status == "Active")
+                        ? src.Contracts.Where(c => c.Status == "Active").Select(c => c.RoleId).Distinct().ToList()
+                        : src.Contracts.Any(c => c.Status == "Expired")
+                            ? src.Contracts.Where(c => c.Status == "Expired").Select(c => c.RoleId).Distinct().ToList()
+                            : src.Contracts.Where(c => c.Status == "Terminated").Select(c => c.RoleId).Distinct().ToList()
+                ))
                 .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Contracts.Where(c => c.Status == "Active").Select(c => (long?)c.BranchId).FirstOrDefault() ?? src.Contracts.Select(c => (long?)c.BranchId).FirstOrDefault()));
 
             CreateMap<AccountCreateDto, Account>();
@@ -194,7 +207,8 @@ namespace MenuGoBE.Mapper
             CreateMap<PayrollUpdateDto, Payroll>();
 
             CreateMap<SalaryDetail, SalaryDetailViewDto>()
-                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty));
+                .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty))
+                .ForMember(dest => dest.CreatedByName, opt => opt.MapFrom(src => src.Creator != null ? src.Creator.Name : string.Empty));
             CreateMap<SalaryDetailCreateDto, SalaryDetail>();
             CreateMap<SalaryDetailUpdateDto, SalaryDetail>();
 

@@ -150,7 +150,7 @@ namespace MenuGoBE.Interface.Services.Document
         /// Chốt (Complete) tất cả Pending Documents của một Order khi thanh toán.
         /// Gán Customer, TotalAmount và ghi CashFlow.
         /// </summary>
-        Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long userId);
+        Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long? userId);
         #endregion
 
         /// <summary>
