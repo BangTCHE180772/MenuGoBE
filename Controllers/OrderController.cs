@@ -234,6 +234,60 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpPost("{orderId}/details/bulk")]
+        [EnableRateLimiting("CustomerOrderPolicy")]
+        public async Task<IActionResult> CreateBulkDetail(long orderId, [FromBody] List<OrderDetailCreateDto> dtos)
+        {
+            if (dtos == null || !dtos.Any())
+                return BadRequest(new { message = "Không có món nào được chọn." });
+
+            foreach (var dto in dtos)
+            {
+                dto.OrderId = orderId;
+            }
+
+            try
+            {
+                var result = await _detailService.CreateMultipleAsync(dtos);
+                
+                if (!result.Success)
+                {
+                    return BadRequest(new { message = "Một số món không đủ số lượng.", errors = result.Errors });
+                }
+
+                var order = await _service.GetByIdAsync(orderId);
+                if (order != null)
+                {
+                    var table = await _tableService.GetByIdAsync(order.TableId);
+                    if (table != null)
+                    {
+                        var status = dtos.First().Status;
+                        string productsSummary = string.Join(", ", result.Details.Select(d => $"{d.ProductName} (x{d.Quantity})"));
+                        var payload = new 
+                        { 
+                            type = status == "CustomerPending" ? "new-order" : "new-item", 
+                            branchId = table.BranchId,
+                            tableId = table.Id, 
+                            tableName = table.Name,
+                            productName = "Nhiều món",
+                            quantity = dtos.Sum(d => d.Quantity),
+                            message = $"{table.Name} vừa gọi: {productsSummary}",
+                            timestamp = System.DateTime.UtcNow
+                        };
+
+                        await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                    }
+                }
+
+                return Ok(result.Details);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
         [HttpPut("{orderId}/details/{id}")]
         [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> UpdateDetail(long orderId, long id, [FromBody] OrderDetailUpdateDto dto)

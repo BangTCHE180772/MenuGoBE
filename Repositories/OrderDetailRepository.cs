@@ -70,14 +70,31 @@ namespace MenuGoBE.Repositories
 
         public async Task<int> GetPendingQuantityAsync(long productId, long branchId)
         {
-            return await _context.OrderDetails
+            var directPending = await _context.OrderDetails
+                .Include(od => od.Product)
                 .Include(od => od.Order)
                 .ThenInclude(o => o.Table)
                 .ThenInclude(t => t.Area)
                 .Where(od => od.ProductId == productId 
                              && od.Order.Table.Area.BranchId == branchId
-                             && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
+                             && (od.Status == "CustomerPending" || (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
                 .SumAsync(od => (int?)od.Quantity) ?? 0;
+
+            var ingredientPending = await _context.OrderDetails
+                .Include(od => od.Product)
+                .Include(od => od.Order)
+                .ThenInclude(o => o.Table)
+                .ThenInclude(t => t.Area)
+                .Where(od => od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed 
+                             && od.Order.Table.Area.BranchId == branchId
+                             && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
+                .Join(_context.RecipesDetaileds.Where(r => r.IngredientProductId == productId),
+                      od => od.ProductId,
+                      r => r.ParentProductId,
+                      (od, r) => new { od.Quantity, RecipeQuantity = r.Quantity })
+                .SumAsync(x => (int?)(x.Quantity * x.RecipeQuantity)) ?? 0;
+
+            return directPending + ingredientPending;
         }
 
         public async Task SaveChangesAsync()

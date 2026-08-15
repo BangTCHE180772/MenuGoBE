@@ -36,7 +36,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<Table?> GetByIdAsync(long id)
         {
-            var entity = await _context.Tables.FindAsync(id);
+            var entity = await _context.Tables.Include(t => t.Area).FirstOrDefaultAsync(t => t.Id == id);
             if (entity != null && !entity.IsActive) return null;
             return entity;
         }
