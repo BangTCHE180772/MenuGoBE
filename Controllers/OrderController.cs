@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
+using System.Linq;
 
 namespace MenuGoBE.Controllers
 {
@@ -27,15 +29,59 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] long? branchId)
         {
             var result = await _service.GetAllAsync();
+
+            if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                      User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                      User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                
+                if (!isAdminOrOwner)
+                {
+                    var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                    var branchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                    
+                    if (branchIds.Any())
+                    {
+                        var filteredResult = result.Where(x => x.BranchId.HasValue && branchIds.Contains(x.BranchId.Value)).ToList();
+                        return Ok(filteredResult);
+                    }
+                }
+                else if (branchId.HasValue && branchId.Value > 0)
+                {
+                    // If Admin/Owner explicitly requests a specific branch
+                    var filteredResult = result.Where(x => x.BranchId == branchId.Value).ToList();
+                    return Ok(filteredResult);
+                }
+            }
+
             return Ok(result);
         }
 
         [HttpGet("invoices")]
         public async Task<IActionResult> GetInvoices([FromQuery] long branchId)
         {
+            if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                      User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                      User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                
+                if (!isAdminOrOwner)
+                {
+                    var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                    var userBranchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                    
+                    if (userBranchIds.Any() && !userBranchIds.Contains(branchId))
+                    {
+                        return Forbid();
+                    }
+                }
+            }
+
             var result = await _service.GetPaidOrdersByBranchAsync(branchId);
             return Ok(result);
         }
