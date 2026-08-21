@@ -28,7 +28,7 @@ public class EmployeeLoginAsyncTests
     public async Task ThrowsException_WhenDeviceNotFoundOrInactive()
     {
         // Arrange
-        var dto = new DeviceEmployeeLoginDto { DeviceToken = "invalid", Email = "emp@test.com", Code = "123456" };
+        var dto = new DeviceEmployeeLoginDto { DeviceToken = "invalid", Email = "emp@test.com" };
         _deviceRepoMock.Setup(r => r.GetByTokenAsync("invalid")).ReturnsAsync((Device?)null);
 
         // Act & Assert
@@ -41,7 +41,7 @@ public class EmployeeLoginAsyncTests
     {
         // Arrange
         var device = new Device { Id = 1, BranchId = 1, Token = "token", IsActive = true };
-        var dto = new DeviceEmployeeLoginDto { DeviceToken = "token", Email = "notexist@test.com", Code = "123456" };
+        var dto = new DeviceEmployeeLoginDto { DeviceToken = "token", Email = "notexist@test.com" };
         _deviceRepoMock.Setup(r => r.GetByTokenAsync("token")).ReturnsAsync(device);
 
         // Act & Assert
@@ -64,7 +64,7 @@ public class EmployeeLoginAsyncTests
         _context.Accounts.Add(account);
         await _context.SaveChangesAsync();
 
-        var dto = new DeviceEmployeeLoginDto { DeviceToken = "token", Email = "emp@test.com", Code = "123456" };
+        var dto = new DeviceEmployeeLoginDto { DeviceToken = "token", Email = "emp@test.com" };
         _deviceRepoMock.Setup(r => r.GetByTokenAsync("token")).ReturnsAsync(device);
 
         // Act & Assert

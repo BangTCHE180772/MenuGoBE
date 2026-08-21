@@ -155,14 +155,7 @@ namespace MenuGoBE.Service
             if (!hasValidContract)
                 throw new Exception("Nhân viên không thuộc chi nhánh của thiết bị này.");
 
-            if (string.IsNullOrEmpty(account.TwoFACode))
-                throw new Exception("Nhân viên chưa cài đặt 2FA. Vui lòng đăng nhập trên máy tính để setup.");
 
-            var tfa = new Google.Authenticator.TwoFactorAuthenticator();
-            bool isCorrectPin = tfa.ValidateTwoFactorPIN(account.TwoFACode, dto.Code);
-
-            if (!isCorrectPin)
-                throw new Exception("Mã xác thực không chính xác.");
 
             var roles = account.Contracts
                 .Where(c => c.BranchId == device.BranchId && c.Status == "Active" &&
