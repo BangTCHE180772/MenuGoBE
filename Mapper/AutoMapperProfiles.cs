@@ -47,7 +47,10 @@ namespace MenuGoBE.Mapper
                             : "Chưa có địa chỉ cũ"
                     ));
             CreateMap<ChainCreateDto, Chain>();
-            CreateMap<ChainUpdateDto, Chain>().ForMember(dest => dest.Address, opt => opt.Ignore());
+            CreateMap<ChainUpdateDto, Chain>()
+                .ForMember(dest => dest.Address, opt => opt.Ignore())
+                .ForMember(dest => dest.AddressId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
 
             //Branch
             CreateMap<Branch, BranchViewDto>()
@@ -81,7 +84,10 @@ namespace MenuGoBE.Mapper
                     ));
             CreateMap<BranchCreateDto, Branch>();
             CreateMap<BranchUpdateDto, Branch>()
-                .ForMember(dest => dest.Address, opt => opt.Ignore());
+                .ForMember(dest => dest.Address, opt => opt.Ignore())
+                .ForMember(dest => dest.AddressId, opt => opt.Ignore())
+                .ForMember(dest => dest.ChainId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
 
             //Table
             CreateMap<Table, TableViewDto>()

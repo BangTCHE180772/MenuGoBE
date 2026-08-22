@@ -103,6 +103,7 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Branch>(dto);
 
             entity.Address.Type = "Chi Nhánh";
+            entity.Address.OldWardId = null;
             entity.Type = "Main";
             entity.Status = string.IsNullOrWhiteSpace(dto.Status) ? "Hoạt động" : dto.Status;
             entity.IsDeleted = false;
@@ -192,10 +193,8 @@ namespace MenuGoBE.Service
                 {
                     entity.Address.NewWardId = dto.Address.NewWardId.Value;
                 }
-                if (dto.Address.OldWardId.HasValue && dto.Address.OldWardId.Value > 0)
-                {
-                    entity.Address.OldWardId = dto.Address.OldWardId.Value;
-                }
+                // OldWardId luôn giữ null
+                entity.Address.OldWardId = null;
                 entity.Address.Type = "Chi Nhánh";
             }
 

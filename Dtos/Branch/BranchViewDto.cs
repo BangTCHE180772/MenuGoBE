@@ -19,8 +19,6 @@ namespace MenuGoBE.Dtos.Branch
 
         public string Name { get; set; } = string.Empty;
 
-        public string AddressText { get; set; } = string.Empty;
-
         public string Type { get; set; } = string.Empty;
 
         public TimeOnly OpenTime { get; set; }
