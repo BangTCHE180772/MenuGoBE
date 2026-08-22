@@ -56,6 +56,7 @@ public class AppDbContext : DbContext
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
     public DbSet<Voucher> Vouchers { get; set; } = null!;
+    public DbSet<OrderAssignment> OrderAssignments { get; set; } = null!;
 
     // 8. Device Module
     public DbSet<Device> Devices { get; set; } = null!;
@@ -298,6 +299,14 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Payroll>()
             .HasIndex(p => new { p.AccountId, p.Month, p.Year });
+
+        // ── OrderAssignment: 1 order = 1 waiter ──
+        modelBuilder.Entity<OrderAssignment>(entity =>
+        {
+            entity.HasIndex(e => e.OrderId).IsUnique();
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.BranchId);
+        });
 
         // ── Global: disable cascade deletes to avoid Multiple Cascade Path ──
         foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))
