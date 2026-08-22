@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using MenuGoBE.Data;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Service
@@ -19,6 +22,7 @@ namespace MenuGoBE.Service
         private readonly IShiftRepository _shiftRepo;
         private readonly IAccountRepository _accountRepo;
         private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly AppDbContext _context;
 
         public WorkScheduleService(
             IWorkScheduleRepository repo, 
@@ -26,7 +30,8 @@ namespace MenuGoBE.Service
             IBranchRepository branchRepo,
             IShiftRepository shiftRepo,
             IAccountRepository accountRepo,
-            IHubContext<NotificationHub> hubContext)
+            IHubContext<NotificationHub> hubContext,
+            AppDbContext context)
         {
             _repo = repo;
             _mapper = mapper;
@@ -34,7 +39,10 @@ namespace MenuGoBE.Service
             _shiftRepo = shiftRepo;
             _accountRepo = accountRepo;
             _hubContext = hubContext;
+            _context = context;
         }
+
+
 
         private async Task CheckAndMarkExpiredAbsentSchedulesAsync()
         {
@@ -575,6 +583,90 @@ namespace MenuGoBE.Service
             await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có yêu cầu đổi ca mới đang được xử lý." });
 
             return true;
+        }
+
+        public async Task<bool> ApproveOTAsync(WorkScheduleOTApproveDto dto)
+        {
+            var ws = await _repo.GetByIdAsync(dto.WorkScheduleId);
+            if (ws == null) return false;
+
+            ws.ApprovedOTHours = dto.ApprovedOTHours;
+            ws.OTStatus = string.IsNullOrWhiteSpace(dto.OTStatus) ? "Approved" : dto.OTStatus;
+            ws.OTNotes = dto.OTNotes ?? string.Empty;
+
+            await _repo.UpdateAsync(ws);
+            await _repo.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<WorkSchedulePOSActivityDto> VerifyPOSActivityAsync(long workScheduleId)
+        {
+            var ws = await _repo.GetByIdAsync(workScheduleId);
+            if (ws == null) throw new KeyNotFoundException($"Không tìm thấy lịch làm việc ID {workScheduleId}");
+
+            var account = await _accountRepo.GetByIdAsync(ws.AccountId);
+            var accountName = account?.Name ?? $"ID {ws.AccountId}";
+
+            decimal actualHours = ws.ActualHours ?? 0m;
+            decimal standardHours = ws.Shift != null ? ws.Shift.StandardHours : 8.0m;
+            if (standardHours <= 0) standardHours = 8.0m;
+
+            decimal excessHours = Math.Max(0m, actualHours - standardHours);
+
+            var result = new WorkSchedulePOSActivityDto
+            {
+                WorkScheduleId = ws.Id,
+                AccountId = ws.AccountId,
+                AccountName = accountName,
+                WorkDate = ws.WorkDate,
+                CheckInAt = ws.CheckInAt,
+                CheckOutAt = ws.CheckOutAt,
+                ActualHours = actualHours,
+                StandardHours = standardHours,
+                ExcessHours = excessHours,
+                OrderCountDuringExcessTime = 0,
+                TotalOrderAmountDuringExcessTime = 0m,
+                HasPOSActivity = false,
+                SuspicionReason = ""
+            };
+
+            if (excessHours <= 0 || !ws.CheckInAt.HasValue || !ws.CheckOutAt.HasValue)
+            {
+                result.SuspicionReason = "Không có số giờ dư ra so với ca tiêu chuẩn.";
+                return result;
+            }
+
+            // Expected end of standard shift
+            var expectedEndTime = ws.CheckInAt.Value.AddHours((double)standardHours);
+            var actualCheckOutTime = ws.CheckOutAt.Value;
+
+            if (actualCheckOutTime <= expectedEndTime)
+            {
+                result.SuspicionReason = "Thời gian check-out nằm trong khung giờ ca chuẩn.";
+                return result;
+            }
+
+            // Query orders created by this staff account during the excess time interval
+            var orders = await _context.Orders
+                .Where(o => o.CreatedBy == ws.AccountId 
+                         && o.CreatedAt >= expectedEndTime 
+                         && o.CreatedAt <= actualCheckOutTime)
+                .ToListAsync();
+
+            result.OrderCountDuringExcessTime = orders.Count;
+            result.TotalOrderAmountDuringExcessTime = orders.Sum(o => o.TotalAmount);
+            result.HasPOSActivity = orders.Count > 0;
+
+            if (!result.HasPOSActivity)
+            {
+                result.SuspicionReason = $"Không ghi nhận bất kỳ đơn POS/Order nào từ {expectedEndTime:HH:mm dd/MM} đến {actualCheckOutTime:HH:mm dd/MM}. Có thể nhân viên đã quên check-out khi về.";
+            }
+            else
+            {
+                result.SuspicionReason = $"Xác nhận có phát sinh {orders.Count} đơn POS trong thời gian dư ({result.TotalOrderAmountDuringExcessTime:N0}đ). Có khả năng làm tăng ca (OT) thật.";
+            }
+
+            return result;
         }
     }
 }

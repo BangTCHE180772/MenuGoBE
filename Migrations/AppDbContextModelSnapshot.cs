@@ -384,7 +384,7 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("BaseSalary")
                         .HasColumnType("decimal(18,4)");
 
-                    b.Property<int>("BaseWorkDay")
+                    b.Property<int?>("BaseWorkDay")
                         .HasColumnType("integer");
 
                     b.Property<long>("BranchId")
@@ -771,6 +771,54 @@ namespace MenuGoBE.Migrations
                         .IsUnique();
 
                     b.ToTable("Groups");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.HolidayConfig", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("BranchIds")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Coefficient")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRecurring")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.ToTable("HolidayConfigs");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Image", b =>
@@ -1311,6 +1359,12 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("ActualWorkHours")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint");
+
                     b.Property<decimal>("BaseSalary")
                         .HasColumnType("decimal(18,4)");
 
@@ -1333,6 +1387,15 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("LockedBy")
                         .HasColumnType("bigint");
 
                     b.Property<int>("Month")
@@ -1362,7 +1425,19 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("TotalAllowance")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal>("TotalBaseShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<decimal>("TotalDeduction")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalHolidayBonus")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalNightPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalOTPay")
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("Year")
@@ -1370,13 +1445,77 @@ namespace MenuGoBE.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ApprovedBy");
+
                     b.HasIndex("BranchId");
 
                     b.HasIndex("ContractId");
 
+                    b.HasIndex("LockedBy");
+
                     b.HasIndex("AccountId", "Month", "Year");
 
                     b.ToTable("Payrolls");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PayrollShiftDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("ActualHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ApprovedOTHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("BaseShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DateCoefficient")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<bool>("IsNightShift")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("NightShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("OTPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long>("PayrollId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("StandardHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("WorkScheduleId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollId");
+
+                    b.HasIndex("WorkScheduleId");
+
+                    b.ToTable("PayrollShiftDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
@@ -1575,6 +1714,8 @@ namespace MenuGoBE.Migrations
 
                     b.HasIndex("AccountId");
 
+                    b.HasIndex("CreatedBy");
+
                     b.HasIndex("PayrollId");
 
                     b.ToTable("SalaryDetails");
@@ -1600,9 +1741,21 @@ namespace MenuGoBE.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsNightShift")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("NightAllowance")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("NightBonusRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("StandardHours")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<TimeOnly>("StartTime")
                         .HasColumnType("time without time zone");
@@ -1854,6 +2007,9 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal?>("ActualHours")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal>("ApprovedOTHours")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
@@ -1873,11 +2029,25 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
 
+                    b.Property<bool>("IsAutoCheckout")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("ManagerApproved")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("OTNotes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OTStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<long>("ShiftId")
                         .HasColumnType("bigint");
+
+                    b.Property<decimal>("StandardHours")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2155,6 +2325,23 @@ namespace MenuGoBE.Migrations
                     b.Navigation("UnitConversion");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.HolidayConfig", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Creator");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.InventoryLedger", b =>
                 {
                     b.HasOne("MenuGoBE.Models.BInventory", "BInventory")
@@ -2331,6 +2518,11 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MenuGoBE.Models.Account", "Approver")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MenuGoBE.Models.Branch", "Branch")
                         .WithMany()
                         .HasForeignKey("BranchId")
@@ -2342,11 +2534,39 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.Account", "Locker")
+                        .WithMany()
+                        .HasForeignKey("LockedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Account");
+
+                    b.Navigation("Approver");
 
                     b.Navigation("Branch");
 
                     b.Navigation("Contract");
+
+                    b.Navigation("Locker");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PayrollShiftDetail", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Payroll", "Payroll")
+                        .WithMany("PayrollShiftDetails")
+                        .HasForeignKey("PayrollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.WorkSchedule", "WorkSchedule")
+                        .WithMany()
+                        .HasForeignKey("WorkScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Payroll");
+
+                    b.Navigation("WorkSchedule");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
@@ -2420,13 +2640,21 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("MenuGoBE.Models.Payroll", "Payroll")
-                        .WithMany("SalaryDetails")
-                        .HasForeignKey("PayrollId")
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MenuGoBE.Models.Payroll", "Payroll")
+                        .WithMany("SalaryDetails")
+                        .HasForeignKey("PayrollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Account");
+
+                    b.Navigation("Creator");
 
                     b.Navigation("Payroll");
                 });
@@ -2683,6 +2911,8 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Payroll", b =>
                 {
+                    b.Navigation("PayrollShiftDetails");
+
                     b.Navigation("SalaryDetails");
                 });
 
