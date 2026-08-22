@@ -1141,6 +1141,41 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Orders");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.OrderAssignment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LastActionAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.ToTable("OrderAssignments");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.OrderDetail", b =>
                 {
                     b.Property<long>("Id")
@@ -2277,6 +2312,33 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Voucher");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.OrderAssignment", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Order", "Order")
+                        .WithOne("Assignment")
+                        .HasForeignKey("MenuGoBE.Models.OrderAssignment", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Order");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.OrderDetail", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Order", "Order")
@@ -2684,6 +2746,8 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Order", b =>
                 {
+                    b.Navigation("Assignment");
+
                     b.Navigation("ChildOrders");
 
                     b.Navigation("OrderDetails");

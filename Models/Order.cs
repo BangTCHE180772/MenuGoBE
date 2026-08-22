@@ -51,4 +51,6 @@ public class Order
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
+
+    public OrderAssignment? Assignment { get; set; }
 }
