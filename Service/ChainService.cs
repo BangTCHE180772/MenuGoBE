@@ -72,6 +72,7 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Chain>(dto);
 
             entity.Address.Type = "Chuỗi";
+            entity.Address.OldWardId = null;
 
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -122,10 +123,8 @@ namespace MenuGoBE.Service
                 {
                     entity.Address.NewWardId = dto.Address.NewWardId.Value;
                 }
-                if (dto.Address.OldWardId.HasValue && dto.Address.OldWardId.Value > 0)
-                {
-                    entity.Address.OldWardId = dto.Address.OldWardId.Value;
-                }
+                // OldWardId luôn giữ null
+                entity.Address.OldWardId = null;
                 entity.Address.Type = "Chuỗi";
             }
 
