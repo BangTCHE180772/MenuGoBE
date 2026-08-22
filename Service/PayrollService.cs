@@ -253,6 +253,42 @@ namespace MenuGoBE.Service
             await _context.SaveChangesAsync();
         }
 
+        public async Task<bool> LockPayrollAsync(long id, long userId)
+        {
+            var entity = await _payrollRepo.GetByIdAsync(id);
+            if (entity == null) return false;
+
+            if (entity.Status == PayrollStatus.Paid)
+            {
+                throw new InvalidOperationException("Bảng lương đã thanh toán không thể khóa lại.");
+            }
+
+            entity.Status = PayrollStatus.Locked;
+            entity.LockedBy = userId;
+            entity.LockedAt = DateTime.UtcNow;
+
+            await _payrollRepo.UpdateAsync(entity);
+            return true;
+        }
+
+        public async Task<bool> ApprovePayrollAsync(long id, long userId)
+        {
+            var entity = await _payrollRepo.GetByIdAsync(id);
+            if (entity == null) return false;
+
+            if (entity.Status == PayrollStatus.Paid)
+            {
+                throw new InvalidOperationException("Bảng lương đã thanh toán.");
+            }
+
+            entity.Status = PayrollStatus.Approved;
+            entity.ApprovedBy = userId;
+            entity.ApprovedAt = DateTime.UtcNow;
+
+            await _payrollRepo.UpdateAsync(entity);
+            return true;
+        }
+
         public async Task<PayrollViewDto> GenerateEmployeePayrollAsync(PayrollGenerateDto dto)
         {
             var now = DateTime.UtcNow;
@@ -283,7 +319,19 @@ namespace MenuGoBE.Service
                 throw new InvalidOperationException($"Nhân viên {account.Name} không có hợp đồng hợp lệ trong tháng {dto.Month}/{dto.Year}.");
             }
 
+            long branchId = (contract != null && contract.BranchId > 0) ? contract.BranchId : (dto.BranchId > 0 ? dto.BranchId : 1);
+
+            // Fetch active holiday configurations for date range
+            var holidayConfigs = await _context.HolidayConfigs
+                .Where(h => h.IsActive 
+                         && (h.BranchId == null || h.BranchId == branchId)
+                         && h.FromDate <= endDate 
+                         && h.ToDate >= startDate)
+                .ToListAsync();
+
+            // Fetch approved work schedules for the month
             var schedules = await _context.WorkSchedules
+                .Include(w => w.Shift)
                 .Where(w => w.AccountId == dto.AccountId 
                          && w.WorkDate >= startDate 
                          && w.WorkDate <= endDate
@@ -293,6 +341,7 @@ namespace MenuGoBE.Service
                              || w.Status == "PRESENT_APPROVED"
                              || w.Status == "CÓ MẶT"
                              || w.Status == "ĐÃ HOÀN THÀNH"
+                             || w.ManagerApproved
                              || (w.CheckInAt != null && w.CheckOutAt != null)
                              || (w.ActualHours.HasValue && w.ActualHours.Value > 0)
                          ))
@@ -301,26 +350,121 @@ namespace MenuGoBE.Service
             decimal actualWorkDays = schedules.Select(s => s.WorkDate).Distinct().Count();
             decimal actualWorkHours = schedules.Sum(s => s.ActualHours ?? 0);
 
-            decimal baseSalary = contract?.BaseSalary ?? 0;
-            string salaryType = contract?.SalaryType ?? "Monthly";
+            decimal baseSalary = contract.BaseSalary;
+            string salaryType = contract.SalaryType ?? "Monthly";
             bool isHourly = salaryType.Equals("Hourly", StringComparison.OrdinalIgnoreCase);
 
-            int baseWorkDays = (isHourly || (contract != null && contract.RoleId == 3)) ? 0 : (contract?.BaseWorkDay ?? 0);
+            int baseWorkDays = (isHourly || contract.RoleId == 3) ? 0 : (contract.BaseWorkDay ?? 26);
+            if (baseWorkDays <= 0 && !isHourly && contract.RoleId != 3) baseWorkDays = 26;
 
-            decimal calculatedSalary = 0;
-            if (contract != null && contract.RoleId == 3)
+            // Calculate base hourly rate
+            decimal hourlyRate = 0m;
+            if (isHourly)
             {
-                // Đối với Quản lý (Manager - RoleId 3), Owner tính lương trực tiếp theo Lương cơ bản trong hợp đồng (không tính theo ngày công chuẩn)
-                calculatedSalary = baseSalary;
-            }
-            else if (isHourly)
-            {
-                calculatedSalary = baseSalary * actualWorkHours;
+                hourlyRate = baseSalary;
             }
             else
             {
-                calculatedSalary = baseWorkDays > 0 ? (baseSalary * actualWorkDays / baseWorkDays) : baseSalary;
+                hourlyRate = baseWorkDays > 0 ? (baseSalary / (baseWorkDays * 8.0m)) : (baseSalary / 208.0m);
             }
+
+            decimal totalBaseShiftPay = 0m;
+            decimal totalNightPay = 0m;
+            decimal totalOTPay = 0m;
+            decimal totalHolidayBonus = 0m;
+
+            var shiftDetailsList = new List<PayrollShiftDetail>();
+
+            if (contract.RoleId == 3)
+            {
+                // Manager role: fixed salary
+                totalBaseShiftPay = baseSalary;
+            }
+            else
+            {
+                foreach (var s in schedules)
+                {
+                    var workDate = s.WorkDate;
+                    decimal actualHours = s.ActualHours ?? 0m;
+                    decimal standardHours = s.Shift != null && s.Shift.StandardHours > 0 ? s.Shift.StandardHours : 8.0m;
+                    decimal baseHours = Math.Min(actualHours, standardHours);
+                    decimal approvedOTHours = s.ApprovedOTHours;
+
+                    // Evaluate coefficients: Tet / Holiday vs. Normal
+                    var matchingHolidays = holidayConfigs
+                        .Where(h => h.IsActive && IsDateAndBranchMatchingHoliday(workDate, s.BranchId, h))
+                        .ToList();
+
+                    decimal holidayCoeff = matchingHolidays.Any() ? matchingHolidays.Max(h => h.Coefficient) : 1.0m;
+
+                    // PRIORITIZATION RULE: Pick Max(Coefficients) - Holiday/Tet coefficient (e.g. 3.0) or Normal (1.0)
+                    decimal dateCoeff = Math.Max(1.0m, holidayCoeff);
+
+                    // Base shift pay for regular hours
+                    decimal baseShiftPay = baseHours * hourlyRate * dateCoeff;
+
+                    // Night shift calculation
+                    bool isNightShift = s.Shift?.IsNightShift ?? false;
+                    decimal nightShiftPay = 0m;
+                    if (isNightShift)
+                    {
+                        decimal nightBonusRate = s.Shift?.NightBonusRate ?? 1.3m;
+                        decimal nightAllowance = s.Shift?.NightAllowance ?? 0m;
+                        decimal nightHours = (s.Shift?.NightHours > 0) ? Math.Min(baseHours, s.Shift.NightHours) : baseHours;
+
+                        if (nightAllowance > 0)
+                        {
+                            nightShiftPay = nightAllowance;
+                        }
+                        else
+                        {
+                            nightShiftPay = nightHours * hourlyRate * (nightBonusRate - 1.0m);
+                        }
+                    }
+
+                    // Approved Overtime (OT) Pay
+                    decimal otMultiplier = 1.5m;
+                    decimal otPay = approvedOTHours * hourlyRate * dateCoeff * otMultiplier;
+
+                    decimal shiftTotal = baseShiftPay + nightShiftPay + otPay;
+
+                    totalBaseShiftPay += baseShiftPay;
+                    totalNightPay += nightShiftPay;
+                    totalOTPay += otPay;
+
+                    if (dateCoeff > 1.0m)
+                    {
+                        totalHolidayBonus += baseShiftPay * (1.0m - (1.0m / dateCoeff));
+                    }
+
+                    string note = "";
+                    if (matchingHolidays.Any())
+                    {
+                        note += $"Lễ/Tết ({matchingHolidays.First().Name} x{dateCoeff}) ";
+                    }
+                    if (isNightShift) note += "Ca đêm ";
+                    if (approvedOTHours > 0) note += $"OT {approvedOTHours}h ";
+
+                    shiftDetailsList.Add(new PayrollShiftDetail
+                    {
+                        WorkScheduleId = s.Id,
+                        WorkDate = workDate,
+                        ActualHours = actualHours,
+                        StandardHours = standardHours,
+                        ApprovedOTHours = approvedOTHours,
+                        DateCoefficient = dateCoeff,
+                        IsNightShift = isNightShift,
+                        HourlyRate = hourlyRate,
+                        BaseShiftPay = Math.Round(baseShiftPay, 2),
+                        NightShiftPay = Math.Round(nightShiftPay, 2),
+                        OTPay = Math.Round(otPay, 2),
+                        TotalShiftPay = Math.Round(shiftTotal, 2),
+                        Note = note.Trim()
+                    });
+                }
+            }
+
+            decimal calculatedSalary = totalBaseShiftPay + totalNightPay + totalOTPay;
 
             var existingPayroll = await _payrollRepo.GetByAccountMonthYearAsync(dto.AccountId, dto.Month, dto.Year);
             if (existingPayroll != null)
@@ -330,15 +474,25 @@ namespace MenuGoBE.Service
                     throw new InvalidOperationException($"Bảng lương tháng {dto.Month}/{dto.Year} của nhân viên này đã ở trạng thái ĐÃ THANH TOÁN. Không thể tính toán lại.");
                 }
 
-                if (contract != null && contract.BranchId > 0)
-                {
-                    existingPayroll.BranchId = contract.BranchId;
-                }
+                existingPayroll.BranchId = branchId;
+                existingPayroll.HourlyRate = hourlyRate;
                 existingPayroll.BaseSalary = baseSalary;
                 existingPayroll.BaseWorkDays = baseWorkDays;
                 existingPayroll.ActualWorkDays = actualWorkDays;
                 existingPayroll.ActualWorkHours = actualWorkHours;
+                existingPayroll.TotalBaseShiftPay = Math.Round(totalBaseShiftPay, 2);
+                existingPayroll.TotalNightPay = Math.Round(totalNightPay, 2);
+                existingPayroll.TotalOTPay = Math.Round(totalOTPay, 2);
+                existingPayroll.TotalHolidayBonus = Math.Round(totalHolidayBonus, 2);
                 existingPayroll.CalculatedSalary = Math.Round(calculatedSalary, 2);
+
+                // Clear old shift details & attach new ones
+                if (existingPayroll.PayrollShiftDetails != null && existingPayroll.PayrollShiftDetails.Any())
+                {
+                    _context.PayrollShiftDetails.RemoveRange(existingPayroll.PayrollShiftDetails);
+                }
+                existingPayroll.PayrollShiftDetails = shiftDetailsList;
+
                 RecalculateTotals(existingPayroll);
 
                 await _payrollRepo.UpdateAsync(existingPayroll);
@@ -350,15 +504,20 @@ namespace MenuGoBE.Service
                 var payroll = new Payroll
                 {
                     AccountId = dto.AccountId,
-                    BranchId = (contract != null && contract.BranchId > 0) ? contract.BranchId : (dto.BranchId > 0 ? dto.BranchId : 1),
-                    ContractId = contract?.Id,
+                    BranchId = branchId,
+                    ContractId = contract.Id,
                     Month = dto.Month,
                     Year = dto.Year,
                     SalaryType = salaryType,
+                    HourlyRate = hourlyRate,
                     BaseSalary = baseSalary,
                     BaseWorkDays = baseWorkDays,
                     ActualWorkDays = actualWorkDays,
                     ActualWorkHours = actualWorkHours,
+                    TotalBaseShiftPay = Math.Round(totalBaseShiftPay, 2),
+                    TotalNightPay = Math.Round(totalNightPay, 2),
+                    TotalOTPay = Math.Round(totalOTPay, 2),
+                    TotalHolidayBonus = Math.Round(totalHolidayBonus, 2),
                     CalculatedSalary = Math.Round(calculatedSalary, 2),
                     TotalAllowance = 0,
                     BonusAmount = 0,
@@ -367,7 +526,8 @@ namespace MenuGoBE.Service
                     NetSalary = Math.Round(calculatedSalary, 2),
                     Status = PayrollStatus.Draft,
                     CreatedBy = dto.CreatedBy,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    PayrollShiftDetails = shiftDetailsList
                 };
 
                 await _payrollRepo.CreateAsync(payroll);
@@ -488,6 +648,42 @@ namespace MenuGoBE.Service
                               + payroll.BonusAmount 
                               - payroll.TotalDeduction 
                               - payroll.PenaltyAmount;
+        }
+
+        private static bool IsDateAndBranchMatchingHoliday(DateOnly workDate, long scheduleBranchId, HolidayConfig h)
+        {
+            if (!h.IsActive) return false;
+
+            // Check branch restriction
+            if (!string.IsNullOrWhiteSpace(h.BranchIds))
+            {
+                var bIds = h.BranchIds.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => long.TryParse(s.Trim(), out var val) ? val : 0)
+                    .Where(v => v > 0);
+                if (!bIds.Contains(scheduleBranchId)) return false;
+            }
+            else if (h.BranchId.HasValue && h.BranchId.Value > 0 && h.BranchId.Value != scheduleBranchId)
+            {
+                return false;
+            }
+
+            if (!h.IsRecurring)
+            {
+                return h.FromDate <= workDate && workDate <= h.ToDate;
+            }
+
+            var startMD = (h.FromDate.Month, h.FromDate.Day);
+            var endMD = (h.ToDate.Month, h.ToDate.Day);
+            var workMD = (workDate.Month, workDate.Day);
+
+            if (startMD.CompareTo(endMD) <= 0)
+            {
+                return workMD.CompareTo(startMD) >= 0 && workMD.CompareTo(endMD) <= 0;
+            }
+            else
+            {
+                return workMD.CompareTo(startMD) >= 0 || workMD.CompareTo(endMD) <= 0;
+            }
         }
     }
 }

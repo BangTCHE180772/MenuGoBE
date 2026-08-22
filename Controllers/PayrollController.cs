@@ -394,6 +394,52 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpPost("{id}/lock")]
+        public async Task<IActionResult> LockPayroll(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền chốt (khoá) bảng lương." });
+
+            try
+            {
+                var success = await _payrollService.LockPayrollAsync(id, currentUserId.Value);
+                if (!success) return NotFound(new { message = $"Không tìm thấy bảng lương ID {id}" });
+                return Ok(new { message = "Đã chốt (khóa) bảng lương thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{id}/approve")]
+        public async Task<IActionResult> ApprovePayroll(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền duyệt bảng lương." });
+
+            try
+            {
+                var success = await _payrollService.ApprovePayrollAsync(id, currentUserId.Value);
+                if (!success) return NotFound(new { message = $"Không tìm thấy bảng lương ID {id}" });
+                return Ok(new { message = "Đã phê duyệt bảng lương thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
