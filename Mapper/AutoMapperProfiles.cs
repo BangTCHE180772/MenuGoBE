@@ -209,6 +209,7 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : string.Empty));
             CreateMap<PayrollCreateDto, Payroll>();
             CreateMap<PayrollUpdateDto, Payroll>();
+            CreateMap<PayrollShiftDetail, PayrollShiftDetailViewDto>();
 
             CreateMap<SalaryDetail, SalaryDetailViewDto>()
                 .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty))
