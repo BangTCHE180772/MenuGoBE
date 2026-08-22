@@ -46,6 +46,8 @@ public class AppDbContext : DbContext
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
+    public DbSet<HolidayConfig> HolidayConfigs { get; set; } = null!;
+    public DbSet<PayrollShiftDetail> PayrollShiftDetails { get; set; } = null!;
 
     // 7. Orders Module
     public DbSet<Area> Areas { get; set; } = null!;
@@ -309,6 +311,12 @@ public class AppDbContext : DbContext
             .HasMany(p => p.SalaryDetails)
             .WithOne(sd => sd.Payroll)
             .HasForeignKey(sd => sd.PayrollId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Payroll>()
+            .HasMany(p => p.PayrollShiftDetails)
+            .WithOne(psd => psd.Payroll)
+            .HasForeignKey(psd => psd.PayrollId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 
