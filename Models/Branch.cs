@@ -16,6 +16,8 @@ public class Branch
     [Required]
     public string Name { get; set; } = string.Empty;
 
+    public string AddressText { get; set; } = string.Empty;
+
     public string Type { get; set; } = string.Empty;
 
     public TimeOnly CloseTime { get; set; }
@@ -29,6 +31,9 @@ public class Branch
     public string Status { get; set; } = "Hoạt động";
 
     public bool IsDeleted { get; set; } = false;
+
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
 
     // Navigation
     [ForeignKey("ChainId")]

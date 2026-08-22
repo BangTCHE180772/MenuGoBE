@@ -106,6 +106,7 @@ builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
 
 // Service
 
@@ -128,6 +129,9 @@ builder.Services.AddScoped<IProductService, ProductService>();
 // builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<ICustomerAuthService, CustomerAuthService>();
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();

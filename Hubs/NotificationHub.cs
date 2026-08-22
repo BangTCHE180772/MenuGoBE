@@ -19,5 +19,10 @@ namespace MenuGoBE.Hubs
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{accountId}");
         }
+
+        public async Task JoinCustomerGroup(long customerId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"customer_{customerId}");
+        }
     }
 }

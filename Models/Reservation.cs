@@ -22,6 +22,11 @@ public class Reservation
 
     public string Status { get; set; } = string.Empty;
 
+    public long? BranchId { get; set; }
+
+    [ForeignKey("BranchId")]
+    public Branch? Branch { get; set; }
+
     public long? OrderId { get; set; }
 
     [ForeignKey("OrderId")]

@@ -10,9 +10,11 @@ namespace MenuGoBE.Dtos.Branch
     {
         public long Id { get; set; }
         // public long AddressId { get; set; }
-        public AddressUpdateDto Address { get; set; } = new();
+        public AddressUpdateDto? Address { get; set; }
        
         public string Name { get; set; } = string.Empty;
+
+        public string AddressText { get; set; } = string.Empty;
 
         public string Type { get; set; } = string.Empty;
 
@@ -23,5 +25,9 @@ namespace MenuGoBE.Dtos.Branch
         public string? Status { get; set; }
 
         public bool? IsDeleted { get; set; }
+
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
     }
 }

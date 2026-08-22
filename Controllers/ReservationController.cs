@@ -25,8 +25,8 @@ public class ReservationController : ControllerBase
         if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
         {
             bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
-                                  User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
-                                  User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                                User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
             
             if (!isAdminOrOwner)
             {
@@ -108,6 +108,14 @@ public class ReservationController : ControllerBase
         var result = await _service.CancelAsync(id);
         if (!result) return BadRequest(new { message = "Không thể hủy đơn đặt bàn này." });
         return Ok(new { message = "Đã hủy đơn đặt bàn thành công." });
+    }
+
+    [HttpPut("{id}/reject")]
+    public async Task<IActionResult> Reject(long id)
+    {
+        var result = await _service.RejectAsync(id);
+        if (!result) return BadRequest(new { message = "Không thể từ chối đơn đặt bàn này." });
+        return Ok(new { message = "Đã từ chối đơn đặt bàn thành công." });
     }
 
     [HttpPut("{id}/extend")]
