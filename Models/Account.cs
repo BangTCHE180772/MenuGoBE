@@ -44,6 +44,7 @@ public class Account
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
     public ICollection<Ticket> Tickets { get; set; } = new List<Ticket>();
+    [InverseProperty("Account")]
     public ICollection<Payroll> Payrolls { get; set; } = new List<Payroll>();
     [InverseProperty("Account")]
     public ICollection<SalaryDetail> SalaryDetails { get; set; } = new List<SalaryDetail>();
