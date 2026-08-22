@@ -146,6 +146,8 @@ namespace MenuGoBE.Service
                     ? (m.EmployeeId.HasValue ? $"MenuGo - Chi nhánh {branchName}" : null)
                     : (m.Employee?.Name ?? $"MenuGo - Chi nhánh {branchName}"),
                 Content = m.Content,
+                Topic = m.Topic,
+                Subject = m.Subject,
                 CreatedAt = m.CreatedAt,
                 ReadAt = m.ReadAt
             }).ToList();
@@ -387,6 +389,7 @@ namespace MenuGoBE.Service
         #region CREATE Mở hoặc tạo mới cuộc trò chuyện
         public async Task<long> OpenConversationAsync(long customerId, string customerName, ConversationCreateDto dto)
         {
+            // Tìm cuộc trò chuyện đang mở giữa khách hàng và chi nhánh (gộp chung một đoạn chat)
             var conversation = await _context.Conversations
                 .Include(c => c.Branch)
                 .FirstOrDefaultAsync(c => c.CustomerId == customerId && c.BranchId == dto.BranchId && c.Status != "Closed");
@@ -411,22 +414,21 @@ namespace MenuGoBE.Service
             }
             else
             {
-                // Re-open if it was open, update the topic/subject if provided
-                if (!string.IsNullOrEmpty(dto.Topic) && dto.Topic != "General")
-                {
-                    conversation.Topic = dto.Topic;
-                    conversation.Subject = dto.Subject?.Trim();
-                }
+                // Cập nhật chủ đề mới nhất của cuộc hội thoại
+                conversation.Topic = dto.Topic;
+                conversation.Subject = dto.Subject?.Trim();
                 conversation.UpdatedAt = DateTime.UtcNow;
             }
 
-            // Add first message
+            // Thêm tin nhắn mới kèm thông tin Topic và Subject để đánh dấu mốc chủ đề mới
             var message = new Message
             {
                 ConversationId = conversation.Id,
                 CustomerId = customerId,
                 EmployeeId = null,
                 Content = dto.FirstMessageContent.Trim(),
+                Topic = dto.Topic,
+                Subject = dto.Subject?.Trim(),
                 CreatedAt = DateTime.UtcNow
             };
             await _chatRepo.AddMessageAsync(message);
@@ -442,6 +444,8 @@ namespace MenuGoBE.Service
                 CustomerId = customerId,
                 CustomerName = customerName,
                 Content = message.Content,
+                Topic = message.Topic,
+                Subject = message.Subject,
                 CreatedAt = message.CreatedAt
             };
 

@@ -18,9 +18,11 @@ public class ReservationRepository : IReservationRepository
     {
         return await _context.Reservations
             .Include(r => r.Customer)
+            .Include(r => r.Branch)
             .Include(r => r.Order)
                 .ThenInclude(o => o.Table)
                     .ThenInclude(t => t.Area)
+                        .ThenInclude(a => a.Branch)
             .Include(r => r.Order)
                 .ThenInclude(o => o.OrderDetails)
             .OrderByDescending(r => r.ReservationTime)

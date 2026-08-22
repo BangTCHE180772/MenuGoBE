@@ -65,6 +65,7 @@ public class ReservationService : IReservationService
                 Status = r.Status,
                 OrderId = r.OrderId,
                 BranchId = r.BranchId ?? r.Order?.Table?.Area?.BranchId,
+                BranchName = r.Branch?.Name ?? r.Order?.Table?.Area?.Branch?.Name ?? "",
                 CreatedAt = r.CreatedAt
             };
 
@@ -389,6 +390,29 @@ public class ReservationService : IReservationService
             await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         }
 
+        // SignalR realtime update for both Branch & Customer
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+        if (reservation.BranchId.HasValue)
+        {
+            await _hubContext.Clients.Group($"branch_{reservation.BranchId.Value}").SendAsync("ReceiveNotification", new
+            {
+                type = "new-reservation",
+                message = $"Khách hàng {customer.Name} đã gửi một yêu cầu đặt bàn mới.",
+                reservationId = reservation.Id,
+                timestamp = DateTime.UtcNow
+            });
+        }
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "new-reservation",
+                message = "Yêu cầu đặt bàn của bạn đã được gửi thành công.",
+                reservationId = reservation.Id,
+                timestamp = DateTime.UtcNow
+            });
+        }
+
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
 
@@ -456,6 +480,19 @@ public class ReservationService : IReservationService
         await _reservationRepo.SaveChangesAsync();
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-updated",
+                message = "Bạn đã check-in nhận bàn thành công. Chúc bạn có bữa ăn ngon miệng!",
+                reservationId = reservation.Id,
+                timestamp = DateTime.UtcNow
+            });
+        }
+
         return true;
     }
 
@@ -537,15 +574,19 @@ public class ReservationService : IReservationService
         await _notificationRepo.CreateAsync(notif);
         await _notificationRepo.SaveChangesAsync();
 
-        await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+        if (reservation.CustomerId > 0)
         {
-            type = "reservation-cancelled",
-            message = $"Lịch đặt bàn tại {branchName} của bạn đã bị hủy.",
-            timestamp = DateTime.UtcNow
-        });
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-cancelled",
+                message = $"Lịch đặt bàn tại {branchName} của bạn đã bị hủy.",
+                timestamp = DateTime.UtcNow
+            });
+        }
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 
@@ -560,6 +601,7 @@ public class ReservationService : IReservationService
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 
@@ -644,16 +686,20 @@ public class ReservationService : IReservationService
             await _notificationRepo.CreateAsync(notif);
             await _notificationRepo.SaveChangesAsync();
 
-            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            if (reservation.CustomerId > 0)
             {
-                type = "reservation-confirmed",
-                message = $"Đặt bàn của bạn tại {branchName} đã được xác nhận.",
-                timestamp = DateTime.UtcNow
-            });
+                await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+                {
+                    type = "reservation-confirmed",
+                    message = $"Đặt bàn của bạn tại {branchName} đã được xác nhận.",
+                    timestamp = DateTime.UtcNow
+                });
+            }
         }
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 
@@ -735,15 +781,19 @@ public class ReservationService : IReservationService
         await _notificationRepo.CreateAsync(notif);
         await _notificationRepo.SaveChangesAsync();
 
-        await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+        if (reservation.CustomerId > 0)
         {
-            type = "reservation-rejected",
-            message = $"Đặt bàn của bạn tại {branchName} đã bị từ chối.",
-            timestamp = DateTime.UtcNow
-        });
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-rejected",
+                message = $"Đặt bàn của bạn tại {branchName} đã bị từ chối.",
+                timestamp = DateTime.UtcNow
+            });
+        }
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 }

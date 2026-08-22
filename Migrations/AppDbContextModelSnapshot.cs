@@ -1054,6 +1054,14 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Topic")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConversationId");

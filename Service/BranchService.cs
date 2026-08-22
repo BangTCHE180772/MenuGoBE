@@ -182,6 +182,12 @@ namespace MenuGoBE.Service
 
             _mapper.Map(dto, entity);
 
+            // Chỉ cập nhật Status nếu DTO gửi giá trị
+            if (!string.IsNullOrWhiteSpace(dto.Status))
+            {
+                entity.Status = dto.Status;
+            }
+
             if (dto.Address != null)
             {
                 if (entity.Address == null)
@@ -204,6 +210,7 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        #region DELETE Xóa mềm chi nhánh
         public async Task<bool> DeleteAsync(long id)
         {
             var entity = await _repo.GetByIdAsync(id);
@@ -219,5 +226,156 @@ namespace MenuGoBE.Service
 
             return true;
         }
+        #endregion
+
+        #region DELETE Xóa vĩnh viễn (Hard Delete) toàn bộ dữ liệu của một chi nhánh
+        public async Task<bool> HardDeleteBranchAsync(long id)
+        {
+            if (_context == null)
+                throw new InvalidOperationException("DbContext chưa được khởi tạo.");
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(async () =>
+            {
+                var branch = await _context.Branches.FindAsync(id);
+                if (branch == null) return false;
+
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                try
+                {
+                    // 1. Xóa toàn bộ Chat (Messages, AssignmentHistories, Conversations)
+                    var convIds = await _context.Conversations.Where(c => c.BranchId == id).Select(c => c.Id).ToListAsync();
+                    if (convIds.Any())
+                    {
+                        var histories = await _context.ConversationAssignmentHistories.Where(h => convIds.Contains(h.ConversationId)).ToListAsync();
+                        _context.ConversationAssignmentHistories.RemoveRange(histories);
+
+                        var messages = await _context.Messages.Where(m => convIds.Contains(m.ConversationId)).ToListAsync();
+                        _context.Messages.RemoveRange(messages);
+
+                        var convs = await _context.Conversations.Where(c => convIds.Contains(c.Id)).ToListAsync();
+                        _context.Conversations.RemoveRange(convs);
+                    }
+
+                    // 2. Xóa Notifications của chi nhánh
+                    var notifs = await _context.Notifications.Where(n => n.BranchId == id).ToListAsync();
+                    _context.Notifications.RemoveRange(notifs);
+
+                    // 3. Xóa Bàn, Đơn hàng, Thanh toán, Đặt bàn, Khu vực
+                    var areaIds = await _context.Areas.Where(a => a.BranchId == id).Select(a => a.Id).ToListAsync();
+                    var tableIds = await _context.Tables.Where(t => areaIds.Contains(t.AreaId)).Select(t => t.Id).ToListAsync();
+
+                    var orders = await _context.Orders.Where(o => tableIds.Contains(o.TableId)).ToListAsync();
+                    var orderIds = orders.Select(o => o.Id).ToList();
+
+                    if (orderIds.Any())
+                    {
+                        var payments = await _context.Payments.Where(p => orderIds.Contains(p.OrderId)).ToListAsync();
+                        _context.Payments.RemoveRange(payments);
+
+                        var orderDetails = await _context.OrderDetails.Where(od => orderIds.Contains(od.OrderId)).ToListAsync();
+                        _context.OrderDetails.RemoveRange(orderDetails);
+                    }
+
+                    var reservations = await _context.Reservations.Where(r => r.BranchId == id || (r.OrderId.HasValue && orderIds.Contains(r.OrderId.Value))).ToListAsync();
+                    _context.Reservations.RemoveRange(reservations);
+
+                    _context.Orders.RemoveRange(orders);
+
+                    var tables = await _context.Tables.Where(t => tableIds.Contains(t.Id)).ToListAsync();
+                    _context.Tables.RemoveRange(tables);
+
+                    var areas = await _context.Areas.Where(a => areaIds.Contains(a.Id)).ToListAsync();
+                    _context.Areas.RemoveRange(areas);
+
+                    // 4. Xóa Kho, Sổ kho, Chứng từ kho, Dòng tiền
+                    var biIds = await _context.BInventories.Where(bi => bi.BranchId == id).Select(bi => bi.Id).ToListAsync();
+                    var docIds = await _context.Documents.Where(d => d.BranchId == id || d.ToBranchId == id).Select(d => d.Id).ToListAsync();
+
+                    if (biIds.Any() || docIds.Any())
+                    {
+                        var ledgers = await _context.InventoryLedgers
+                            .Where(l => (l.DocumentId.HasValue && docIds.Contains(l.DocumentId.Value)) || biIds.Contains(l.BInventoryId))
+                            .ToListAsync();
+                        _context.InventoryLedgers.RemoveRange(ledgers);
+                    }
+
+                    if (docIds.Any())
+                    {
+                        var docDetails = await _context.DocumentDetails.Where(dd => docIds.Contains(dd.DocumentId)).ToListAsync();
+                        _context.DocumentDetails.RemoveRange(docDetails);
+
+                        var docs = await _context.Documents.Where(d => docIds.Contains(d.Id)).ToListAsync();
+                        _context.Documents.RemoveRange(docs);
+                    }
+
+                    var cashFlows = await _context.CashFlows.Where(cf => cf.BranchId == id).ToListAsync();
+                    _context.CashFlows.RemoveRange(cashFlows);
+
+                    var bInventories = await _context.BInventories.Where(bi => bi.BranchId == id).ToListAsync();
+                    _context.BInventories.RemoveRange(bInventories);
+
+                    // 5. Xóa Nhân sự, Lương, Lịch làm việc, Hợp đồng, Ticket
+                    var payrolls = await _context.Payrolls.Where(p => p.BranchId == id).ToListAsync();
+                    var payrollIds = payrolls.Select(p => p.Id).ToList();
+                    if (payrollIds.Any())
+                    {
+                        var salaryDetails = await _context.SalaryDetails.Where(sd => payrollIds.Contains(sd.PayrollId)).ToListAsync();
+                        _context.SalaryDetails.RemoveRange(salaryDetails);
+                        _context.Payrolls.RemoveRange(payrolls);
+                    }
+
+                    var workSchedules = await _context.WorkSchedules.Where(ws => ws.BranchId == id).ToListAsync();
+                    _context.WorkSchedules.RemoveRange(workSchedules);
+
+                    var tickets = await _context.Tickets.Where(t => t.BranchId == id).ToListAsync();
+                    _context.Tickets.RemoveRange(tickets);
+
+                    var contracts = await _context.Contracts.Where(c => c.BranchId == id).ToListAsync();
+                    _context.Contracts.RemoveRange(contracts);
+
+                    // 6. Xóa Thiết bị, Đối tác, Voucher
+                    var devices = await _context.Devices.Where(d => d.BranchId == id).ToListAsync();
+                    _context.Devices.RemoveRange(devices);
+
+                    var partners = await _context.Partners.Where(p => p.BranchId == id).ToListAsync();
+                    _context.Partners.RemoveRange(partners);
+
+                    var vouchers = await _context.Vouchers.Where(v => v.BranchId == id).ToListAsync();
+                    _context.Vouchers.RemoveRange(vouchers);
+
+                    // 7. Xóa Chi nhánh & Địa chỉ liên kết (nếu không dùng chung)
+                    var addressId = branch.AddressId;
+                    _context.Branches.Remove(branch);
+
+                    await _context.SaveChangesAsync();
+
+                    if (addressId > 0)
+                    {
+                        var isAddressUsedElsewhere = await _context.Branches.AnyAsync(b => b.AddressId == addressId)
+                            || await _context.Accounts.AnyAsync(a => a.AddressId == addressId);
+                        if (!isAddressUsedElsewhere)
+                        {
+                            var addr = await _context.Addresses.FindAsync(addressId);
+                            if (addr != null)
+                            {
+                                _context.Addresses.Remove(addr);
+                                await _context.SaveChangesAsync();
+                            }
+                        }
+                    }
+
+                    await transaction.CommitAsync();
+                    return true;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
+        }
+        #endregion
     }
 }

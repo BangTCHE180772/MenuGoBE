@@ -55,6 +55,8 @@ public class MessageViewDto
     public long? EmployeeId { get; set; }
     public string? EmployeeName { get; set; }
     public string Content { get; set; } = string.Empty;
+    public string? Topic { get; set; }
+    public string? Subject { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ReadAt { get; set; }
 }

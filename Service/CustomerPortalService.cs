@@ -6,6 +6,7 @@ using AutoMapper;
 using MenuGoBE.Data;
 using MenuGoBE.Dtos.Auth;
 using MenuGoBE.Dtos.Reservation;
+using MenuGoBE.Helpers;
 using MenuGoBE.Hubs;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
@@ -50,14 +51,80 @@ namespace MenuGoBE.Service
         }
         #endregion
 
+        #region PUT Cập nhật thông tin hồ sơ và đổi mật khẩu khách hàng
+        public async Task<CustomerProfileDto> UpdateProfileAsync(long customerId, CustomerUpdateProfileDto dto)
+        {
+            var customer = await _customerRepo.GetByIdAsync(customerId);
+            if (customer == null) throw new KeyNotFoundException("Khách hàng không tồn tại.");
+
+            var newPhone = dto.Phone?.Trim();
+            if (!string.IsNullOrEmpty(newPhone) && newPhone != customer.Phone)
+            {
+                var existingCustomer = await _customerRepo.GetByPhoneAsync(newPhone);
+                if (existingCustomer != null && existingCustomer.Id != customerId)
+                {
+                    throw new InvalidOperationException("Số điện thoại này đã được sử dụng bởi một tài khoản khác.");
+                }
+                customer.Phone = newPhone;
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Name))
+            {
+                customer.Name = dto.Name.Trim();
+            }
+
+            if (dto.Email != null)
+            {
+                var newEmail = dto.Email.Trim().ToLower();
+                if (!string.IsNullOrEmpty(newEmail) && newEmail != customer.Email)
+                {
+                    var existingEmail = await _customerRepo.GetByEmailAsync(newEmail);
+                    if (existingEmail != null && existingEmail.Id != customerId)
+                    {
+                        throw new InvalidOperationException("Email này đã được sử dụng bởi một tài khoản khác.");
+                    }
+                    customer.Email = newEmail;
+                }
+                else if (string.IsNullOrEmpty(newEmail))
+                {
+                    customer.Email = null;
+                }
+            }
+
+            // Đổi mật khẩu nếu có yêu cầu
+            if (!string.IsNullOrEmpty(dto.NewPassword))
+            {
+                if (!string.IsNullOrEmpty(customer.HashedPassword))
+                {
+                    if (string.IsNullOrEmpty(dto.CurrentPassword) || !HashHelper.VerifyPassword(dto.CurrentPassword, customer.HashedPassword))
+                    {
+                        throw new InvalidOperationException("Mật khẩu hiện tại không chính xác.");
+                    }
+                }
+
+                customer.HashedPassword = HashHelper.HashPassword(dto.NewPassword);
+            }
+
+            await _customerRepo.UpdateAsync(customer);
+            await _context.SaveChangesAsync();
+
+            return _mapper.Map<CustomerProfileDto>(customer);
+        }
+        #endregion
+
         #region GET Lấy danh sách lịch đặt bàn của khách hàng
         public async Task<List<ReservationViewDto>> GetMyReservationsAsync(long customerId)
         {
             var reservations = await _context.Reservations
                 .Include(r => r.Customer)
+                .Include(r => r.Branch)
                 .Include(r => r.Order)
                     .ThenInclude(o => o!.Table)
-                .Include(r => r.Branch)
+                        .ThenInclude(t => t!.Area)
+                            .ThenInclude(a => a!.Branch)
+                .Include(r => r.Order)
+                    .ThenInclude(o => o!.OrderDetails)
+                        .ThenInclude(od => od.Product)
                 .Where(r => r.CustomerId == customerId)
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
@@ -77,13 +144,26 @@ namespace MenuGoBE.Service
                     Status = r.Status,
                     OrderId = r.OrderId,
                     BranchId = r.BranchId ?? r.Order?.Table?.Area?.BranchId,
+                    BranchName = r.Branch?.Name ?? r.Order?.Table?.Area?.Branch?.Name ?? "",
                     CreatedAt = r.CreatedAt
                 };
 
                 if (r.OrderId.HasValue && r.Order != null)
                 {
                     dto.TableNames.Add(r.Order.Table?.Name ?? "");
-                    dto.PreOrderItemsCount = r.Order.OrderDetails.Count(od => od.Status == "PreOrder" || od.CookingStatus == "PreOrder");
+                    var preOrderDetails = r.Order.OrderDetails
+                        .Where(od => od.Status == "PreOrder" || od.CookingStatus == "PreOrder")
+                        .ToList();
+
+                    dto.PreOrderItemsCount = preOrderDetails.Count;
+                    dto.PreOrderItems = preOrderDetails.Select(od => new PreOrderItemDto
+                    {
+                        ProductId = od.ProductId,
+                        ProductName = od.Product?.Name ?? "Món ăn",
+                        Quantity = od.Quantity,
+                        Price = od.Price,
+                        Note = od.Note ?? ""
+                    }).ToList();
 
                     var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value);
                     foreach (var child in childOrders)

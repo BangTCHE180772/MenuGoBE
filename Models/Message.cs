@@ -28,6 +28,12 @@ public class Message
     [Required]
     public string Content { get; set; } = string.Empty;
 
+    [MaxLength(50)]
+    public string? Topic { get; set; }
+
+    [MaxLength(255)]
+    public string? Subject { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? ReadAt { get; set; }
