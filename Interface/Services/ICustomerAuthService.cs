@@ -7,5 +7,7 @@ namespace MenuGoBE.Interface.Services
     {
         Task<bool> RegisterAsync(CustomerRegisterDto dto);
         Task<CustomerLoginResponseDto> LoginAsync(CustomerLoginDto dto);
+        Task<bool> SendResetPasswordOtpAsync(string email);
+        Task<bool> ResetPasswordWithOtpAsync(CustomerResetPasswordDto dto);
     }
 }

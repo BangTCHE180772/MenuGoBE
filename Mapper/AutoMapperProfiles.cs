@@ -87,7 +87,9 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.Address, opt => opt.Ignore())
                 .ForMember(dest => dest.AddressId, opt => opt.Ignore())
                 .ForMember(dest => dest.ChainId, opt => opt.Ignore())
-                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Status, opt => opt.Ignore())
+                .ForMember(dest => dest.IsDeleted, opt => opt.Ignore());
 
             //Table
             CreateMap<Table, TableViewDto>()

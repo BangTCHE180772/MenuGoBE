@@ -13,6 +13,8 @@ using MenuGoBE.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
+using Microsoft.Extensions.Caching.Memory;
+
 namespace MenuGoBE.Service
 {
     public class CustomerAuthService : ICustomerAuthService
@@ -20,15 +22,21 @@ namespace MenuGoBE.Service
         private readonly ICustomerRepository _customerRepo;
         private readonly IConfiguration _configuration;
         private readonly IMapper _mapper;
+        private readonly IEmailService _emailService;
+        private readonly IMemoryCache _cache;
 
         public CustomerAuthService(
             ICustomerRepository customerRepo,
             IConfiguration configuration,
-            IMapper mapper)
+            IMapper mapper,
+            IEmailService emailService,
+            IMemoryCache cache)
         {
             _customerRepo = customerRepo;
             _configuration = configuration;
             _mapper = mapper;
+            _emailService = emailService;
+            _cache = cache;
         }
 
         #region CREATE Đăng ký tài khoản khách hàng mới hoặc cập nhật thông tin
@@ -131,6 +139,74 @@ namespace MenuGoBE.Service
                 signingCredentials: credentials);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+        #endregion
+
+        #region POST Gửi mã OTP khôi phục mật khẩu qua Email
+        public async Task<bool> SendResetPasswordOtpAsync(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new ArgumentException("Vui lòng nhập địa chỉ email.");
+            }
+
+            var normalizedEmail = email.Trim().ToLower();
+            var customer = await _customerRepo.GetByEmailAsync(normalizedEmail);
+            if (customer == null)
+            {
+                throw new KeyNotFoundException("Không tìm thấy tài khoản khách hàng gắn với địa chỉ email này.");
+            }
+
+            // Sinh mã OTP 6 chữ số
+            var otp = new Random().Next(100000, 999999).ToString();
+            _cache.Set($"OTP_CUSTOMER_RESET_{normalizedEmail}", otp, TimeSpan.FromMinutes(5));
+
+            var subject = "Mã xác nhận đặt lại mật khẩu - MenuGo";
+            var body = $@"
+                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #f1f5f9; border-radius: 12px;'>
+                    <h2 style='color: #ea580c; margin-top: 0;'>MenuGo - Khôi phục mật khẩu</h2>
+                    <p>Xin chào <strong>{customer.Name}</strong>,</p>
+                    <p>Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản khách hàng của bạn.</p>
+                    <p>Mã xác nhận (OTP) của bạn là:</p>
+                    <div style='background: #fff7ed; border: 1px dashed #ea580c; border-radius: 8px; padding: 14px; text-align: center; margin: 20px 0;'>
+                        <span style='font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #ea580c;'>{otp}</span>
+                    </div>
+                    <p style='color: #64748b; font-size: 13px;'>Mã xác nhận này có hiệu lực trong vòng <strong>5 phút</strong>. Vui lòng không chia sẻ mã này cho bất kỳ ai.</p>
+                    <hr style='border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;' />
+                    <p style='color: #94a3b8; font-size: 12px;'>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
+                </div>";
+
+            await _emailService.SendEmailAsync(normalizedEmail, subject, body);
+            return true;
+        }
+        #endregion
+
+        #region POST Xác nhận OTP và đặt lại mật khẩu mới
+        public async Task<bool> ResetPasswordWithOtpAsync(CustomerResetPasswordDto dto)
+        {
+            if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.OtpCode) || string.IsNullOrWhiteSpace(dto.NewPassword))
+            {
+                throw new ArgumentException("Vui lòng điền đầy đủ email, mã xác nhận và mật khẩu mới.");
+            }
+
+            var normalizedEmail = dto.Email.Trim().ToLower();
+            if (!_cache.TryGetValue($"OTP_CUSTOMER_RESET_{normalizedEmail}", out string? cachedOtp) || cachedOtp != dto.OtpCode.Trim())
+            {
+                throw new InvalidOperationException("Mã xác nhận không chính xác hoặc đã hết hạn (5 phút).");
+            }
+
+            var customer = await _customerRepo.GetByEmailAsync(normalizedEmail);
+            if (customer == null)
+            {
+                throw new KeyNotFoundException("Không tìm thấy thông tin tài khoản khách hàng.");
+            }
+
+            customer.HashedPassword = HashHelper.HashPassword(dto.NewPassword);
+            await _customerRepo.UpdateAsync(customer);
+
+            // Xóa cache sau khi dùng
+            _cache.Remove($"OTP_CUSTOMER_RESET_{normalizedEmail}");
+            return true;
         }
         #endregion
     }

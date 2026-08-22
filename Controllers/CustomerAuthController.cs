@@ -61,5 +61,57 @@ namespace MenuGoBE.Controllers
             }
         }
         #endregion
+
+        #region POST Gửi mã OTP khôi phục mật khẩu qua Email
+        [HttpPost("forgot-password/send-otp")]
+        public async Task<IActionResult> SendResetPasswordOtp([FromBody] CustomerSendOtpRequestDto dto)
+        {
+            try
+            {
+                await _authService.SendResetPasswordOtpAsync(dto.Email);
+                return Ok(new { success = true, message = "Mã xác nhận (OTP) đã được gửi tới email của bạn." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region POST Xác nhận OTP và đặt lại mật khẩu mới
+        [HttpPost("forgot-password/reset")]
+        public async Task<IActionResult> ResetPasswordWithOtp([FromBody] CustomerResetPasswordDto dto)
+        {
+            try
+            {
+                await _authService.ResetPasswordWithOtpAsync(dto);
+                return Ok(new { success = true, message = "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay bây giờ." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
+        }
+        #endregion
     }
 }
