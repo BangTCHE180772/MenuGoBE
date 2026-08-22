@@ -181,7 +181,23 @@ namespace MenuGoBE.Service
 
             _mapper.Map(dto, entity);
 
-            entity.Address.Type = "Chi Nhánh";
+            if (dto.Address != null)
+            {
+                if (entity.Address == null)
+                {
+                    entity.Address = new Address();
+                }
+
+                if (dto.Address.NewWardId.HasValue && dto.Address.NewWardId.Value > 0)
+                {
+                    entity.Address.NewWardId = dto.Address.NewWardId.Value;
+                }
+                if (dto.Address.OldWardId.HasValue && dto.Address.OldWardId.Value > 0)
+                {
+                    entity.Address.OldWardId = dto.Address.OldWardId.Value;
+                }
+                entity.Address.Type = "Chi Nhánh";
+            }
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();

@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers.Document
             _documentService = documentService;
         }
 
-        #region GET api/costadjustmentdocument (Lấy danh sách phiếu Điều chỉnh giá vốn DTO)
+        #region GET Lấy danh sách phiếu Điều chỉnh giá vốn DTO
         /// <summary>
         /// Lấy danh sách phiếu Điều chỉnh giá vốn thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
@@ -43,7 +43,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/costadjustmentdocument/{id} (Lấy chi tiết phiếu Điều chỉnh giá vốn DTO)
+        #region GET Lấy chi tiết phiếu Điều chỉnh giá vốn DTO
         /// <summary>
         /// Lấy chi tiết 1 phiếu Điều chỉnh giá vốn theo ID (Trả về DocumentResponseDto).
         /// </summary>
@@ -65,7 +65,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/costadjustmentdocument/pending (Tạo phiếu nháp theo DTO)
+        #region POST Tạo phiếu nháp theo DTO
         /// <summary>
         /// Tạo mới phiếu Điều chỉnh giá vốn ở trạng thái Pending (Lưu tạm) sử dụng CostAdjustmentDocumentCreateDto.
         /// </summary>
@@ -105,7 +105,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/costadjustmentdocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        #region POST Tạo & Chốt trực tiếp theo DTO
         /// <summary>
         /// Tạo và Chốt trực tiếp phiếu Điều chỉnh giá vốn sang Completed sử dụng CostAdjustmentDocumentCreateDto.
         /// </summary>
@@ -145,7 +145,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region PUT api/costadjustmentdocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        #region PUT Cập nhật phiếu nháp theo DTO
         /// <summary>
         /// Cập nhật phiếu Điều chỉnh giá vốn ở trạng thái Pending sử dụng CostAdjustmentDocumentUpdateDto.
         /// </summary>
@@ -193,7 +193,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/costadjustmentdocument/{id}/complete (Chốt phiếu nháp)
+        #region POST Chốt phiếu nháp
         /// <summary>
         /// Chốt phiếu Điều chỉnh giá vốn Pending -> Completed.
         /// </summary>
@@ -212,7 +212,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region DELETE api/costadjustmentdocument/{id}/soft-delete (Hủy phiếu nháp)
+        #region DELETE Hủy phiếu nháp
         /// <summary>
         /// Xóa mềm phiếu Điều chỉnh giá vốn Pending -> Chuyển sang Canceled.
         /// </summary>

@@ -10,6 +10,7 @@ public interface IReservationService
     Task<bool> UpdateAsync(long id, ReservationUpdateDto dto);
     Task<bool> CheckInAsync(long id);
     Task<bool> CancelAsync(long id);
+    Task<bool> RejectAsync(long id);
     Task<bool> ExtendAsync(long id, int minutes);
     Task<bool> ChangeTableAsync(long reservationId, long newTableId);
     Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime);

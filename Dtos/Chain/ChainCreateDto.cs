@@ -18,6 +18,8 @@ namespace MenuGoBE.Dtos.Chain
 
         public string Name { get; set; } = string.Empty;
 
+        public string AddressText { get; set; } = string.Empty;
+
         // public long AddressId { get; set; }
         public AddressCreateDto Address { get; set; } = new();
     }

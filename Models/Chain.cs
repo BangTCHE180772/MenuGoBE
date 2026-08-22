@@ -20,6 +20,8 @@ public class Chain
     [Required]
     public string Name { get; set; } = string.Empty;
 
+    public string AddressText { get; set; } = string.Empty;
+
     public long AddressId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
