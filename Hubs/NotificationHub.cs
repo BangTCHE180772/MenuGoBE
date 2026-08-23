@@ -128,6 +128,11 @@ namespace MenuGoBE.Hubs
             }
 
             await base.OnDisconnectedAsync(exception);
+          
+       }    
+    public async Task JoinCustomerGroup(long customerId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"customer_{customerId}");
         }
     }
 }

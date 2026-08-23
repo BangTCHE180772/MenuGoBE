@@ -12,8 +12,10 @@ public class ReservationViewDto
     public string Status { get; set; } = string.Empty;
     public long? OrderId { get; set; }
     public long? BranchId { get; set; }
+    public string BranchName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     
     public List<string> TableNames { get; set; } = new List<string>();
     public int PreOrderItemsCount { get; set; }
+    public List<PreOrderItemDto> PreOrderItems { get; set; } = new List<PreOrderItemDto>();
 }

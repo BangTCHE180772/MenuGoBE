@@ -7,6 +7,7 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<Customer?> GetByIdAsync(long id);
         Task<Customer?> GetByPhoneAsync(string phone);
+        Task<Customer?> GetByEmailAsync(string email);
         Task CreateAsync(Customer customer);
         Task UpdateAsync(Customer customer);
     }

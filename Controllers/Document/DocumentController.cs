@@ -14,16 +14,15 @@ namespace MenuGoBE.Controllers.Document
     [Route("api/[controller]")]
     public class DocumentController : BaseApiController
     {
-        #region 0. Service Dependency & Constructor
+
         private readonly IDocumentService _documentService;
 
         public DocumentController(IDocumentService documentService)
         {
             _documentService = documentService;
         }
-        #endregion
 
-        #region 1. Generic Read APIs (API GET Dùng chung cho Tất cả Loại Chứng từ)
+        #region Generic Read APIs (API GET Dùng chung cho Tất cả Loại Chứng từ)
         /// <summary>
         /// Lấy danh sách chứng từ dùng chung cho màn hình dạng bảng (Grid View).
         /// Hỗ trợ lọc theo chi nhánh, loại chứng từ (type) và trạng thái (status).

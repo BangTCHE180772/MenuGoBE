@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers.Document
             _documentService = documentService;
         }
 
-        #region GET api/transferdocument (Lấy danh sách phiếu Chuyển kho DTO)
+        #region GET Lấy danh sách phiếu Chuyển kho DTO
         /// <summary>
         /// Lấy danh sách phiếu Chuyển kho thuộc chi nhánh gửi (Trả về List DTO gọn nhẹ).
         /// </summary>
@@ -43,7 +43,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/transferdocument/{id} (Lấy chi tiết phiếu Chuyển kho DTO)
+        #region GET Lấy chi tiết phiếu Chuyển kho DTO
         /// <summary>
         /// Lấy chi tiết 1 phiếu Chuyển kho theo ID (Trả về DocumentResponseDto).
         /// </summary>
@@ -65,7 +65,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/transferdocument/pending (Tạo phiếu nháp theo DTO)
+        #region POST Tạo phiếu nháp theo DTO
         /// <summary>
         /// Tạo mới phiếu Chuyển kho ở trạng thái Pending (Lưu tạm) sử dụng TransferDocumentCreateDto.
         /// </summary>
@@ -106,7 +106,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/transferdocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        #region POST Tạo & Chốt trực tiếp theo DTO
         /// <summary>
         /// Tạo và Chốt trực tiếp phiếu Chuyển kho sang Completed tại chi nhánh gửi sử dụng TransferDocumentCreateDto.
         /// </summary>
@@ -147,7 +147,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region PUT api/transferdocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        #region PUT Cập nhật phiếu nháp theo DTO
         /// <summary>
         /// Cập nhật phiếu Chuyển kho ở trạng thái Pending sử dụng TransferDocumentUpdateDto.
         /// </summary>
@@ -196,7 +196,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/transferdocument/{id}/complete (Chốt phiếu nháp tại chi nhánh gửi)
+        #region POST Chốt phiếu nháp tại chi nhánh gửi
         /// <summary>
         /// Chốt phiếu Chuyển kho Pending -> Completed tại Chi nhánh Gửi.
         /// </summary>
@@ -215,7 +215,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/transferdocument/{id}/receive (Chi nhánh nhận xử lý nhận/từ chối hàng)
+        #region POST Chi nhánh nhận xử lý nhận/từ chối hàng
         /// <summary>
         /// Xử lý nhận hàng / từ chối nhận hàng tại Chi nhánh Nhận khi phiếu đang ở trạng thái InTransit.
         /// </summary>
@@ -250,7 +250,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region DELETE api/transferdocument/{id}/soft-delete (Hủy phiếu nháp)
+        #region DELETE Hủy phiếu nháp
         /// <summary>
         /// Xóa mềm phiếu Chuyển kho Pending -> Chuyển sang Canceled.
         /// </summary>

@@ -7,6 +7,7 @@ public class ReservationCreateDto
     public DateTime ReservationTime { get; set; }
     public int NumberOfGuests { get; set; }
     public string Note { get; set; } = string.Empty;
+    public long? BranchId { get; set; }
 
     public List<long> TableIds { get; set; } = new List<long>();
 
