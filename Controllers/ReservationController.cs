@@ -73,6 +73,10 @@ public class ReservationController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (MenuGoBE.Exceptions.ReservationWarningException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message, isWarning = true });
+        }
     }
 
     [HttpPut("{id}")]
@@ -91,6 +95,10 @@ public class ReservationController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (MenuGoBE.Exceptions.ReservationWarningException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message, isWarning = true });
         }
     }
 
