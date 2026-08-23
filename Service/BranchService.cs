@@ -179,9 +179,29 @@ namespace MenuGoBE.Service
                 throw new MenuGoException(ErrorCodes.BranchAlreadyDeleted);
             }
 
+            var existingStatus = entity.Status;
+            var existingNewWardId = entity.Address?.NewWardId;
+            var existingOldWardId = entity.Address?.OldWardId;
+
             _mapper.Map(dto, entity);
 
-            entity.Address.Type = "Chi Nhánh";
+            if (string.IsNullOrWhiteSpace(entity.Status))
+            {
+                entity.Status = !string.IsNullOrWhiteSpace(existingStatus) ? existingStatus : "Hoạt động";
+            }
+
+            if (entity.Address != null)
+            {
+                entity.Address.Type = "Chi Nhánh";
+                if (dto.Address == null || !dto.Address.NewWardId.HasValue || dto.Address.NewWardId == 0)
+                {
+                    entity.Address.NewWardId = existingNewWardId;
+                }
+                if (dto.Address == null || !dto.Address.OldWardId.HasValue || dto.Address.OldWardId == 0)
+                {
+                    entity.Address.OldWardId = existingOldWardId;
+                }
+            }
 
             await _repo.UpdateAsync(entity);
             await _repo.SaveChangesAsync();
