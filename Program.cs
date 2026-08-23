@@ -110,6 +110,7 @@ builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
 builder.Services.AddScoped<IChatRepository, ChatRepository>();
 
 // Service
@@ -146,6 +147,8 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddHostedService<AutoCheckoutService>();
+builder.Services.AddScoped<IOrderAssignmentService, OrderAssignmentService>();
+builder.Services.AddHostedService<OrderAssignmentMonitorService>();
 builder.Services.AddScoped<INewWardService, NewWardService>();
 builder.Services.AddScoped<IOldWardService, OldWardService>();
 builder.Services.AddScoped<INewProvinceService, NewProvinceService>();

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Linq;
 
@@ -18,14 +19,58 @@ namespace MenuGoBE.Controllers
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly ITableService _tableService;
         private readonly IProductService _productService;
+        private readonly IOrderAssignmentService _assignmentService;
+        private readonly IAccountService _accountService;
 
-        public OrderController(IOrderService service, IOrderDetailService detailService, IHubContext<NotificationHub> hubContext, ITableService tableService, IProductService productService)
+        public OrderController(
+            IOrderService service,
+            IOrderDetailService detailService,
+            IHubContext<NotificationHub> hubContext,
+            ITableService tableService,
+            IProductService productService,
+            IOrderAssignmentService assignmentService,
+            IAccountService accountService)
         {
             _service = service;
             _detailService = detailService;
             _hubContext = hubContext;
             _tableService = tableService;
             _productService = productService;
+            _assignmentService = assignmentService;
+            _accountService = accountService;
+        }
+
+        /// <summary>
+        /// Gửi notification cho assigned waiter hoặc on-duty staff.
+        /// Manager LUÔN nhận qua branch group.
+        /// </summary>
+        private async Task SendOrderNotificationAsync(long orderId, long branchId, object payload)
+        {
+            var assignedAccountId = await _assignmentService.GetAssignedAccountIdAsync(orderId);
+
+            if (assignedAccountId.HasValue)
+            {
+                // Targeted: chỉ assigned waiter nhận
+                await _hubContext.Clients.Group($"waiter_{assignedAccountId.Value}")
+                    .SendAsync("ReceiveNotification", payload);
+            }
+            else
+            {
+                // Chưa assign → gửi cho on-duty staff (Waiter + Cashier đang làm)
+                await _hubContext.Clients.Group($"on_duty_{branchId}")
+                    .SendAsync("ReceiveNotification", payload);
+            }
+
+            // Manager/Admin LUÔN nhận (họ join branch group khi login)
+            await _hubContext.Clients.Group($"branch_{branchId}")
+                .SendAsync("ReceiveNotification", payload);
+        }
+
+        private long? GetCurrentUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (claim != null && long.TryParse(claim.Value, out var id)) return id;
+            return null;
         }
 
         [HttpGet]
@@ -115,13 +160,24 @@ namespace MenuGoBE.Controllers
         [EnableRateLimiting("CustomerOrderPolicy")]
         public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
         {
-            var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
-            if (claim != null && long.TryParse(claim.Value, out var parsedId))
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId.HasValue)
             {
-                dto.CreatedBy = parsedId;
+                dto.CreatedBy = currentUserId.Value;
             }
             
             var result = await _service.CreateAsync(dto);
+
+            // Auto-assign nếu người tạo là staff (có CreatedBy)
+            if (currentUserId.HasValue && result != null)
+            {
+                var table = await _tableService.GetByIdAsync(result.TableId);
+                if (table != null)
+                {
+                    await _assignmentService.TryAssignAsync(result.Id, currentUserId.Value, table.BranchId);
+                }
+            }
+
             return Ok(result);
         }
 
@@ -150,26 +206,26 @@ namespace MenuGoBE.Controllers
         [HttpPost("{id}/pay")]
         public async Task<IActionResult> Pay(long id, [FromBody] OrderPayDto? dto)
         {
-            long? currentUserId = null; // Fallback
-            var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
-            if (claim != null && long.TryParse(claim.Value, out var parsedId))
-            {
-                currentUserId = parsedId;
-            }
+            var currentUserId = GetCurrentUserId();
 
             var paidTableIds = await _service.PayOrderAsync(id, dto, "Cash", currentUserId);
 
             if (paidTableIds == null || !paidTableIds.Any())
                 return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
 
+            // Clear assignment khi thanh toán
+            await _assignmentService.ClearAssignmentAsync(id);
+
             foreach (var tableId in paidTableIds)
             {
-                await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                // Thanh toán: broadcast cho on-duty + branch
+                var payload = new
                 {
                     TableId = tableId,
                     Type = "Payment",
                     Message = "Thanh toán thành công. Bàn cần dọn dẹp!"
-                });
+                };
+                await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
             }
 
             return Ok(new { message = "Thanh toán thành công" });
@@ -182,6 +238,9 @@ namespace MenuGoBE.Controllers
 
             if (!result)
                 return BadRequest(new { message = "Không thể gộp đơn. Kiểm tra lại OrderId hoặc đơn cha đã bị gộp vào đơn khác." });
+
+            // Xử lý assignment khi merge: xoá assignment bàn con, giữ bàn cha
+            await _assignmentService.TransferOnMergeAsync(dto.ChildOrderId, dto.FatherOrderId);
 
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
             {
@@ -281,8 +340,15 @@ namespace MenuGoBE.Controllers
                             timestamp = System.DateTime.UtcNow
                         };
 
-                        await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
-                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                        // Auto-assign + Touch nếu waiter tạo
+                        var currentUserId = GetCurrentUserId();
+                        if (currentUserId.HasValue)
+                        {
+                            await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
+                            await _assignmentService.TouchAsync(orderId);
+                        }
+
+                        await SendOrderNotificationAsync(orderId, table.BranchId, payload);
                     }
                 }
 
@@ -335,8 +401,15 @@ namespace MenuGoBE.Controllers
                             timestamp = System.DateTime.UtcNow
                         };
 
-                        await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
-                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                        // Auto-assign + Touch nếu waiter tạo
+                        var currentUserId = GetCurrentUserId();
+                        if (currentUserId.HasValue)
+                        {
+                            await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
+                            await _assignmentService.TouchAsync(orderId);
+                        }
+
+                        await SendOrderNotificationAsync(orderId, table.BranchId, payload);
                     }
                 }
 
@@ -416,8 +489,15 @@ namespace MenuGoBE.Controllers
                                 timestamp = System.DateTime.UtcNow
                             };
 
-                            await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
-                            await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                            // Auto-assign waiter confirm + Touch
+                            var currentUserId = GetCurrentUserId();
+                            if (currentUserId.HasValue)
+                            {
+                                await _assignmentService.TryAssignAsync(order.Id, currentUserId.Value, table.BranchId);
+                                await _assignmentService.TouchAsync(order.Id);
+                            }
+
+                            await SendOrderNotificationAsync(order.Id, table.BranchId, payload);
                         }
                     }
                 }
@@ -465,8 +545,8 @@ namespace MenuGoBE.Controllers
                                 timestamp = System.DateTime.UtcNow
                             };
 
-                            await _hubContext.Clients.Group($"branch_{table.BranchId}").SendAsync("ReceiveNotification", payload);
-                            await _hubContext.Clients.All.SendAsync("ReceiveNotification", payload);
+                            await _assignmentService.TouchAsync(order.Id);
+                            await SendOrderNotificationAsync(order.Id, table.BranchId, payload);
                         }
                     }
                 }
@@ -587,6 +667,9 @@ namespace MenuGoBE.Controllers
             if (!result)
                 return BadRequest(new { message = "Không thể hủy đơn. Có món đang được chuẩn bị hoặc đã phục vụ." });
 
+            // Clear assignment khi huỷ đơn
+            await _assignmentService.ClearAssignmentAsync(orderId);
+
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
             {
                 type = "order-cancelled",
@@ -647,6 +730,154 @@ namespace MenuGoBE.Controllers
             });
 
             return Ok(new { message = "Cập nhật trạng thái mẻ thành công" });
+        }
+
+        // ===== ORDER ASSIGNMENT ENDPOINTS =====
+
+        /// <summary>Lấy danh sách bàn tôi đang phụ trách</summary>
+        [HttpGet("my-assignments")]
+        public async Task<IActionResult> GetMyAssignments()
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var orderIds = await _assignmentService.GetMyOrderIdsAsync(currentUserId.Value);
+            var assignments = new List<object>();
+
+            foreach (var orderId in orderIds)
+            {
+                var order = await _service.GetByIdAsync(orderId);
+                if (order != null)
+                {
+                    var table = await _tableService.GetByIdAsync(order.TableId);
+                    assignments.Add(new
+                    {
+                        orderId,
+                        tableId = order.TableId,
+                        tableName = table?.Name ?? $"Bàn #{order.TableId}",
+                        branchId = table?.BranchId,
+                        status = order.Status
+                    });
+                }
+            }
+
+            return Ok(assignments);
+        }
+
+        /// <summary>Tự nhận bàn</summary>
+        [HttpPost("{orderId}/assign")]
+        public async Task<IActionResult> AssignSelf(long orderId)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var order = await _service.GetByIdAsync(orderId);
+            if (order == null)
+                return NotFound(new { message = "Không tìm thấy đơn hàng." });
+
+            var table = await _tableService.GetByIdAsync(order.TableId);
+            if (table == null)
+                return NotFound(new { message = "Không tìm thấy bàn." });
+
+            var assigned = await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
+            if (!assigned)
+                return BadRequest(new { message = "Bàn đã có nhân viên phụ trách." });
+
+            return Ok(new { message = $"Đã nhận phụ trách {table.Name}." });
+        }
+
+        /// <summary>Bỏ nhận bàn</summary>
+        [HttpDelete("{orderId}/unassign")]
+        public async Task<IActionResult> Unassign(long orderId)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            await _assignmentService.ClearAssignmentAsync(orderId);
+            return Ok(new { message = "Đã bỏ phụ trách bàn." });
+        }
+
+        /// <summary>
+        /// Manager chỉ định bắt buộc waiter cho bàn.
+        /// Chỉ Manager/Admin mới dùng được.
+        /// </summary>
+        [HttpPost("{orderId}/force-assign")]
+        public async Task<IActionResult> ForceAssign(long orderId, [FromBody] ForceAssignDto dto)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            // Validate: chỉ Manager/Admin
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Chỉ Quản lý mới có quyền chỉ định nhân viên." });
+
+            var order = await _service.GetByIdAsync(orderId);
+            if (order == null)
+                return NotFound(new { message = "Không tìm thấy đơn hàng." });
+
+            var table = await _tableService.GetByIdAsync(order.TableId);
+            if (table == null)
+                return NotFound(new { message = "Không tìm thấy bàn." });
+
+            await _assignmentService.ForceAssignAsync(orderId, dto.AccountId, table.BranchId);
+
+            // Thông báo cho waiter bị chỉ định
+            await _hubContext.Clients.Group($"waiter_{dto.AccountId}")
+                .SendAsync("ReceiveNotification", new
+                {
+                    type = "force-assigned",
+                    orderId,
+                    tableId = table.Id,
+                    tableName = table.Name,
+                    message = $"📋 Quản lý đã chỉ định bạn phụ trách {table.Name}.",
+                    priority = "Warning",
+                    timestamp = DateTime.UtcNow
+                });
+
+            return Ok(new { message = $"Đã chỉ định nhân viên cho {table.Name}." });
+        }
+
+        /// <summary>
+        /// Lấy danh sách nhân viên đang on-duty trong branch (cho Manager chọn khi force-assign).
+        /// </summary>
+        [HttpGet("on-duty-staff/{branchId}")]
+        public async Task<IActionResult> GetOnDutyStaff(long branchId)
+        {
+            var currentUserId = GetCurrentUserId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Chỉ Quản lý mới có quyền xem danh sách nhân viên đang làm." });
+
+            using var scope = HttpContext.RequestServices.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<MenuGoBE.Data.AppDbContext>();
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+
+            var onDutyStaff = await db.WorkSchedules
+                .Include(ws => ws.Account)
+                .Where(ws =>
+                    ws.BranchId == branchId &&
+                    ws.WorkDate == today &&
+                    ws.CheckInAt != null &&
+                    ws.CheckOutAt == null &&
+                    ws.Status == "Working")
+                .Select(ws => new
+                {
+                    accountId = ws.AccountId,
+                    name = ws.Account.Name,
+                    shiftId = ws.ShiftId
+                })
+                .Distinct()
+                .ToListAsync();
+
+            return Ok(onDutyStaff);
         }
     }
 }
