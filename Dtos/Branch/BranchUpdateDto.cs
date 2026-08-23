@@ -23,5 +23,10 @@ namespace MenuGoBE.Dtos.Branch
         public string? Status { get; set; }
 
         public bool? IsDeleted { get; set; }
+
+        // GPS location for check-in validation
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public int? CheckinRadiusMeters { get; set; }
     }
 }

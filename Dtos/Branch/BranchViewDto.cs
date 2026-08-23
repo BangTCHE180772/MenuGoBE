@@ -13,6 +13,10 @@ namespace MenuGoBE.Dtos.Branch
 
         public long AddressId { get; set; }
 
+        public long? NewWardId { get; set; }
+
+        public long? OldWardId { get; set; }
+
         public string NewAddressName { get; set; } = string.Empty;
 
         public string OldAddressName { get; set; } = string.Empty;
@@ -32,5 +36,10 @@ namespace MenuGoBE.Dtos.Branch
         public string Status { get; set; } = "Hoạt động";
 
         public bool IsDeleted { get; set; } = false;
+
+        // GPS
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public int CheckinRadiusMeters { get; set; } = 100;
     }
 }
