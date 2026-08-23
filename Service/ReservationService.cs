@@ -89,9 +89,9 @@ public class ReservationService : IReservationService
 
     public async Task<bool> UpdateAsync(long id, ReservationUpdateDto dto)
     {
-        if (dto.ReservationTime < DateTime.UtcNow.AddMinutes(10))
+        if (dto.ReservationTime < DateTime.UtcNow)
         {
-            throw new InvalidOperationException("Thời gian đặt bàn phải cách thời gian hiện tại ít nhất 10 phút.");
+            throw new InvalidOperationException("Thời gian đặt bàn phải sau thời gian hiện tại.");
         }
 
         var reservation = await _reservationRepo.GetByIdAsync(id);
@@ -112,17 +112,60 @@ public class ReservationService : IReservationService
                 if (order != null) tableIds.Add(order.TableId);
                 tableIds.AddRange(childOrders.Select(c => c.TableId));
 
-                var startTime = dto.ReservationTime.AddMinutes(-89);
-                var endTime = dto.ReservationTime.AddMinutes(89);
+                var startTime = dto.ReservationTime.AddMinutes(-59);
+                var endTime = dto.ReservationTime.AddMinutes(59);
                 var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
 
-                var isOverlap = overlappingReservations.Any(r => r.Id != reservation.Id && r.OrderId.HasValue && 
+                var overlappingTables = overlappingReservations.Where(r => r.Id != reservation.Id && r.OrderId.HasValue && 
                     (r.Order != null && tableIds.Contains(r.Order.TableId) || 
                      _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value).Result.Any(c => tableIds.Contains(c.TableId))));
 
-                if (isOverlap)
+                if (overlappingTables.Any())
                 {
-                    throw new InvalidOperationException("Bàn đã chọn không trống trong khung giờ mới.");
+                    bool has15MinOverlap = false;
+                    bool has60MinOverlap = false;
+
+                    foreach (var overlap in overlappingTables)
+                    {
+                        var diff = Math.Abs((overlap.ReservationTime - dto.ReservationTime).TotalMinutes);
+                        if (diff <= 15) has15MinOverlap = true;
+                        else if (diff <= 60) has60MinOverlap = true;
+                    }
+
+                    if (has15MinOverlap)
+                    {
+                        throw new InvalidOperationException("Bàn đã chọn có khách đặt trong khung +/- 15 phút.");
+                    }
+                    else if (has60MinOverlap && !dto.IgnoreWarning)
+                    {
+                        throw new MenuGoBE.Exceptions.ReservationWarningException("Bàn đã chọn có khách đặt trong vòng 1 tiếng. Bạn có chắc chắn muốn đặt không?");
+                    }
+                }
+
+                // Check overlap with current occupancy if reservation is soon
+                var minutesToReservation = (dto.ReservationTime - DateTime.UtcNow).TotalMinutes;
+                if (minutesToReservation <= 60)
+                {
+                    bool currentOccupancy15 = false;
+                    bool currentOccupancy60 = false;
+                    foreach (var tableId in tableIds)
+                    {
+                        var table = await _tableRepo.GetByIdAsync(tableId);
+                        if (table != null && (table.Status == "Occupied" || table.Status == "Serving" || table.Status == "Reserved"))
+                        {
+                            if (minutesToReservation <= 15) currentOccupancy15 = true;
+                            else if (minutesToReservation <= 60) currentOccupancy60 = true;
+                        }
+                    }
+
+                    if (currentOccupancy15)
+                    {
+                        throw new InvalidOperationException("Bàn đang có khách. Không thể dời lịch đến thời điểm này.");
+                    }
+                    else if (currentOccupancy60 && !dto.IgnoreWarning)
+                    {
+                        throw new MenuGoBE.Exceptions.ReservationWarningException("Bàn đang có khách và có thể chưa trống kịp. Bạn có chắc chắn muốn dời lịch không?");
+                    }
                 }
             }
         }
@@ -171,10 +214,10 @@ public class ReservationService : IReservationService
     public async Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime)
     {
         var allTables = await _tableRepo.GetByBranchIdsAsync(new List<long> { branchId });
-        var validTables = allTables.Where(t => t.Status == "Empty" || t.Status == "Available").ToList();
+        var validTables = allTables.Where(t => t.Status != "Maintenance" && t.Status != "Inactive").ToList();
 
-        var startTime = reservationTime.AddMinutes(-89);
-        var endTime = reservationTime.AddMinutes(89);
+        var startTime = reservationTime.AddMinutes(-14);
+        var endTime = reservationTime.AddMinutes(14);
 
         var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
         
@@ -196,15 +239,28 @@ public class ReservationService : IReservationService
             }
         }
 
+        // Apply current occupancy logic if the reservation is within 14 minutes
+        var minutesToRes = (reservationTime - DateTime.UtcNow).TotalMinutes;
+        if (minutesToRes <= 14)
+        {
+            foreach (var t in validTables)
+            {
+                if (t.Status == "Occupied" || t.Status == "Serving" || t.Status == "Reserved")
+                {
+                    bookedTableIds.Add(t.Id);
+                }
+            }
+        }
+
         var availableTables = validTables.Where(t => !bookedTableIds.Contains(t.Id)).ToList();
         return _mapper.Map<List<MenuGoBE.Dtos.Table.TableViewDto>>(availableTables);
     }
 
     public async Task<ReservationViewDto> CreateAsync(ReservationCreateDto dto)
     {
-        if (dto.ReservationTime < DateTime.UtcNow.AddMinutes(10))
+        if (dto.ReservationTime < DateTime.UtcNow)
         {
-            throw new InvalidOperationException("Thời gian đặt bàn phải cách thời gian hiện tại ít nhất 10 phút.");
+            throw new InvalidOperationException("Thời gian đặt bàn phải sau thời gian hiện tại.");
         }
 
         var customer = await _customerRepo.GetByPhoneAsync(dto.CustomerPhone);
@@ -255,46 +311,57 @@ public class ReservationService : IReservationService
         if (dto.TableIds != null && dto.TableIds.Any())
         {
             // VALIDATION: Check for overlapping tables
-            var startTime = dto.ReservationTime.AddMinutes(-89);
-            var endTime = dto.ReservationTime.AddMinutes(89);
+            var startTime = dto.ReservationTime.AddMinutes(-59);
+            var endTime = dto.ReservationTime.AddMinutes(59);
             var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
             
-            var bookedTableIds = overlappingReservations
-                .Where(r => r.OrderId.HasValue && r.Order != null)
-                .Select(r => r.Order.TableId)
-                .ToHashSet();
+            bool has15MinOverlap = false;
+            bool has60MinOverlap = false;
 
             foreach (var r in overlappingReservations)
             {
                 if (r.OrderId.HasValue)
                 {
+                    var tablesInReservation = new HashSet<long>();
+                    if (r.Order != null) tablesInReservation.Add(r.Order.TableId);
+                    
                     var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value);
                     foreach (var child in childOrders)
                     {
-                        bookedTableIds.Add(child.TableId);
+                        tablesInReservation.Add(child.TableId);
+                    }
+
+                    if (dto.TableIds.Any(tid => tablesInReservation.Contains(tid)))
+                    {
+                        var diff = Math.Abs((r.ReservationTime - dto.ReservationTime).TotalMinutes);
+                        if (diff <= 15) has15MinOverlap = true;
+                        else if (diff <= 60) has60MinOverlap = true;
                     }
                 }
             }
 
-            foreach (var tableId in dto.TableIds)
-            {
-                if (bookedTableIds.Contains(tableId))
-                {
-                    throw new InvalidOperationException("Bàn đã được đặt trong khoảng thời gian này.");
-                }
-            }
-
+            // Check overlap with current occupancy if reservation is soon
             var minutesToReservation = (dto.ReservationTime - DateTime.UtcNow).TotalMinutes;
             if (minutesToReservation <= 60)
             {
                 foreach (var tableId in dto.TableIds)
                 {
                     var table = await _tableRepo.GetByIdAsync(tableId);
-                    if (table != null && (table.Status == "Occupied" || table.Status == "Serving"))
+                    if (table != null && (table.Status == "Occupied" || table.Status == "Serving" || table.Status == "Reserved"))
                     {
-                        throw new InvalidOperationException($"Bàn {table.Name} đang có khách. Vui lòng chọn bàn khác hoặc dời thời gian đặt bàn.");
+                        if (minutesToReservation <= 15) has15MinOverlap = true;
+                        else if (minutesToReservation <= 60) has60MinOverlap = true;
                     }
                 }
+            }
+
+            if (has15MinOverlap)
+            {
+                throw new InvalidOperationException("Bàn đã chọn đang có khách hoặc bị trùng thời gian đặt.");
+            }
+            else if (has60MinOverlap && !dto.IgnoreWarning)
+            {
+                throw new MenuGoBE.Exceptions.ReservationWarningException("Bàn đã chọn đang có khách hoặc có lịch đặt trong vòng 1 tiếng tới. Bạn có chắc chắn muốn đặt không?");
             }
 
             var fatherTableId = dto.TableIds.First();

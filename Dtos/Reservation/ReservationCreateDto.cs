@@ -14,4 +14,6 @@ public class ReservationCreateDto
     public List<PreOrderItemDto> PreOrderItems { get; set; } = new List<PreOrderItemDto>();
 
     public bool ConfirmUpdateCustomer { get; set; } = false;
+
+    public bool IgnoreWarning { get; set; } = false;
 }
