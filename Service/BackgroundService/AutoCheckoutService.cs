@@ -1,6 +1,7 @@
 using MenuGoBE.Data;
 using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Services;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
 using MenuGoBE.Models;
@@ -120,6 +121,11 @@ namespace MenuGoBE.Service
                             await _repo.UpdateAsync(ws);
                             _logger.LogInformation($"Auto-Transition: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {checkOutTimeUtc}");
 
+                            // Auto-unassign tất cả bàn của nhân viên khi chuyển ca
+                            var assignmentService = scope.ServiceProvider.GetRequiredService<IOrderAssignmentService>();
+                            await assignmentService.ClearAllByAccountAsync(ws.AccountId);
+                            _logger.LogInformation($"Auto-unassigned all tables for AccountId: {ws.AccountId} (auto-transition)");
+
                             var nextShiftStartLocal = nextSchedule.WorkDate.ToDateTime(nextSchedule.Shift.StartTime);
                             var nextShiftStartUtc = DateTime.SpecifyKind(nextShiftStartLocal.AddHours(-7), DateTimeKind.Utc);
                             
@@ -147,6 +153,11 @@ namespace MenuGoBE.Service
                             
                             await _repo.UpdateAsync(ws);
                             _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
+
+                            // Auto-unassign tất cả bàn của nhân viên khi ép checkout
+                            var assignmentService2 = scope.ServiceProvider.GetRequiredService<IOrderAssignmentService>();
+                            await assignmentService2.ClearAllByAccountAsync(ws.AccountId);
+                            _logger.LogInformation($"Auto-unassigned all tables for AccountId: {ws.AccountId} (auto-forced-checkout)");
                             hasChanges = true;
                         }
                     }
