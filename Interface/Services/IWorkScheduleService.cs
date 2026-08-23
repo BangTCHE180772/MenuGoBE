@@ -13,7 +13,8 @@ namespace MenuGoBE.Interface.Services
         Task<bool> DeleteAsync(long id);
         
         // (Check-in/Check-out)
-        Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId);
+        Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId, long? workScheduleId = null);
+        Task<(bool Success, string Message, string Action)> CheckInWithLocationAsync(long accountId, long branchId, double latitude, double longitude, long? workScheduleId = null);
         Task<List<WorkScheduleViewDto>> AssignBulkAsync(WorkScheduleAssignDto dto);
         Task<List<WorkScheduleViewDto>> GetByAccountIdAsync(long accountId);
         Task<List<long>> GetActiveRoleIdsAsync(long accountId);

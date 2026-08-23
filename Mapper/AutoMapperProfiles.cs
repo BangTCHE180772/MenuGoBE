@@ -49,6 +49,8 @@ namespace MenuGoBE.Mapper
 
             //Branch
             CreateMap<Branch, BranchViewDto>()
+                .ForMember(dest => dest.NewWardId, opt => opt.MapFrom(src => src.Address != null ? src.Address.NewWardId : null))
+                .ForMember(dest => dest.OldWardId, opt => opt.MapFrom(src => src.Address != null ? src.Address.OldWardId : null))
                 .ForMember(
                     dest => dest.NewAddressName,
                     opt => opt.MapFrom(src =>
