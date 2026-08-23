@@ -16,6 +16,10 @@ public class Customer
 
     public int Point { get; set; }
 
+    public string? HashedPassword { get; set; }
+
+    public string? Email { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

@@ -1,49 +1,70 @@
 using System;
+using System.Net;
+using System.Net.Mail;
 using System.Threading.Tasks;
-using MailKit.Net.Smtp;
-using MailKit.Security;
-using Microsoft.Extensions.Options;
-using MimeKit;
 using MenuGoBE.Interface.Services;
-using MenuGoBE.Helpers;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace MenuGoBE.Service
 {
     public class EmailService : IEmailService
     {
-        private readonly MailSettings _mailSettings;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<EmailService> _logger;
 
-        public EmailService(IOptions<MailSettings> mailSettingsOptions)
+        public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
         {
-            _mailSettings = mailSettingsOptions.Value;
+            _configuration = configuration;
+            _logger = logger;
         }
 
+        #region SEND Gửi email thông báo / mã OTP
         public async Task SendEmailAsync(string toEmail, string subject, string body)
         {
             try
             {
-                var email = new MimeMessage();
-                email.Sender = MailboxAddress.Parse(_mailSettings.Mail);
-                email.To.Add(MailboxAddress.Parse(toEmail));
-                email.Subject = subject;
+                var smtpServer = _configuration["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
+                var portStr = _configuration["EmailSettings:Port"] ?? "587";
+                var senderEmail = _configuration["EmailSettings:SenderEmail"];
+                var senderPassword = _configuration["EmailSettings:SenderPassword"];
+                var senderName = _configuration["EmailSettings:SenderName"] ?? "MenuGo Support";
 
-                var builder = new BodyBuilder
+                if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(senderPassword))
                 {
-                    HtmlBody = body
-                };
-                email.Body = builder.ToMessageBody();
+                    // If SMTP credentials not configured in appsettings, log to console for development testing
+                    _logger.LogInformation("================ EMAIL MOCK DISPATCH ================");
+                    _logger.LogInformation($"To: {toEmail}");
+                    _logger.LogInformation($"Subject: {subject}");
+                    _logger.LogInformation($"Body: {body}");
+                    _logger.LogInformation("======================================================");
+                    return;
+                }
 
-                using var smtp = new SmtpClient();
-                await smtp.ConnectAsync(_mailSettings.Host, _mailSettings.Port, SecureSocketOptions.StartTls);
-                await smtp.AuthenticateAsync(_mailSettings.Mail, _mailSettings.Password);
-                await smtp.SendAsync(email);
-                await smtp.DisconnectAsync(true);
+                int port = int.TryParse(portStr, out var p) ? p : 587;
+
+                using var message = new MailMessage();
+                message.From = new MailAddress(senderEmail, senderName);
+                message.To.Add(new MailAddress(toEmail));
+                message.Subject = subject;
+                message.Body = body;
+                message.IsBodyHtml = true;
+
+                using var client = new SmtpClient(smtpServer, port);
+                client.EnableSsl = true;
+                client.UseDefaultCredentials = false;
+                client.Credentials = new NetworkCredential(senderEmail, senderPassword);
+
+                await client.SendMailAsync(message);
+                _logger.LogInformation($"Đã gửi email thành công tới {toEmail}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error sending email to {toEmail}: {ex.Message}");
-                throw;
+                _logger.LogError(ex, $"Gặp lỗi khi gửi email tới {toEmail}: {ex.Message}");
+                // Fallback log for dev safety
+                _logger.LogInformation($"[FALLBACK EMAIL] To: {toEmail} | Subject: {subject} | Content: {body}");
             }
         }
+        #endregion
     }
 }

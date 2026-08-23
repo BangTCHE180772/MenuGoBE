@@ -20,6 +20,7 @@ public class ReservationService : IReservationService
     private readonly IMapper _mapper;
     private readonly IReservationSignalService _signalService;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly INotificationRepository _notificationRepo;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -30,7 +31,8 @@ public class ReservationService : IReservationService
         ICustomerRepository customerRepo,
         IMapper mapper,
         IReservationSignalService signalService,
-        IHubContext<NotificationHub> hubContext)
+        IHubContext<NotificationHub> hubContext,
+        INotificationRepository notificationRepo)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -41,6 +43,7 @@ public class ReservationService : IReservationService
         _mapper = mapper;
         _signalService = signalService;
         _hubContext = hubContext;
+        _notificationRepo = notificationRepo;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -61,7 +64,8 @@ public class ReservationService : IReservationService
                 Note = r.Note,
                 Status = r.Status,
                 OrderId = r.OrderId,
-                BranchId = r.Order?.Table?.Area?.BranchId,
+                BranchId = r.BranchId ?? r.Order?.Table?.Area?.BranchId,
+                BranchName = r.Branch?.Name ?? r.Order?.Table?.Area?.Branch?.Name ?? "",
                 CreatedAt = r.CreatedAt
             };
 
@@ -227,12 +231,23 @@ public class ReservationService : IReservationService
             }
         }
 
+        long? branchId = dto.BranchId;
+        if (!branchId.HasValue && dto.TableIds != null && dto.TableIds.Any())
+        {
+            var firstTable = await _tableRepo.GetByIdAsync(dto.TableIds.First());
+            if (firstTable != null && firstTable.Area != null)
+            {
+                branchId = firstTable.Area.BranchId;
+            }
+        }
+
         var reservation = new Reservation
         {
             Customer = customer,
             ReservationTime = dto.ReservationTime,
             NumberOfGuests = dto.NumberOfGuests,
             Note = dto.Note,
+            BranchId = branchId,
             Status = "Pending",
             CreatedAt = DateTime.UtcNow
         };
@@ -375,6 +390,29 @@ public class ReservationService : IReservationService
             await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         }
 
+        // SignalR realtime update for both Branch & Customer
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+        if (reservation.BranchId.HasValue)
+        {
+            await _hubContext.Clients.Group($"branch_{reservation.BranchId.Value}").SendAsync("ReceiveNotification", new
+            {
+                type = "new-reservation",
+                message = $"Khách hàng {customer.Name} đã gửi một yêu cầu đặt bàn mới.",
+                reservationId = reservation.Id,
+                timestamp = DateTime.UtcNow
+            });
+        }
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "new-reservation",
+                message = "Yêu cầu đặt bàn của bạn đã được gửi thành công.",
+                reservationId = reservation.Id,
+                timestamp = DateTime.UtcNow
+            });
+        }
+
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
 
@@ -442,6 +480,19 @@ public class ReservationService : IReservationService
         await _reservationRepo.SaveChangesAsync();
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-updated",
+                message = "Bạn đã check-in nhận bàn thành công. Chúc bạn có bữa ăn ngon miệng!",
+                reservationId = reservation.Id,
+                timestamp = DateTime.UtcNow
+            });
+        }
+
         return true;
     }
 
@@ -503,8 +554,39 @@ public class ReservationService : IReservationService
         }
 
         await _reservationRepo.SaveChangesAsync();
+
+        // Create Customer Notification
+        var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+        var notif = new Notification
+        {
+            BranchId = reservation.BranchId ?? (reservation.Order?.Table?.Area?.BranchId ?? 0),
+            CustomerId = reservation.CustomerId,
+            Type = "Reservation",
+            Title = "Đặt bàn đã bị hủy",
+            Message = $"Lịch đặt bàn của bạn vào lúc {reservation.ReservationTime:dd/MM/yyyy HH:mm} tại {branchName} đã bị hủy.",
+            CreatedAt = DateTime.UtcNow,
+            IsRead = false,
+            IsImportant = false,
+            Priority = "Information",
+            ReferenceType = "Reservation",
+            ReferenceId = id
+        };
+        await _notificationRepo.CreateAsync(notif);
+        await _notificationRepo.SaveChangesAsync();
+
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-cancelled",
+                message = $"Lịch đặt bàn tại {branchName} của bạn đã bị hủy.",
+                timestamp = DateTime.UtcNow
+            });
+        }
+
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 
@@ -519,6 +601,7 @@ public class ReservationService : IReservationService
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 
@@ -558,9 +641,159 @@ public class ReservationService : IReservationService
                 await _tableRepo.SaveChangesAsync();
             }
         }
+        else
+        {
+            // Create father order for the newly assigned table
+            var fatherOrder = new Order
+            {
+                TableId = newTableId,
+                FatherId = null,
+                Status = "Reserved",
+                TotalAmount = 0,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _orderRepo.CreateAsync(fatherOrder);
+            await _orderRepo.SaveChangesAsync();
+
+            bool shouldLockImmediately = DateTime.UtcNow >= reservation.ReservationTime.AddMinutes(-30) && DateTime.UtcNow < reservation.ReservationTime.AddMinutes(30);
+            if (shouldLockImmediately)
+            {
+                newTable.Status = "Reserved";
+                await _tableRepo.UpdateAsync(newTable);
+                await _tableRepo.SaveChangesAsync();
+            }
+
+            reservation.OrderId = fatherOrder.Id;
+            reservation.Status = "Confirmed";
+            await _reservationRepo.UpdateAsync(reservation);
+
+            // Create Customer Notification
+            var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+            var notif = new Notification
+            {
+                BranchId = reservation.BranchId ?? (fatherOrder.Table?.Area?.BranchId ?? 0),
+                CustomerId = reservation.CustomerId,
+                Type = "Reservation",
+                Title = "Đặt bàn đã được xác nhận",
+                Message = $"Đặt bàn của bạn vào lúc {reservation.ReservationTime:dd/MM/yyyy HH:mm} tại {branchName} đã được xác nhận.",
+                CreatedAt = DateTime.UtcNow,
+                IsRead = false,
+                IsImportant = true,
+                Priority = "Information",
+                ReferenceType = "Reservation",
+                ReferenceId = reservationId
+            };
+            await _notificationRepo.CreateAsync(notif);
+            await _notificationRepo.SaveChangesAsync();
+
+            if (reservation.CustomerId > 0)
+            {
+                await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+                {
+                    type = "reservation-confirmed",
+                    message = $"Đặt bàn của bạn tại {branchName} đã được xác nhận.",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
+        return true;
+    }
+
+    public async Task<bool> RejectAsync(long id)
+    {
+        var reservation = await _reservationRepo.GetByIdAsync(id);
+        if (reservation == null || reservation.Status != "Pending") return false;
+
+        reservation.Status = "Rejected";
+        await _reservationRepo.UpdateAsync(reservation);
+
+        if (reservation.OrderId.HasValue)
+        {
+            var fatherOrder = await _orderRepo.GetActiveOrderByIdWithDetailsAsync(reservation.OrderId.Value)
+                              ?? await _orderRepo.GetByIdAsync(reservation.OrderId.Value);
+            
+            if (fatherOrder != null)
+            {
+                fatherOrder.Status = "Cancelled";
+                await _orderRepo.UpdateAsync(fatherOrder);
+
+                var fatherTable = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
+                if (fatherTable != null)
+                {
+                    if (fatherTable.Status == "Reserved")
+                    {
+                        fatherTable.Status = "Empty";
+                        await _tableRepo.UpdateAsync(fatherTable);
+                    }
+                }
+
+                var details = await _detailRepo.GetByOrderIdAsync(fatherOrder.Id);
+                foreach (var detail in details)
+                {
+                    await _detailRepo.UpdateStatusAsync(detail.Id, "Cancelled");
+                }
+
+                var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(fatherOrder.Id);
+                foreach (var child in childOrders)
+                {
+                    child.Status = "Cancelled";
+                    await _orderRepo.UpdateAsync(child);
+
+                    var childTable = await _tableRepo.GetByIdAsync(child.TableId);
+                    if (childTable != null)
+                    {
+                        if (childTable.Status == "Reserved")
+                        {
+                            childTable.Status = "Empty";
+                            await _tableRepo.UpdateAsync(childTable);
+                        }
+                    }
+                }
+
+                await _orderRepo.SaveChangesAsync();
+                await _tableRepo.SaveChangesAsync();
+                await _detailRepo.SaveChangesAsync();
+            }
+        }
+
+        await _reservationRepo.SaveChangesAsync();
+
+        // Create Customer Notification
+        var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+        var notif = new Notification
+        {
+            BranchId = reservation.BranchId ?? 0,
+            CustomerId = reservation.CustomerId,
+            Type = "Reservation",
+            Title = "Yêu cầu đặt bàn bị từ chối",
+            Message = $"Yêu cầu đặt bàn của bạn vào lúc {reservation.ReservationTime:dd/MM/yyyy HH:mm} tại {branchName} đã bị từ chối.",
+            CreatedAt = DateTime.UtcNow,
+            IsRead = false,
+            IsImportant = true,
+            Priority = "Warning",
+            ReferenceType = "Reservation",
+            ReferenceId = id
+        };
+        await _notificationRepo.CreateAsync(notif);
+        await _notificationRepo.SaveChangesAsync();
+
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-rejected",
+                message = $"Đặt bàn của bạn tại {branchName} đã bị từ chối.",
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        _signalService.TriggerSignal();
+        await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
+        await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         return true;
     }
 }

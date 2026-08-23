@@ -30,6 +30,9 @@ public class Branch
 
     public bool IsDeleted { get; set; } = false;
 
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;

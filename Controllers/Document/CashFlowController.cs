@@ -20,7 +20,7 @@ namespace MenuGoBE.Controllers.Document
             _cashFlowService = cashFlowService;
         }
 
-        #region GET api/cashflow?branchId={branchId} — Lấy danh sách thu chi
+        #region GET Lấy danh sách thu chi
         /// <summary>
         /// Lấy danh sách phiếu thu chi của chi nhánh (chưa bị xóa mềm), sắp xếp theo BusinessDate giảm dần.
         /// </summary>
@@ -43,7 +43,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/cashflow/{id} — Lấy chi tiết 1 phiếu
+        #region GET Lấy chi tiết 1 phiếu
         [HttpGet("{id:long}")]
         public async Task<IActionResult> GetById(long id)
         {
@@ -58,7 +58,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/cashflow — Tạo phiếu thu hoặc chi thủ công
+        #region POST Tạo phiếu thu hoặc chi thủ công
         /// <summary>
         /// Tạo phiếu thu (Inflow) hoặc phiếu chi (Outflow) thủ công.
         /// </summary>
@@ -89,7 +89,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region DELETE api/cashflow/{id}/soft-delete — Xóa mềm phiếu
+        #region DELETE Xóa mềm phiếu
         [HttpDelete("{id:long}/soft-delete")]
         public async Task<IActionResult> SoftDelete(long id, [FromQuery] string? deleteNote)
         {

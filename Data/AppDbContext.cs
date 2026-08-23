@@ -61,6 +61,11 @@ public class AppDbContext : DbContext
     // 8. Device Module
     public DbSet<Device> Devices { get; set; } = null!;
 
+    // Chat Module
+    public DbSet<Conversation> Conversations { get; set; } = null!;
+    public DbSet<Message> Messages { get; set; } = null!;
+    public DbSet<ConversationAssignmentHistory> ConversationAssignmentHistories { get; set; } = null!;
+
     // 9. Inventory Module
     public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<BInventory> BInventories { get; set; } = null!;
