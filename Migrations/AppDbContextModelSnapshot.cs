@@ -214,6 +214,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("ChainId")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("CheckinRadiusMeters")
+                        .HasColumnType("integer");
+
                     b.Property<TimeOnly>("CloseTime")
                         .HasColumnType("time without time zone");
 
@@ -222,6 +225,12 @@ namespace MenuGoBE.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1752,6 +1761,9 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("NightBonusRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("NightHours")
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("StandardHours")

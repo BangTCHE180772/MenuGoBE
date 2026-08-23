@@ -344,5 +344,28 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        /// <summary>
+        /// Điểm danh có xác minh vị trí GPS. Được gọi từ thiết bị di động / trình duyệt của nhân viên.
+        /// </summary>
+        [HttpPost("check-in-with-location")]
+        public async Task<IActionResult> CheckInWithLocation([FromBody] CheckInWithLocationDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var (success, msg, action) = await _service.CheckInWithLocationAsync(
+                    currentUserId.Value, dto.BranchId, dto.Latitude, dto.Longitude, dto.WorkScheduleId);
+
+                return Ok(new { success, message = msg, action });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }
