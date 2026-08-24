@@ -411,6 +411,13 @@ namespace MenuGoBE.Service
                 else
                 {
                     // Check-in ca này -> Kiểm tra quy tắc 30 phút
+                    if (targetWs.Shift == null && targetWs.ShiftId > 0)
+                    {
+                        targetWs.Shift = await _shiftRepo.GetByIdAsync(targetWs.ShiftId);
+                    }
+
+                    var shiftName = targetWs.Shift?.Name ?? "ca làm";
+
                     if (targetWs.Shift != null)
                     {
                         var shiftStartLocal = targetWs.WorkDate.ToDateTime(targetWs.Shift.StartTime);
@@ -418,7 +425,6 @@ namespace MenuGoBE.Service
 
                         if (localNow < earliestCheckIn)
                         {
-                            var shiftName = targetWs.Shift.Name;
                             var startTimeStr = targetWs.Shift.StartTime.ToString("HH:mm");
                             var earliestStr = earliestCheckIn.ToString("HH:mm");
                             return (
@@ -434,7 +440,6 @@ namespace MenuGoBE.Service
                     await _repo.UpdateAsync(targetWs);
                     await _repo.SaveChangesAsync();
 
-                    var shiftName = targetWs.Shift?.Name ?? "ca làm";
                     return (true, $"Check-in ca '{shiftName}' thành công!", "checkin");
                 }
             }
