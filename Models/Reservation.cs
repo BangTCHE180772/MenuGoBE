@@ -32,5 +32,9 @@ public class Reservation
     [ForeignKey("OrderId")]
     public Order? Order { get; set; }
 
+    public int TableCount { get; set; }
+
+    public ICollection<ReservationDetail> ReservationDetails { get; set; } = new List<ReservationDetail>();
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
