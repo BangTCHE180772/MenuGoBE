@@ -102,12 +102,32 @@ public class ReservationController : ControllerBase
         }
     }
 
-    [HttpPut("{id}/check-in")]
+    [HttpPost("{id}/assign-tables")]
+    public async Task<IActionResult> AssignTables(long id, [FromBody] List<long> tableIds)
+    {
+        try
+        {
+            await _service.AssignTablesToReservationAsync(id, tableIds);
+            return Ok(new { message = "Đã xếp bàn thành công." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/check-in")]
     public async Task<IActionResult> CheckIn(long id)
     {
-        var result = await _service.CheckInAsync(id);
-        if (!result) return BadRequest(new { message = "Không thể check-in. Bàn có thể đang có khách ngồi hoặc trạng thái không hợp lệ." });
-        return Ok(new { message = "Khách đã đến. Bàn đã được mở." });
+        try
+        {
+            var result = await _service.CheckInReservationAsync(id);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id}/cancel")]
