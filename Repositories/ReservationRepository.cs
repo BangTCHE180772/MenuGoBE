@@ -71,12 +71,14 @@ public class ReservationRepository : IReservationRepository
     public async Task<Reservation?> GetUpcomingByTableIdAsync(long tableId)
     {
         var now = DateTime.UtcNow;
+        var lateLimit = now.AddMinutes(-60); // Allow late check-in
         return await _context.Reservations
             .Include(r => r.Customer)
             .Include(r => r.Order)
-            .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.ReservationTime >= now && r.OrderId.HasValue)
+            .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.ReservationTime >= lateLimit && r.OrderId.HasValue)
             .Where(r => r.Order!.TableId == tableId || _context.Orders.Any(child => child.FatherId == r.OrderId && child.TableId == tableId))
-            .OrderBy(r => r.ReservationTime)
+            .OrderBy(r => r.ReservationTime) // get the earliest reservation first
+
             .FirstOrDefaultAsync();
     }
 
