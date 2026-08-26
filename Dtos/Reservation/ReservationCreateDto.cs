@@ -10,6 +10,7 @@ public class ReservationCreateDto
     public long? BranchId { get; set; }
 
     public List<long> TableIds { get; set; } = new List<long>();
+    public int TableCount { get; set; }
 
     public List<PreOrderItemDto> PreOrderItems { get; set; } = new List<PreOrderItemDto>();
 
