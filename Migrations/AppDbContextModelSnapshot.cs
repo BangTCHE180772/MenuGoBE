@@ -1716,6 +1716,9 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("TableCount")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
@@ -1725,6 +1728,36 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("OrderId");
 
                     b.ToTable("Reservations");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ReservationDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("ReservationId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ReservationId");
+
+                    b.ToTable("ReservationDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Role", b =>
@@ -2743,6 +2776,25 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Order");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.ReservationDetail", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Reservation", "Reservation")
+                        .WithMany("ReservationDetails")
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Reservation");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.SalaryDetail", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Account", "Account")
@@ -3047,6 +3099,11 @@ namespace MenuGoBE.Migrations
                     b.Navigation("UnitConversions");
 
                     b.Navigation("UsedInRecipeItems");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
+                {
+                    b.Navigation("ReservationDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Role", b =>
