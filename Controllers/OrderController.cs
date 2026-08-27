@@ -615,6 +615,14 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        // GET /api/Order/cancelled-history?branchId=1&fromDate=2026-08-01&toDate=2026-08-31
+        [HttpGet("cancelled-history")]
+        public async Task<IActionResult> GetCancelledHistory([FromQuery] long branchId, [FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
+        {
+            var result = await _detailService.GetCancelledHistoryAsync(branchId, fromDate, toDate);
+            return Ok(result);
+        }
+
         [HttpPut("details/{id}/cooking-status")]
         public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
         {
