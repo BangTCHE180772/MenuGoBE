@@ -22,10 +22,19 @@ public class Reservation
 
     public string Status { get; set; } = string.Empty;
 
+    public long? BranchId { get; set; }
+
+    [ForeignKey("BranchId")]
+    public Branch? Branch { get; set; }
+
     public long? OrderId { get; set; }
 
     [ForeignKey("OrderId")]
     public Order? Order { get; set; }
+
+    public int TableCount { get; set; }
+
+    public ICollection<ReservationDetail> ReservationDetails { get; set; } = new List<ReservationDetail>();
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

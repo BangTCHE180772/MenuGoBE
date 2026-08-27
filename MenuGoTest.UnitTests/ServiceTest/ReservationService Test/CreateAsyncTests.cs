@@ -12,12 +12,12 @@ public class CreateAsyncTests : ReservationServiceTestBase
         var dto = new ReservationCreateDto
         {
             CustomerName = "Test", CustomerPhone = "0987654321",
-            ReservationTime = DateTime.UtcNow.AddMinutes(5), // < 10 phút
+            ReservationTime = DateTime.UtcNow.AddMinutes(-5), // < hiện tại
             NumberOfGuests = 4
         };
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(dto));
-        Assert.Contains("ít nhất 10 phút", ex.Message);
+        Assert.Contains("sau thời gian hiện tại", ex.Message);
     }
 
     [Fact]
@@ -83,6 +83,7 @@ public class CreateAsyncTests : ReservationServiceTestBase
             new Reservation
             {
                 Id = 99, Status = "Pending", OrderId = 50,
+                ReservationTime = DateTime.UtcNow.AddHours(2), // match the dto time
                 Order = new Order { Id = 50, TableId = 1, Status = "Reserved" }
             }
         };

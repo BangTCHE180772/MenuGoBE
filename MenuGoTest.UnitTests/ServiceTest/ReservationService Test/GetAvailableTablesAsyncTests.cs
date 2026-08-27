@@ -16,7 +16,7 @@ public class GetAvailableTablesAsyncTests : ReservationServiceTestBase
         {
             new Table { Id = 1, Name = "Bàn 1", Status = "Empty", AreaId = 1, Area = new Area { Id = 1, BranchId = branchId } },
             new Table { Id = 2, Name = "Bàn 2", Status = "Empty", AreaId = 1, Area = new Area { Id = 1, BranchId = branchId } },
-            new Table { Id = 3, Name = "Bàn 3", Status = "Occupied", AreaId = 1, Area = new Area { Id = 1, BranchId = branchId } } // Non-empty, should be excluded
+            new Table { Id = 3, Name = "Bàn 3", Status = "Maintenance", AreaId = 1, Area = new Area { Id = 1, BranchId = branchId } } // Non-empty, should be excluded
         };
 
         var overlapping = new List<Reservation>

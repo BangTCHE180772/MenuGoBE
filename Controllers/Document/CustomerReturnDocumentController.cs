@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers.Document
             _documentService = documentService;
         }
 
-        #region GET api/customerreturndocument (Lấy danh sách phiếu Khách trả hàng DTO)
+        #region GET Lấy danh sách phiếu Khách trả hàng DTO
         /// <summary>
         /// Lấy danh sách phiếu Khách trả hàng thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
@@ -43,7 +43,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/customerreturndocument/{id} (Lấy chi tiết phiếu Khách trả hàng DTO)
+        #region GET Lấy chi tiết phiếu Khách trả hàng DTO
         /// <summary>
         /// Lấy chi tiết 1 phiếu Khách trả hàng theo ID (Trả về DocumentResponseDto).
         /// </summary>
@@ -65,7 +65,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/customerreturndocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        #region POST Tạo & Chốt trực tiếp theo DTO
         /// <summary>
         /// Tạo và Chốt trực tiếp phiếu Khách trả hàng sang Completed sử dụng CustomerReturnDocumentCreateDto.
         /// </summary>

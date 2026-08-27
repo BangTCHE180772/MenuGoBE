@@ -44,8 +44,13 @@ namespace MenuGoBE.Models
         [MaxLength(500)]
         public string? RedirectUrl { get; set; }
 
+        public long? CustomerId { get; set; }
+
         // Navigation
         [ForeignKey("BranchId")]
         public Branch Branch { get; set; } = null!;
+
+        [ForeignKey("CustomerId")]
+        public Customer? Customer { get; set; }
     }
 }
