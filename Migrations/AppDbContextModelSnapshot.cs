@@ -1763,8 +1763,14 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("NightBonusRate")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<TimeOnly?>("NightEndTime")
+                        .HasColumnType("time without time zone");
+
                     b.Property<decimal>("NightHours")
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<TimeOnly?>("NightStartTime")
+                        .HasColumnType("time without time zone");
 
                     b.Property<decimal>("StandardHours")
                         .HasColumnType("decimal(18,4)");
