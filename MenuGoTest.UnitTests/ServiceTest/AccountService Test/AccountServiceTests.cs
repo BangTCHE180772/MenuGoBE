@@ -446,6 +446,58 @@ namespace MenuGoTest.UnitTests.ServiceTest.AccountServiceTest
 
         #endregion
 
+        #region ChangePasswordAsync
+
+        [Fact]
+        public async Task ChangePasswordAsync_WhenAccountNotFound_ShouldThrowInvalidOperationException()
+        {
+            // Arrange
+            long accountId = 999;
+            _repoMock.Setup(r => r.GetByIdAsync(accountId)).ReturnsAsync((Account?)null);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.ChangePasswordAsync(accountId, "old", "new"));
+            Assert.Equal("Không tìm thấy tài khoản.", ex.Message);
+            _repoMock.Verify(r => r.UpdateAsync(It.IsAny<Account>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ChangePasswordAsync_WhenCurrentPasswordWrong_ShouldThrowInvalidOperationException()
+        {
+            // Arrange
+            long accountId = 1;
+            var account = new Account { Id = accountId, HashedPassword = MenuGoBE.Helpers.HashHelper.HashPassword("CorrectPass123") };
+            _repoMock.Setup(r => r.GetByIdAsync(accountId)).ReturnsAsync(account);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.ChangePasswordAsync(accountId, "WrongPass", "NewPass123"));
+            Assert.Equal("Mật khẩu hiện tại không đúng.", ex.Message);
+            _repoMock.Verify(r => r.UpdateAsync(It.IsAny<Account>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ChangePasswordAsync_WhenCurrentPasswordCorrect_ShouldHashAndSaveNewPassword()
+        {
+            // Arrange
+            long accountId = 1;
+            var oldHash = MenuGoBE.Helpers.HashHelper.HashPassword("CorrectPass123");
+            var account = new Account { Id = accountId, HashedPassword = oldHash };
+            _repoMock.Setup(r => r.GetByIdAsync(accountId)).ReturnsAsync(account);
+            _repoMock.Setup(r => r.UpdateAsync(It.IsAny<Account>())).Returns(Task.CompletedTask);
+            _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
+
+            // Act
+            await _service.ChangePasswordAsync(accountId, "CorrectPass123", "NewPass456");
+
+            // Assert
+            Assert.NotEqual(oldHash, account.HashedPassword);
+            Assert.True(MenuGoBE.Helpers.HashHelper.VerifyPassword("NewPass456", account.HashedPassword));
+            _repoMock.Verify(r => r.UpdateAsync(account), Times.Once);
+            _repoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
+        }
+
+        #endregion
+
         #region GetAccountPermissionsAsync
 
         [Fact]
