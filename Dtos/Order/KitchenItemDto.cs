@@ -9,6 +9,8 @@ namespace MenuGoBE.Dtos.Order
         public long ProductId { get; set; }
         public string ProductName { get; set; } = string.Empty;
         public string? ProductImage { get; set; }
+        public long? KitchenStationId { get; set; }
+        public string? KitchenStationName { get; set; }
         public int Quantity { get; set; }
         public decimal Price { get; set; }
         public string Note { get; set; } = string.Empty;

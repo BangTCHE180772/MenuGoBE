@@ -93,6 +93,9 @@ namespace MenuGoBE.Repositories
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
                         .ThenInclude(p => p.Image)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                        .ThenInclude(p => p.KitchenStation)
                 .Include(o => o.Table)
                 .ToListAsync();
         }

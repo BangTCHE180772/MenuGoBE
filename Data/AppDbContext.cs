@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<Menu> Menus { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
     public DbSet<MenuProduct> MenuProducts { get; set; } = null!;
+    public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
 
     // 4. Units & Conversions Module
     public DbSet<Unit> Units { get; set; } = null!;
@@ -123,6 +124,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<KitchenStation>()
+            .HasIndex(k => new { k.BranchId, k.Name })
             .IsUnique();
 
         modelBuilder.Entity<Product>()

@@ -745,6 +745,8 @@ namespace MenuGoBE.Service
                         ProductId = od.ProductId,
                         ProductName = od.Product?.Name ?? "Mon ăn",
                         ProductImage = od.Product?.Image?.ImageLink,
+                        KitchenStationId = od.Product?.KitchenStationId,
+                        KitchenStationName = od.Product?.KitchenStation?.Name,
                         Quantity = od.Quantity,
                         Price = od.Price,
                         Note = od.Note ?? string.Empty,
