@@ -16,6 +16,7 @@ namespace MenuGoBE.Interface.Services
         Task<bool> DeleteAsync(long id);
         Task<bool> UpdateStatusAsync(long id, PayrollStatus status, DateTime? paymentDate = null);
         Task<bool> LockPayrollAsync(long id, long userId);
+        Task<bool> UnlockPayrollAsync(long id, long userId);
         Task<bool> ApprovePayrollAsync(long id, long userId);
         Task<PayrollViewDto> GenerateEmployeePayrollAsync(PayrollGenerateDto dto);
         Task<List<PayrollViewDto>> GenerateBatchPayrollAsync(PayrollBatchGenerateDto dto, bool isAdmin, bool isManager, List<long> managerBranchIds);
