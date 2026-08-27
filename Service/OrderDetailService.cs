@@ -1,9 +1,11 @@
 using AutoMapper;
+using MenuGoBE.Dtos.Leftover;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
@@ -23,10 +25,11 @@ namespace MenuGoBE.Service
         private readonly IRecipesDetailedRepository _recipesRepo;
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly IDocumentService _documentService;
+        private readonly ILeftoverRecordService _leftoverRecordService;
 
         public OrderDetailService(
-            IOrderDetailRepository detailRepo, 
-            IOrderRepository orderRepo, 
+            IOrderDetailRepository detailRepo,
+            IOrderRepository orderRepo,
             IMapper mapper,
             ITableRepository tableRepo,
             IProductRepository productRepo,
@@ -35,7 +38,8 @@ namespace MenuGoBE.Service
             IBInventoryRepository bInventoryRepo,
             IRecipesDetailedRepository recipesRepo,
             IHubContext<NotificationHub> hubContext,
-            IDocumentService documentService)
+            IDocumentService documentService,
+            ILeftoverRecordService leftoverRecordService)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
@@ -48,6 +52,7 @@ namespace MenuGoBE.Service
             _recipesRepo = recipesRepo;
             _hubContext = hubContext;
             _documentService = documentService;
+            _leftoverRecordService = leftoverRecordService;
         }
 
 
@@ -676,27 +681,32 @@ namespace MenuGoBE.Service
             var entity = await _detailRepo.GetByIdAsync(orderDetailId);
             if (entity == null) return false;
 
-            if (entity.CookingStatus != "Waiting" || entity.Status == "Cancelled")
+            // Cho phép huỷ khi món còn đang chờ (Waiting) HOẶC đã làm xong (Ready) —
+            // trường hợp Ready là luồng "bếp làm chậm, khách đi về không nhận món nữa".
+            bool wasWaiting = entity.CookingStatus == "Waiting";
+            bool wasReady = entity.CookingStatus == "Ready";
+
+            if ((!wasWaiting && !wasReady) || entity.Status == "Cancelled")
             {
                 return false;
             }
 
             string oldStatus = entity.Status;
+            var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
 
             var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
             if (result)
             {
                 await _detailRepo.SaveChangesAsync();
-                
+
                 var order = await _orderRepo.GetByIdAsync(entity.OrderId);
                 if (order != null)
                 {
                     await RecalculateTotalAmountAsync(order);
 
-                    // Cộng lại kho nếu đã trừ khi Confirmed (Regular/Manufactured)
                     if (oldStatus == "Confirmed")
                     {
-                        var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+                        // Cộng lại kho nếu đã trừ khi Confirmed (Regular/Manufactured)
                         if (productType == "Regular" || productType == "Manufactured")
                         {
                             var table = await _tableRepo.GetByIdAsync(order.TableId);
@@ -716,10 +726,59 @@ namespace MenuGoBE.Service
                                 }
                             }
                         }
+                        // Processed + đã làm xong (Ready) mà vẫn bị huỷ = lỗi của bếp
+                        // (bếp làm chậm, khách đi về không nhận món nữa). Không cộng trả
+                        // kho nguyên liệu (đã dùng), chỉ ghi nhận vào "Món thừa" (Extra)
+                        // để lên thống kê admin xem bếp làm chậm bao nhiêu lần.
+                        else if (productType == "Processed" && wasReady)
+                        {
+                            var table = await _tableRepo.GetByIdAsync(order.TableId);
+                            if (table != null)
+                            {
+                                var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                                if (area != null)
+                                {
+                                    try
+                                    {
+                                        await _leftoverRecordService.CreateAsync(new LeftoverRecordCreateDto
+                                        {
+                                            BranchId = area.BranchId,
+                                            Type = LeftoverType.Extra,
+                                            ProductId = entity.ProductId,
+                                            Quantity = entity.Quantity,
+                                            Reason = "Bếp làm chậm, khách không nhận món đã hoàn thành",
+                                        }, null);
+                                    }
+                                    catch
+                                    {
+                                        // Không chặn việc huỷ món nếu ghi nhận thống kê thất bại
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
             return result;
+        }
+
+        public async Task<List<CancelledOrderDetailDto>> GetCancelledHistoryAsync(long branchId, DateTime? fromDate, DateTime? toDate)
+        {
+            var details = await _detailRepo.GetCancelledByBranchAsync(branchId, fromDate, toDate);
+
+            return details.Select(od => new CancelledOrderDetailDto
+            {
+                OrderDetailId = od.Id,
+                OrderId = od.OrderId,
+                ProductId = od.ProductId,
+                ProductName = od.Product?.Name ?? string.Empty,
+                TableName = od.Order?.Table?.Name,
+                Quantity = od.Quantity,
+                Price = od.Price,
+                CookingStatusAtCancel = od.CookingStatus,
+                Category = od.CookingStatus == "Ready" ? "Completed" : "Pending",
+                CreatedAt = od.CreatedAt,
+            }).ToList();
         }
 
         public async Task<List<KitchenItemDto>> GetKitchenItemsAsync(long? branchId = null)
