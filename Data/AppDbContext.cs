@@ -44,6 +44,7 @@ public class AppDbContext : DbContext
     public DbSet<Contract> Contracts { get; set; } = null!;
     public DbSet<Shift> Shifts { get; set; } = null!;
     public DbSet<WorkSchedule> WorkSchedules { get; set; } = null!;
+    public DbSet<ShiftChangeRequest> ShiftChangeRequests { get; set; } = null!;
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
