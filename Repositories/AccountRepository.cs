@@ -51,6 +51,10 @@ namespace MenuGoBE.Repositories
         public async Task<Account?> GetAccountByEmailAsync(string email)
         {
             return await _context.Accounts
+                .Include(a => a.Contracts)
+                    .ThenInclude(c => c.Role)
+                .Include(a => a.TempRoles)
+                    .ThenInclude(tr => tr.Role)
                 .FirstOrDefaultAsync(a => a.Email == email && a.IsActive);
         }
 

@@ -32,5 +32,13 @@ namespace MenuGoBE.Dtos.Branch
         public string Status { get; set; } = "Hoạt động";
 
         public bool IsDeleted { get; set; } = false;
+
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
+
+        public long? NewWardId { get; set; }
+
+        public long? OldWardId { get; set; }
     }
 }

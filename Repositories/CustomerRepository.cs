@@ -25,6 +25,11 @@ namespace MenuGoBE.Repositories
             return await _context.Customers.FirstOrDefaultAsync(c => c.Phone == phone);
         }
 
+        public async Task<Customer?> GetByEmailAsync(string email)
+        {
+            return await _context.Customers.FirstOrDefaultAsync(c => c.Email == email);
+        }
+
         public async Task CreateAsync(Customer customer)
         {
             await _context.Customers.AddAsync(customer);

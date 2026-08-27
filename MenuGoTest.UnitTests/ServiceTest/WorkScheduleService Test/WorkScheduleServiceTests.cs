@@ -36,7 +36,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
             _mapper = config.CreateMapper();
 
             var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>();
-            var notificationRepoMock = new Mock<MenuGoBE.Interface.Repository.INotificationRepository>();
+            var notificationRepoMock = new Mock<INotificationRepository>();
 
             _service = new WorkScheduleService(
                 _repoMock.Object,

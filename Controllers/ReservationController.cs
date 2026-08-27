@@ -25,8 +25,8 @@ public class ReservationController : ControllerBase
         if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
         {
             bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
-                                  User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
-                                  User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                                User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
             
             if (!isAdminOrOwner)
             {
@@ -73,6 +73,10 @@ public class ReservationController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (MenuGoBE.Exceptions.ReservationWarningException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message, isWarning = true });
+        }
     }
 
     [HttpPut("{id}")]
@@ -92,14 +96,38 @@ public class ReservationController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (MenuGoBE.Exceptions.ReservationWarningException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message, isWarning = true });
+        }
     }
 
-    [HttpPut("{id}/check-in")]
+    [HttpPost("{id}/assign-tables")]
+    public async Task<IActionResult> AssignTables(long id, [FromBody] List<long> tableIds)
+    {
+        try
+        {
+            await _service.AssignTablesToReservationAsync(id, tableIds);
+            return Ok(new { message = "Đã xếp bàn thành công." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/check-in")]
     public async Task<IActionResult> CheckIn(long id)
     {
-        var result = await _service.CheckInAsync(id);
-        if (!result) return BadRequest(new { message = "Không thể check-in. Bàn có thể đang có khách ngồi hoặc trạng thái không hợp lệ." });
-        return Ok(new { message = "Khách đã đến. Bàn đã được mở." });
+        try
+        {
+            var result = await _service.CheckInReservationAsync(id);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id}/cancel")]
@@ -108,6 +136,14 @@ public class ReservationController : ControllerBase
         var result = await _service.CancelAsync(id);
         if (!result) return BadRequest(new { message = "Không thể hủy đơn đặt bàn này." });
         return Ok(new { message = "Đã hủy đơn đặt bàn thành công." });
+    }
+
+    [HttpPut("{id}/reject")]
+    public async Task<IActionResult> Reject(long id)
+    {
+        var result = await _service.RejectAsync(id);
+        if (!result) return BadRequest(new { message = "Không thể từ chối đơn đặt bàn này." });
+        return Ok(new { message = "Đã từ chối đơn đặt bàn thành công." });
     }
 
     [HttpPut("{id}/extend")]

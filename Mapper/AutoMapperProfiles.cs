@@ -21,6 +21,8 @@ using MenuGoBE.Dtos.Payroll;
 using MenuGoBE.Dtos.SalaryDetail;
 using MenuGoBE.Dtos.Document;
 using MenuGoBE.Models.Enums;
+using MenuGoBE.Dtos.Chat;
+using MenuGoBE.Dtos.Auth;
 
 namespace MenuGoBE.Mapper
 {
@@ -45,7 +47,10 @@ namespace MenuGoBE.Mapper
                             : "Chưa có địa chỉ cũ"
                     ));
             CreateMap<ChainCreateDto, Chain>();
-            CreateMap<ChainUpdateDto, Chain>();
+            CreateMap<ChainUpdateDto, Chain>()
+                .ForMember(dest => dest.Address, opt => opt.Ignore())
+                .ForMember(dest => dest.AddressId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore());
 
             //Branch
             CreateMap<Branch, BranchViewDto>()
@@ -64,6 +69,12 @@ namespace MenuGoBE.Mapper
                             : "Chưa có địa chỉ cũ"
                     ))
                 .ForMember(
+                    dest => dest.NewWardId,
+                    opt => opt.MapFrom(src => src.Address != null ? src.Address.NewWardId : null))
+                .ForMember(
+                    dest => dest.OldWardId,
+                    opt => opt.MapFrom(src => src.Address != null ? src.Address.OldWardId : null))
+                .ForMember(
                     dest => dest.ManagerName,
                     opt => opt.MapFrom(src =>
                         src.Contracts
@@ -72,7 +83,13 @@ namespace MenuGoBE.Mapper
                             .FirstOrDefault() ?? "Chưa phân công"
                     ));
             CreateMap<BranchCreateDto, Branch>();
-            CreateMap<BranchUpdateDto, Branch>();
+            CreateMap<BranchUpdateDto, Branch>()
+                .ForMember(dest => dest.Address, opt => opt.Ignore())
+                .ForMember(dest => dest.AddressId, opt => opt.Ignore())
+                .ForMember(dest => dest.ChainId, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.Status, opt => opt.Ignore())
+                .ForMember(dest => dest.IsDeleted, opt => opt.Ignore());
 
             //Table
             CreateMap<Table, TableViewDto>()
@@ -290,6 +307,23 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.SourceId, opt => opt.MapFrom(src => src.DocumentId))
                 .ForMember(dest => dest.SourceCode, opt => opt.MapFrom(src => src.Document != null ? src.Document.Code : null))
                 .ForMember(dest => dest.OrderId, opt => opt.MapFrom(src => src.Document != null ? src.Document.OrderId : null));
+
+            // Customer Auth & Portal Mappings
+            CreateMap<Customer, CustomerProfileDto>();
+
+            // Chat Mappings
+            CreateMap<Conversation, ConversationViewDto>()
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : ""))
+                .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : ""))
+                .ForMember(dest => dest.AssignedEmployeeName, opt => opt.MapFrom(src => src.AssignedEmployee != null ? src.AssignedEmployee.Name : null));
+
+            CreateMap<Message, MessageViewDto>()
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
+                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => src.Employee != null ? src.Employee.Name : null));
+
+            CreateMap<ConversationAssignmentHistory, ConversationAssignmentHistoryViewDto>()
+                .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => src.Employee != null ? src.Employee.Name : null))
+                .ForMember(dest => dest.CreatorName, opt => opt.MapFrom(src => src.Creator != null ? src.Creator.Name : null));
         }
     }
 }

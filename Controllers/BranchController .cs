@@ -140,6 +140,7 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region DELETE Xóa mềm chi nhánh
         [HttpDelete("{id:long}")]
         public async Task<IActionResult> Delete(long id)
         {
@@ -156,5 +157,39 @@ namespace MenuGoBE.Controllers
                 message = "Xóa Branch thành công"
             });
         }
+        #endregion
+
+        #region DELETE Xóa vĩnh viễn (Hard Delete / Purge) sạch sẽ một chi nhánh và toàn bộ dữ liệu liên quan (Chỉ dành cho BE)
+        [HttpDelete("hard-delete/{id:long}")]
+        public async Task<IActionResult> HardDelete(long id)
+        {
+            try
+            {
+                var success = await _service.HardDeleteBranchAsync(id);
+
+                if (!success)
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = $"Không tìm thấy Branch có Id = {id} để xóa vĩnh viễn."
+                    });
+
+                return Ok(new
+                {
+                    success = true,
+                    message = $"Đã xóa sạch sẽ toàn bộ dữ liệu của chi nhánh Id = {id}."
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Đã xảy ra lỗi khi xóa sạch chi nhánh.",
+                    error = ex.Message
+                });
+            }
+        }
+        #endregion
     }
 }

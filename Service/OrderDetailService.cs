@@ -270,6 +270,10 @@ namespace MenuGoBE.Service
                                 entity.CookingStatus = "Waiting";
                         }
 
+                        entity.CreatedAt = DateTime.UtcNow;
+                        await _detailRepo.CreateAsync(entity);
+                        createdEntities.Add(entity);
+
                         if (entity.Status == "Confirmed")
                         {
                             if (productType == "Regular" || productType == "Manufactured")
@@ -279,26 +283,24 @@ namespace MenuGoBE.Service
                                     var area = await _areaRepo.GetByIdAsync(table.AreaId);
                                     if (area != null)
                                     {
-                                        var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                                        if (binv != null && binv.IsManageQuantity)
+                                        try
                                         {
-                                            if (binv.Quantity < entity.Quantity)
+                                            var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                            if (product != null)
                                             {
-                                                await SendStockAlertAsync(branchId, entity.ProductId, "Sản phẩm đã hết hàng trong kho.");
-                                                throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
+                                                var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.Sale, order.CreatedBy ?? 1);
+                                                await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, entity.Quantity, entity.Id, order.CreatedBy ?? 1);
                                             }
-                                            binv.Quantity -= entity.Quantity;
-                                            await _bInventoryRepo.UpdateAsync(binv);
-                                            await _bInventoryRepo.SaveChangesAsync();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            await SendStockAlertAsync(branchId, entity.ProductId, ex.Message);
+                                            throw new InvalidOperationException(ex.Message);
                                         }
                                     }
                                 }
                             }
                         }
-
-                        entity.CreatedAt = DateTime.UtcNow;
-                        await _detailRepo.CreateAsync(entity);
-                        createdEntities.Add(entity);
                     }
                     
                     await _detailRepo.SaveChangesAsync();
@@ -458,6 +460,9 @@ namespace MenuGoBE.Service
         {
             var detail = await _detailRepo.GetByIdAsync(orderDetailId);
             if (detail == null) return false;
+
+            // Ngăn chặn trừ kho nhiều lần do click đúp (Race Condition)
+            if (detail.Status == "Confirmed") return true;
 
             if (finalQuantity.HasValue && finalQuantity.Value > 0)
             {
