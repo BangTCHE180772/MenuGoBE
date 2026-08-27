@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers
         [HttpGet]
         public async Task<IActionResult> GetNotifications([FromQuery] NotificationQueryDto query)
         {
-            if (!TryGetUserId(out _))
+            if (!TryGetUserId(out long userId))
             {
                 return Unauthorized(new { message = "Không thể trích xuất người dùng." });
             }
@@ -67,14 +67,14 @@ namespace MenuGoBE.Controllers
             }
 
             var userRole = User.FindFirstValue(ClaimTypes.Role);
-            var result = await _service.GetPagedNotificationsAsync(targetBranchIds, query, userRole);
+            var result = await _service.GetPagedNotificationsAsync(targetBranchIds, query, userRole, userId);
             return Ok(result);
         }
 
         [HttpGet("recent")]
         public async Task<IActionResult> GetRecentNotifications([FromQuery] long? branchId)
         {
-            if (!TryGetUserId(out _))
+            if (!TryGetUserId(out long userId))
             {
                 return Unauthorized(new { message = "Không thể trích xuất người dùng." });
             }
@@ -98,14 +98,14 @@ namespace MenuGoBE.Controllers
                 : allowedBranchIds;
 
             var userRole = User.FindFirstValue(ClaimTypes.Role);
-            var result = await _service.GetRecentNotificationsAsync(targetBranchIds, userRole);
+            var result = await _service.GetRecentNotificationsAsync(targetBranchIds, userRole, userId);
             return Ok(result);
         }
 
         [HttpGet("unread-count")]
         public async Task<IActionResult> GetUnreadCount([FromQuery] long? branchId)
         {
-            if (!TryGetUserId(out _))
+            if (!TryGetUserId(out long userId))
             {
                 return Unauthorized(new { message = "Không thể trích xuất người dùng." });
             }
@@ -129,7 +129,7 @@ namespace MenuGoBE.Controllers
                 : allowedBranchIds;
 
             var userRole = User.FindFirstValue(ClaimTypes.Role);
-            var count = await _service.GetUnreadCountAsync(targetBranchIds, userRole);
+            var count = await _service.GetUnreadCountAsync(targetBranchIds, userRole, userId);
             return Ok(new { count });
         }
 

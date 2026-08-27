@@ -15,9 +15,10 @@ namespace MenuGoBE.Interface.Services
 
         Task<bool> ConfirmAsync(long orderDetailId, int? finalQuantity = null);
         Task<bool> RejectAsync(long orderDetailId, string reason);
-        Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus);
+        Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus, int? quantity = null);
+        Task<bool> BatchUpdateCookingStatusAsync(long productId, string cookingStatus, long[] branchIds);
         Task<bool> CancelOrderDetailAsync(long orderDetailId);
-        Task<List<KitchenItemDto>> GetKitchenItemsAsync();
+        Task<List<KitchenItemDto>> GetKitchenItemsAsync(long? branchId = null);
 
         Task<bool> RequestReturnItemAsync(ReturnItemRequestDto dto, long confirmedByUserId);
         Task<bool> ConfirmReturnItemAsync(long orderDetailId, long confirmedByUserId);

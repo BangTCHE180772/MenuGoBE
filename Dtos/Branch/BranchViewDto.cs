@@ -37,9 +37,14 @@ namespace MenuGoBE.Dtos.Branch
 
         public bool IsDeleted { get; set; } = false;
 
-        // GPS
         public double? Latitude { get; set; }
+
         public double? Longitude { get; set; }
-        public int CheckinRadiusMeters { get; set; } = 100;
+
+        public long? NewWardId { get; set; }
+
+        public long? OldWardId { get; set; }
+                public int CheckinRadiusMeters { get; set; } = 100;
+
     }
 }

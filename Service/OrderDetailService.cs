@@ -270,6 +270,10 @@ namespace MenuGoBE.Service
                                 entity.CookingStatus = "Waiting";
                         }
 
+                        entity.CreatedAt = DateTime.UtcNow;
+                        await _detailRepo.CreateAsync(entity);
+                        createdEntities.Add(entity);
+
                         if (entity.Status == "Confirmed")
                         {
                             if (productType == "Regular" || productType == "Manufactured")
@@ -279,26 +283,24 @@ namespace MenuGoBE.Service
                                     var area = await _areaRepo.GetByIdAsync(table.AreaId);
                                     if (area != null)
                                     {
-                                        var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                                        if (binv != null && binv.IsManageQuantity)
+                                        try
                                         {
-                                            if (binv.Quantity < entity.Quantity)
+                                            var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                            if (product != null)
                                             {
-                                                await SendStockAlertAsync(branchId, entity.ProductId, "Sản phẩm đã hết hàng trong kho.");
-                                                throw new InvalidOperationException("Sản phẩm đã hết hàng trong kho.");
+                                                var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.Sale, order.CreatedBy ?? 1);
+                                                await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, entity.Quantity, entity.Id, order.CreatedBy ?? 1);
                                             }
-                                            binv.Quantity -= entity.Quantity;
-                                            await _bInventoryRepo.UpdateAsync(binv);
-                                            await _bInventoryRepo.SaveChangesAsync();
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            await SendStockAlertAsync(branchId, entity.ProductId, ex.Message);
+                                            throw new InvalidOperationException(ex.Message);
                                         }
                                     }
                                 }
                             }
                         }
-
-                        entity.CreatedAt = DateTime.UtcNow;
-                        await _detailRepo.CreateAsync(entity);
-                        createdEntities.Add(entity);
                     }
                     
                     await _detailRepo.SaveChangesAsync();
@@ -459,6 +461,9 @@ namespace MenuGoBE.Service
             var detail = await _detailRepo.GetByIdAsync(orderDetailId);
             if (detail == null) return false;
 
+            // Ngăn chặn trừ kho nhiều lần do click đúp (Race Condition)
+            if (detail.Status == "Confirmed") return true;
+
             if (finalQuantity.HasValue && finalQuantity.Value > 0)
             {
                 detail.Quantity = finalQuantity.Value;
@@ -576,12 +581,36 @@ namespace MenuGoBE.Service
             return result;
         }
 
-        public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus)
+        public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus, int? quantity = null)
         {
+            var detail = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (detail == null) return false;
+
+            // Handle splitting if quantity is less than detail.Quantity
+            if (quantity.HasValue && quantity.Value > 0 && quantity.Value < detail.Quantity)
+            {
+                var newDetail = new OrderDetail
+                {
+                    OrderId = detail.OrderId,
+                    ProductId = detail.ProductId,
+                    Quantity = detail.Quantity - quantity.Value,
+                    Price = detail.Price,
+                    Note = detail.Note,
+                    Status = detail.Status,
+                    CookingStatus = detail.CookingStatus,
+                    BatchId = detail.BatchId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                detail.Quantity = quantity.Value;
+                
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.CreateAsync(newDetail);
+                await _detailRepo.SaveChangesAsync();
+            }
+
             // Xử lý trừ nguyên liệu khi Processed bắt đầu nấu
             if (cookingStatus == "Cooking")
             {
-                var detail = await _detailRepo.GetByIdAsync(orderDetailId);
                 if (detail != null)
                 {
                     var productType = await _productRepo.GetProductTypeAsync(detail.ProductId);
@@ -693,9 +722,9 @@ namespace MenuGoBE.Service
             return result;
         }
 
-        public async Task<List<KitchenItemDto>> GetKitchenItemsAsync()
+        public async Task<List<KitchenItemDto>> GetKitchenItemsAsync(long? branchId = null)
         {
-            var activeOrders = await _orderRepo.GetActiveKitchenOrdersWithDetailsAsync();
+            var activeOrders = await _orderRepo.GetActiveKitchenOrdersWithDetailsAsync(branchId);
             var result = new List<KitchenItemDto>();
 
             foreach (var order in activeOrders)
@@ -721,6 +750,7 @@ namespace MenuGoBE.Service
                         Note = od.Note ?? string.Empty,
                         Status = od.Status ?? "Confirmed",
                         CookingStatus = string.IsNullOrEmpty(od.CookingStatus) ? "Waiting" : od.CookingStatus,
+                        BatchId = od.BatchId,
                         CreatedAt = od.CreatedAt
                     });
                 result.AddRange(items);
@@ -842,6 +872,27 @@ namespace MenuGoBE.Service
             // Trả món đã được thực hiện trực tiếp ở RequestReturnItemAsync.
             // Endpoint này được giữ lại để tương thích ngược nếu client gọi.
             return await Task.FromResult(true);
+        }
+
+        public async Task<bool> BatchUpdateCookingStatusAsync(long productId, string cookingStatus, long[] branchIds)
+        {
+            var pendingItems = await _detailRepo.GetPendingByProductIdAsync(productId, branchIds);
+            if (!pendingItems.Any()) return false;
+
+            string batchId = Guid.NewGuid().ToString();
+            bool result = true;
+
+            foreach (var item in pendingItems)
+            {
+                item.BatchId = batchId;
+                await _detailRepo.UpdateAsync(item);
+                await _detailRepo.SaveChangesAsync();
+                
+                var success = await UpdateCookingStatusAsync(item.Id, cookingStatus);
+                if (!success) result = false;
+            }
+
+            return result;
         }
     }
 }

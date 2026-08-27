@@ -361,9 +361,15 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision");
+
                     b.Property<string>("LogoImage")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -441,6 +447,101 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Contracts");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Conversation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AssignedEmployeeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("PreferredContactMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedEmployeeId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("Conversations");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ConversationAssignmentHistory", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("EmployeeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("ConversationAssignmentHistories");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Customer", b =>
                 {
                     b.Property<long>("Id")
@@ -451,6 +552,12 @@ namespace MenuGoBE.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("text");
+
+                    b.Property<string>("HashedPassword")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -971,6 +1078,52 @@ namespace MenuGoBE.Migrations
                     b.ToTable("MenuProducts");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Message", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("EmployeeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Topic")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("Messages");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.NewProvince", b =>
                 {
                     b.Property<long>("Id")
@@ -1024,11 +1177,17 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("AccountId")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("IsImportant")
                         .HasColumnType("boolean");
@@ -1069,6 +1228,8 @@ namespace MenuGoBE.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
+
+                    b.HasIndex("CustomerId");
 
                     b.ToTable("Notifications");
                 });
@@ -1195,6 +1356,41 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Orders");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.OrderAssignment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LastActionAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.ToTable("OrderAssignments");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.OrderDetail", b =>
                 {
                     b.Property<long>("Id")
@@ -1202,6 +1398,10 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BatchId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("CookingStatus")
                         .IsRequired()
@@ -1632,6 +1832,9 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1655,13 +1858,48 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("TableCount")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
 
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("OrderId");
 
                     b.ToTable("Reservations");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ReservationDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("ReservationId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ReservationId");
+
+                    b.ToTable("ReservationDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Role", b =>
@@ -2231,6 +2469,58 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Conversation", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "AssignedEmployee")
+                        .WithMany()
+                        .HasForeignKey("AssignedEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AssignedEmployee");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ConversationAssignmentHistory", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Conversation", "Conversation")
+                        .WithMany("AssignmentHistories")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Device", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Branch", "Branch")
@@ -2397,6 +2687,31 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Message", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Account", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.NewWard", b =>
                 {
                     b.HasOne("MenuGoBE.Models.NewProvince", "NewProvince")
@@ -2416,7 +2731,14 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MenuGoBE.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Branch");
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.OldDistrict", b =>
@@ -2471,6 +2793,33 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Table");
 
                     b.Navigation("Voucher");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.OrderAssignment", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Order", "Order")
+                        .WithOne("Assignment")
+                        .HasForeignKey("MenuGoBE.Models.OrderAssignment", "OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Order");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.OrderDetail", b =>
@@ -2634,6 +2983,11 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
                 {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MenuGoBE.Models.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
@@ -2645,9 +2999,30 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.Navigation("Branch");
+
                     b.Navigation("Customer");
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ReservationDetail", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Reservation", "Reservation")
+                        .WithMany("ReservationDetails")
+                        .HasForeignKey("ReservationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Reservation");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.SalaryDetail", b =>
@@ -2850,6 +3225,13 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Products");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Conversation", b =>
+                {
+                    b.Navigation("AssignmentHistories");
+
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Customer", b =>
                 {
                     b.Navigation("Orders");
@@ -2913,6 +3295,8 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Order", b =>
                 {
+                    b.Navigation("Assignment");
+
                     b.Navigation("ChildOrders");
 
                     b.Navigation("OrderDetails");
@@ -2947,6 +3331,11 @@ namespace MenuGoBE.Migrations
                     b.Navigation("UnitConversions");
 
                     b.Navigation("UsedInRecipeItems");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
+                {
+                    b.Navigation("ReservationDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Role", b =>

@@ -22,5 +22,9 @@ namespace MenuGoBE.Dtos.Branch
         public TimeOnly CloseTime { get; set; }
 
         public string Status { get; set; } = "Hoạt động";
+
+        public double? Latitude { get; set; }
+
+        public double? Longitude { get; set; }
     }
 }

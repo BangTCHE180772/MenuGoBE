@@ -685,6 +685,16 @@ namespace MenuGoBE.Service
                 }
             }
 
+            var currentStatus = (entity.Status ?? "").ToUpper();
+            if (currentStatus.StartsWith("LEAVE_REQUEST"))
+            {
+                throw new InvalidOperationException("Bạn đã gửi đơn xin nghỉ cho ca làm việc này rồi.");
+            }
+            if (currentStatus == "ABSENT" || currentStatus == "VẮNG MẶT" || currentStatus == "VẮNG")
+            {
+                throw new InvalidOperationException("Ca làm việc này đã được duyệt nghỉ.");
+            }
+
             var reasonStr = string.IsNullOrWhiteSpace(dto.Reason) ? "Xin nghỉ ca" : dto.Reason;
             entity.Status = $"LEAVE_REQUEST:{reasonStr}";
             entity.ManagerApproved = false;
@@ -729,6 +739,20 @@ namespace MenuGoBE.Service
                 }
             }
 
+            var currentStatus = (entity.Status ?? "").ToUpper();
+            if (currentStatus.StartsWith("LEAVE_REQUEST"))
+            {
+                throw new InvalidOperationException("Ca làm việc này đang chờ duyệt xin nghỉ, không thể đổi ca.");
+            }
+            if (currentStatus.StartsWith("TRANSFER_PENDING"))
+            {
+                throw new InvalidOperationException("Ca làm việc này đang trong quá trình chờ đổi ca.");
+            }
+            if (currentStatus == "ABSENT" || currentStatus == "VẮNG MẶT" || currentStatus == "VẮNG")
+            {
+                throw new InvalidOperationException("Ca làm việc này đã được duyệt nghỉ.");
+            }
+
             var noteStr = string.IsNullOrWhiteSpace(dto.Note) ? "Đổi ca" : dto.Note;
             
             // Theo luồng FE, gán accountId của người được nhận ca cho ca làm việc
@@ -743,6 +767,19 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
 
             // Gửi thông báo cho nhân viên được nhờ nhận ca và quản lý
+            var senderAccount = await _accountRepo.GetByIdAsync(accountId);
+            string senderName = senderAccount != null ? senderAccount.Name : "Một nhân viên";
+            var notification = new Notification
+            {
+                BranchId = entity.BranchId,
+                AccountId = dto.TargetAccountId,
+                Type = "WorkSchedule",
+                Message = $"{senderName} đã gửi cho bạn một lời mời nhận ca làm việc.",
+                IsImportant = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _notificationRepo.CreateAsync(notification);
+
             await _hubContext.Clients.Group($"user_{dto.TargetAccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Bạn có lời mời nhận ca làm việc mới." });
             await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có yêu cầu đổi ca mới đang được xử lý." });
 

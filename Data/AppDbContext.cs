@@ -56,11 +56,18 @@ public class AppDbContext : DbContext
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
+    public DbSet<ReservationDetail> ReservationDetails { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
     public DbSet<Voucher> Vouchers { get; set; } = null!;
+    public DbSet<OrderAssignment> OrderAssignments { get; set; } = null!;
 
     // 8. Device Module
     public DbSet<Device> Devices { get; set; } = null!;
+
+    // Chat Module
+    public DbSet<Conversation> Conversations { get; set; } = null!;
+    public DbSet<Message> Messages { get; set; } = null!;
+    public DbSet<ConversationAssignmentHistory> ConversationAssignmentHistories { get; set; } = null!;
 
     // 9. Inventory Module
     public DbSet<Notification> Notifications { get; set; } = null!;
@@ -300,6 +307,14 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Payroll>()
             .HasIndex(p => new { p.AccountId, p.Month, p.Year });
+
+        // ── OrderAssignment: 1 order = 1 waiter ──
+        modelBuilder.Entity<OrderAssignment>(entity =>
+        {
+            entity.HasIndex(e => e.OrderId).IsUnique();
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.BranchId);
+        });
 
         // ── Global: disable cascade deletes to avoid Multiple Cascade Path ──
         foreach (var foreignKey in modelBuilder.Model.GetEntityTypes().SelectMany(e => e.GetForeignKeys()))

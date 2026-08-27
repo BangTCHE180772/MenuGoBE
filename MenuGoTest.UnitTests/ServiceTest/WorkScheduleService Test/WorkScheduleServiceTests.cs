@@ -36,6 +36,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
             _mapper = config.CreateMapper();
 
             var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>();
+            var notificationRepoMock = new Mock<INotificationRepository>();
 
             _service = new WorkScheduleService(
                 _repoMock.Object,
@@ -44,7 +45,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
                 _shiftRepoMock.Object,
                 _accountRepoMock.Object,
                 hubContextMock.Object,
-                null!);
+                notificationRepoMock.Object);
         }
 
         #region GetAllAsync

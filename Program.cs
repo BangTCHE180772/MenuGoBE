@@ -29,6 +29,10 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 // System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler.DefaultMapInboundClaims = false;
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -106,6 +110,8 @@ builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<IRecipesDetailedRepository, RecipesDetailedRepository>();
 builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
 
 // Service
 
@@ -128,6 +134,9 @@ builder.Services.AddScoped<IProductService, ProductService>();
 // builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<ICustomerAuthService, CustomerAuthService>();
+builder.Services.AddScoped<ICustomerPortalService, CustomerPortalService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 builder.Services.Configure<CloudinarySettings>(builder.Configuration.GetSection("CloudinarySettings"));
 builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailSettings"));
 builder.Services.AddScoped<IPhotoService, PhotoService>();
@@ -138,6 +147,8 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddHostedService<AutoCheckoutService>();
+builder.Services.AddScoped<IOrderAssignmentService, OrderAssignmentService>();
+builder.Services.AddHostedService<OrderAssignmentMonitorService>();
 builder.Services.AddScoped<INewWardService, NewWardService>();
 builder.Services.AddScoped<IOldWardService, OldWardService>();
 builder.Services.AddScoped<INewProvinceService, NewProvinceService>();

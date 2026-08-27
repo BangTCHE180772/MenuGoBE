@@ -72,6 +72,7 @@ namespace MenuGoBE.Service
             var entity = _mapper.Map<Chain>(dto);
 
             entity.Address.Type = "Chuỗi";
+            entity.Address.OldWardId = null;
 
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
@@ -109,24 +110,22 @@ namespace MenuGoBE.Service
             var entity = await _repo.GetByIdAsync(dto.Id);
             if (entity == null) return false;
 
-            // Lưu giữ WardId cũ trước khi map
-            var oldNewWardId = entity.Address?.NewWardId;
-            var oldOldWardId = entity.Address?.OldWardId;
-
             _mapper.Map(dto, entity);
 
-            if (entity.Address != null)
+            if (dto.Address != null)
             {
+                if (entity.Address == null)
+                {
+                    entity.Address = new Address();
+                }
+
+                if (dto.Address.NewWardId.HasValue && dto.Address.NewWardId.Value > 0)
+                {
+                    entity.Address.NewWardId = dto.Address.NewWardId.Value;
+                }
+                // OldWardId luôn giữ null
+                entity.Address.OldWardId = null;
                 entity.Address.Type = "Chuỗi";
-                // Nếu dto truyền null (không chọn địa chỉ mới), giữ nguyên WardId cũ trong DB
-                if (!dto.Address.NewWardId.HasValue)
-                {
-                    entity.Address.NewWardId = oldNewWardId;
-                }
-                if (!dto.Address.OldWardId.HasValue)
-                {
-                    entity.Address.OldWardId = oldOldWardId;
-                }
             }
 
             await _repo.UpdateAsync(entity);
