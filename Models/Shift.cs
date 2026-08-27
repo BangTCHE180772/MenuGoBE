@@ -24,6 +24,10 @@ public class Shift
     [Column(TypeName = "decimal(18,4)")]
     public decimal NightAllowance { get; set; } = 0m; // Flat allowance e.g. 50,000 VND
 
+    public TimeOnly? NightStartTime { get; set; }
+
+    public TimeOnly? NightEndTime { get; set; }
+
     [Column(TypeName = "decimal(18,4)")]
     public decimal NightHours { get; set; } = 0m; // Number of hours considered night shift
 

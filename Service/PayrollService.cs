@@ -410,7 +410,17 @@ namespace MenuGoBE.Service
                     {
                         decimal nightBonusRate = s.Shift?.NightBonusRate ?? 1.3m;
                         decimal nightAllowance = s.Shift?.NightAllowance ?? 0m;
-                        decimal nightHours = (s.Shift?.NightHours > 0) ? Math.Min(baseHours, s.Shift.NightHours) : baseHours;
+                        
+                        decimal nightHours = baseHours;
+                        if (s.Shift != null && s.Shift.NightStartTime.HasValue && s.Shift.NightEndTime.HasValue)
+                        {
+                            decimal calculatedNightHours = CalculateNightHours(s.Shift.StartTime, s.Shift.EndTime, s.Shift.NightStartTime.Value, s.Shift.NightEndTime.Value);
+                            nightHours = Math.Min(baseHours, calculatedNightHours);
+                        }
+                        else if (s.Shift != null && s.Shift.NightHours > 0)
+                        {
+                            nightHours = Math.Min(baseHours, s.Shift.NightHours);
+                        }
 
                         if (nightAllowance > 0)
                         {
@@ -684,6 +694,35 @@ namespace MenuGoBE.Service
             {
                 return workMD.CompareTo(startMD) >= 0 || workMD.CompareTo(endMD) <= 0;
             }
+        }
+
+        private static decimal CalculateNightHours(TimeOnly shiftStart, TimeOnly shiftEnd, TimeOnly nightStart, TimeOnly nightEnd)
+        {
+            int sStart = shiftStart.Hour * 60 + shiftStart.Minute;
+            int sEnd = shiftEnd.Hour * 60 + shiftEnd.Minute;
+            if (sEnd <= sStart) sEnd += 1440;
+
+            int nStart = nightStart.Hour * 60 + nightStart.Minute;
+            int nEnd = nightEnd.Hour * 60 + nightEnd.Minute;
+            if (nEnd <= nStart) nEnd += 1440;
+
+            int totalOverlapMinutes = 0;
+            int[] offsets = new int[] { -1440, 0, 1440 };
+            foreach (var offset in offsets)
+            {
+                int ns = nStart + offset;
+                int ne = nEnd + offset;
+
+                int overlapStart = Math.Max(sStart, ns);
+                int overlapEnd = Math.Min(sEnd, ne);
+
+                if (overlapEnd > overlapStart)
+                {
+                    totalOverlapMinutes += (overlapEnd - overlapStart);
+                }
+            }
+
+            return Math.Round(totalOverlapMinutes / 60.0m, 2);
         }
     }
 }
