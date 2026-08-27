@@ -198,6 +198,16 @@ namespace MenuGoBE.Service
             var entity = await _payrollRepo.GetByIdAsync(id);
             if (entity == null) return false;
 
+            if (entity.Status == PayrollStatus.Draft && status != PayrollStatus.Draft && status != PayrollStatus.Pending && status != PayrollStatus.Cancelled)
+            {
+                throw new InvalidOperationException("Bảng lương ở trạng thái Bản nháp chỉ được phép đổi sang Chờ thanh toán/Chờ chốt hoặc Hủy.");
+            }
+
+            if (status == PayrollStatus.Paid && entity.Status != PayrollStatus.Approved)
+            {
+                throw new InvalidOperationException("Bảng lương phải được Owner phê duyệt (Approved) trước khi thanh toán.");
+            }
+
             var oldStatus = entity.Status;
             entity.Status = status;
             if (status == PayrollStatus.Paid)
@@ -271,6 +281,31 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        public async Task<bool> UnlockPayrollAsync(long id, long userId)
+        {
+            var entity = await _payrollRepo.GetByIdAsync(id);
+            if (entity == null) return false;
+
+            if (entity.Status == PayrollStatus.Paid)
+            {
+                throw new InvalidOperationException("Bảng lương đã thanh toán không thể mở khóa.");
+            }
+
+            if (entity.Status != PayrollStatus.Locked && entity.Status != PayrollStatus.Approved)
+            {
+                throw new InvalidOperationException("Bảng lương phải ở trạng thái Đã chốt hoặc Đã duyệt mới có thể mở khóa.");
+            }
+
+            entity.Status = PayrollStatus.Rejected;
+            entity.LockedBy = null;
+            entity.LockedAt = null;
+            entity.ApprovedBy = null;
+            entity.ApprovedAt = null;
+
+            await _payrollRepo.UpdateAsync(entity);
+            return true;
+        }
+
         public async Task<bool> ApprovePayrollAsync(long id, long userId)
         {
             var entity = await _payrollRepo.GetByIdAsync(id);
@@ -278,7 +313,7 @@ namespace MenuGoBE.Service
 
             if (entity.Status == PayrollStatus.Paid)
             {
-                throw new InvalidOperationException("Bảng lương đã thanh toán.");
+                throw new InvalidOperationException("Bảng lương đã thanh toán không thể phê duyệt lại.");
             }
 
             entity.Status = PayrollStatus.Approved;
@@ -562,7 +597,8 @@ namespace MenuGoBE.Service
 
             if (isAdmin)
             {
-                accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => c.RoleId == 3));
+                // Owner / Admin can calculate batch payroll for all roles (Managers & Regular Staff)
+                accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => c.RoleId >= 3));
                 if (dto.BranchId.HasValue && dto.BranchId.Value > 0)
                 {
                     accountsQuery = accountsQuery.Where(a => a.Contracts.Any(c => c.BranchId == dto.BranchId.Value));

@@ -43,7 +43,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
                 _branchRepoMock.Object,
                 _shiftRepoMock.Object,
                 _accountRepoMock.Object,
-                hubContextMock.Object);
+                hubContextMock.Object,
+                null!);
         }
 
         #region GetAllAsync
