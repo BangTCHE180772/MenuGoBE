@@ -8,4 +8,5 @@ public class ReservationUpdateDto
     public int NumberOfGuests { get; set; }
     public string Note { get; set; } = string.Empty;
     public bool ConfirmUpdateCustomer { get; set; } = false;
+    public bool IgnoreWarning { get; set; } = false;
 }

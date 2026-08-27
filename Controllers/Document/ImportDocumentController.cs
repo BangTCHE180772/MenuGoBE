@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers.Document
             _documentService = documentService;
         }
 
-        #region GET api/importdocument (Lấy danh sách phiếu nhập kho DTO)
+        #region GET Lấy danh sách phiếu nhập kho DTO
         /// <summary>
         /// Lấy danh sách phiếu Nhập kho thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
@@ -65,7 +65,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/importdocument/pending (Tạo phiếu nhập nháp theo DTO)
+        #region POST Tạo phiếu nhập nháp theo DTO
         /// <summary>
         /// Tạo mới phiếu Nhập kho ở trạng thái Pending (Lưu tạm) sử dụng ImportDocumentCreateDto.
         /// </summary>
@@ -107,7 +107,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/importdocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        #region POST Tạo & Chốt trực tiếp theo DTO
         /// <summary>
         /// Tạo và Chốt trực tiếp phiếu Nhập kho sang Completed (Lưu thẳng / Post) sử dụng ImportDocumentCreateDto.
         /// </summary>
@@ -149,7 +149,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region PUT api/importdocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        #region PUT Cập nhật phiếu nháp theo DTO
         /// <summary>
         /// Cập nhật phiếu Nhập kho đang ở trạng thái Pending sử dụng ImportDocumentUpdateDto.
         /// </summary>
@@ -199,7 +199,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/importdocument/{id}/complete (Chốt phiếu nháp)
+        #region POST Chốt phiếu nháp
         /// <summary>
         /// Chốt phiếu Nhập kho Pending -> Completed (Đóng băng Snapshot, Ghi sổ kho & CashFlow).
         /// </summary>
@@ -218,7 +218,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region DELETE api/importdocument/{id}/soft-delete (Hủy phiếu nháp)
+        #region DELETE Hủy phiếu nháp
         /// <summary>
         /// Xóa mềm phiếu Nhập kho Pending -> Chuyển sang Canceled.
         /// </summary>
@@ -236,7 +236,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/importdocument/{id}/return-details (Lấy thông tin trả hàng cho phiếu Nhập)
+        #region GET Lấy thông tin trả hàng cho phiếu Nhập
         /// <summary>
         /// Lấy danh sách sản phẩm trong phiếu Nhập kho đã chốt kèm số lượng đã trả tích lũy,
         /// phục vụ tạo phiếu Trả hàng NCC.

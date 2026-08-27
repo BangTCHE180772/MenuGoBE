@@ -13,6 +13,8 @@ namespace MenuGoBE.Models
         [Required]
         public long BranchId { get; set; }
 
+        public long? AccountId { get; set; }
+
         [Required]
         [MaxLength(50)]
         public string Type { get; set; } = string.Empty; // e.g. Operational, ShelfLife, Quality, Order, Inventory, Other
@@ -42,8 +44,13 @@ namespace MenuGoBE.Models
         [MaxLength(500)]
         public string? RedirectUrl { get; set; }
 
+        public long? CustomerId { get; set; }
+
         // Navigation
         [ForeignKey("BranchId")]
         public Branch Branch { get; set; } = null!;
+
+        [ForeignKey("CustomerId")]
+        public Customer? Customer { get; set; }
     }
 }

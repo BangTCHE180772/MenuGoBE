@@ -52,21 +52,21 @@ namespace MenuGoBE.Service
                 throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
             }
 
-            if (string.IsNullOrEmpty(account.TwoFACode))
-            {
-                return new
-                {
-                    status = "setup_2fa_required",
-                    accountId = account.Id,
-                    message = "Tài khoản của bạn chưa cài đặt bảo mật 2 lớp. Bắt buộc cài đặt để tiếp tục."
-                };
-            }
+            var (activeRoles, branchIds) = GetActiveRoles(account);
+            var token = GenerateJwtToken(account, activeRoles, branchIds);
 
             return new
             {
-                status = "verify_2fa_required",
-                accountId = account.Id,
-                message = "Vui lòng nhập mã 6 số từ Google Authenticator."
+                status = "success",
+                token = token,
+                user = new
+                {
+                    id = account.Id,
+                    name = account.Name,
+                    email = account.Email,
+                    roles = activeRoles,
+                    branchIds = branchIds
+                }
             };
         }
 

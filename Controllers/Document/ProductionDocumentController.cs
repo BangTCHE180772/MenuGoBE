@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers.Document
             _documentService = documentService;
         }
 
-        #region GET api/productiondocument (Lấy danh sách phiếu Sản xuất DTO)
+        #region GET Lấy danh sách phiếu Sản xuất DTO
         /// <summary>
         /// Lấy danh sách phiếu Sản xuất thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
@@ -43,7 +43,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/productiondocument/{id} (Lấy chi tiết phiếu Sản xuất DTO)
+        #region GET Lấy chi tiết phiếu Sản xuất DTO
         /// <summary>
         /// Lấy chi tiết 1 phiếu Sản xuất theo ID (Trả về DocumentResponseDto).
         /// </summary>
@@ -65,7 +65,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/productiondocument/pending (Tạo phiếu nháp theo DTO)
+        #region POST Tạo phiếu nháp theo DTO
         /// <summary>
         /// Tạo mới phiếu Sản xuất ở trạng thái Pending (Lưu tạm) sử dụng ProductionDocumentCreateDto.
         /// </summary>
@@ -105,7 +105,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/productiondocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        #region POST Tạo & Chốt trực tiếp theo DTO
         /// <summary>
         /// Tạo và Chốt trực tiếp phiếu Sản xuất sang Completed sử dụng ProductionDocumentCreateDto.
         /// </summary>
@@ -145,7 +145,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region PUT api/productiondocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        #region PUT Cập nhật phiếu nháp theo DTO
         /// <summary>
         /// Cập nhật phiếu Sản xuất ở trạng thái Pending sử dụng ProductionDocumentUpdateDto.
         /// </summary>
@@ -193,7 +193,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/productiondocument/{id}/complete (Chốt phiếu nháp)
+        #region POST Chốt phiếu nháp
         /// <summary>
         /// Chốt phiếu Sản xuất Pending -> Completed.
         /// </summary>
@@ -212,7 +212,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region DELETE api/productiondocument/{id}/soft-delete (Hủy phiếu nháp)
+        #region DELETE Hủy phiếu nháp
         /// <summary>
         /// Xóa mềm phiếu Sản xuất Pending -> Chuyển sang Canceled.
         /// </summary>

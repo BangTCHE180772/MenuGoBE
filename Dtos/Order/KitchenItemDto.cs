@@ -14,6 +14,7 @@ namespace MenuGoBE.Dtos.Order
         public string Note { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public string CookingStatus { get; set; } = string.Empty;
+        public string? BatchId { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

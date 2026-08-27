@@ -25,7 +25,7 @@ namespace MenuGoBE.Controllers.Document
             _documentService = documentService;
         }
 
-        #region GET api/checkdocument (Lấy danh sách phiếu Kiểm kho DTO)
+        #region GET Lấy danh sách phiếu Kiểm kho DTO
         /// <summary>
         /// Lấy danh sách phiếu Kiểm kho thuộc chi nhánh (Trả về List DTO gọn nhẹ).
         /// </summary>
@@ -43,7 +43,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region GET api/checkdocument/{id} (Lấy chi tiết phiếu Kiểm kho DTO)
+        #region GET Lấy chi tiết phiếu Kiểm kho DTO
         /// <summary>
         /// Lấy chi tiết 1 phiếu Kiểm kho theo ID (Trả về DocumentResponseDto).
         /// </summary>
@@ -65,7 +65,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/checkdocument/pending (Tạo phiếu nháp theo DTO)
+        #region POST Tạo phiếu nháp theo DTO
         /// <summary>
         /// Tạo mới phiếu Kiểm kho ở trạng thái Pending (Lưu tạm) sử dụng CheckDocumentCreateDto.
         /// </summary>
@@ -105,7 +105,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/checkdocument/completed (Tạo & Chốt trực tiếp theo DTO)
+        #region POST Tạo & Chốt trực tiếp theo DTO
         /// <summary>
         /// Tạo và Chốt trực tiếp phiếu Kiểm kho sang Completed sử dụng CheckDocumentCreateDto.
         /// </summary>
@@ -145,7 +145,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region PUT api/checkdocument/pending/{id} (Cập nhật phiếu nháp theo DTO)
+        #region PUT Cập nhật phiếu nháp theo DTO
         /// <summary>
         /// Cập nhật phiếu Kiểm kho ở trạng thái Pending sử dụng CheckDocumentUpdateDto.
         /// </summary>
@@ -193,7 +193,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region POST api/checkdocument/{id}/complete (Chốt phiếu nháp)
+        #region POST Chốt phiếu nháp
         /// <summary>
         /// Chốt phiếu Kiểm kho Pending -> Completed.
         /// </summary>
@@ -212,7 +212,7 @@ namespace MenuGoBE.Controllers.Document
         }
         #endregion
 
-        #region DELETE api/checkdocument/{id}/soft-delete (Hủy phiếu nháp)
+        #region DELETE Hủy phiếu nháp
         /// <summary>
         /// Xóa mềm phiếu Kiểm kho Pending -> Chuyển sang Canceled.
         /// </summary>
