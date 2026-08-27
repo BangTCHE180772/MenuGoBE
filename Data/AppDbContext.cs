@@ -54,6 +54,7 @@ public class AppDbContext : DbContext
     public DbSet<Customer> Customers { get; set; } = null!;
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
+    public DbSet<LeftoverRecord> LeftoverRecords { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<ReservationDetail> ReservationDetails { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
