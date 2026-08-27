@@ -383,7 +383,7 @@ namespace MenuGoBE.Service
                 .ToListAsync();
 
             decimal actualWorkDays = schedules.Select(s => s.WorkDate).Distinct().Count();
-            decimal actualWorkHours = schedules.Sum(s => s.ActualHours ?? 0);
+            decimal actualWorkHours = schedules.Sum(s => (s.ActualHours ?? 0) + s.ApprovedOTHours);
 
             decimal baseSalary = contract.BaseSalary;
             string salaryType = contract.SalaryType ?? "Monthly";
@@ -494,7 +494,7 @@ namespace MenuGoBE.Service
                     {
                         WorkScheduleId = s.Id,
                         WorkDate = workDate,
-                        ActualHours = actualHours,
+                        ActualHours = actualHours + approvedOTHours,
                         StandardHours = standardHours,
                         ApprovedOTHours = approvedOTHours,
                         DateCoefficient = dateCoeff,

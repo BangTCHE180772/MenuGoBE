@@ -321,6 +321,19 @@ namespace MenuGoBE.Service
 
             _mapper.Map(dto, entity);
 
+            if (dto.ApprovedOTHours.HasValue)
+            {
+                entity.ApprovedOTHours = dto.ApprovedOTHours.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(dto.OTStatus))
+            {
+                entity.OTStatus = dto.OTStatus;
+            }
+            if (dto.OTNotes != null)
+            {
+                entity.OTNotes = dto.OTNotes;
+            }
+
             if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
             {
                 entity.CheckInAt = DateTime.SpecifyKind(entity.CheckInAt.Value, DateTimeKind.Utc);
