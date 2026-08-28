@@ -66,6 +66,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
                         BaseQuantity = 5,
                         UnitPrice = 120_000,
                         BatchCodeSnapshot = "LOT-IMP-001",
+                        ManufactureDateSnapshot = DateTime.UtcNow.AddDays(-2),
                         ExpiryDateSnapshot = DateTime.UtcNow.AddDays(30)
                     }
                 }
@@ -89,6 +90,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             Assert.Equal("LOT-IMP-001", addedBatch.BatchCode);
             Assert.Equal(5, addedBatch.QuantityRemaining);
             Assert.Equal(120_000, addedBatch.UnitCost);
+            Assert.NotNull(addedBatch.ManufactureDate);
+            Assert.NotNull(addedBatch.ExpiryDate);
         }
 
         [Fact]
