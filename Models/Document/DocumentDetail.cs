@@ -52,6 +52,11 @@ public class DocumentDetail
     [Column(TypeName = "decimal(108,12)")] public decimal? NewAvgCost { get; set; } // [Điều chỉnh GV] Giá vốn mới áp dụng
     [Column(TypeName = "decimal(51,3)")] public decimal? ReceivedQuantity { get; set; } // [Chuyển kho] Số lượng thực nhận
 
+    // --- SNAPSHOT CHO LÔ HÀNG (BATCH) ---
+    [MaxLength(100)] public string? BatchCodeSnapshot { get; set; }
+    public DateTime? ManufactureDateSnapshot { get; set; }
+    public DateTime? ExpiryDateSnapshot { get; set; }
+
     public bool IsDeleted { get; set; } = false;
     public string? Note { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -63,4 +68,5 @@ public class DocumentDetail
 
     [InverseProperty("Father")] public ICollection<DocumentDetail> Children { get; set; } = new List<DocumentDetail>();
     [ForeignKey("UnitConversionId")] public UnitConversion? UnitConversion { get; set; }
+    public virtual ICollection<BatchAllocation> BatchAllocations { get; set; } = new List<BatchAllocation>();
 }
