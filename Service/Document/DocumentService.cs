@@ -570,6 +570,14 @@ namespace MenuGoBE.Service.Document
                     {
                         existingBatch.Status = BatchStatus.Active;
                     }
+                    if (detail.ManufactureDateSnapshot.HasValue)
+                    {
+                        existingBatch.ManufactureDate = detail.ManufactureDateSnapshot;
+                    }
+                    if (detail.ExpiryDateSnapshot.HasValue)
+                    {
+                        existingBatch.ExpiryDate = detail.ExpiryDateSnapshot;
+                    }
                     existingBatch.UpdatedAt = DateTime.UtcNow;
                 }
                 else

@@ -186,6 +186,9 @@ namespace MenuGoBE.Dtos.Document
         public string SnapshotUnitName { get; set; } = string.Empty;
         public string SnapshotBaseUnitName { get; set; } = string.Empty;
         public decimal SnapshotAvgCost { get; set; }
+        public string? BatchCodeSnapshot { get; set; }
+        public DateTime? ManufactureDateSnapshot { get; set; }
+        public DateTime? ExpiryDateSnapshot { get; set; }
         #endregion
 
         #region Thông tin Sản phẩm Hiện tại (Dành cho phiếu Pending khi Snapshot bị trống)
