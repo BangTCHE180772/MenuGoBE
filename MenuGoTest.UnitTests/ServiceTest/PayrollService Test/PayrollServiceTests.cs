@@ -593,6 +593,9 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
                     }
                 }
             };
+            _context.Accounts.Add(account);
+            await _context.SaveChangesAsync();
+
             // Act & Assert
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.GenerateEmployeePayrollAsync(dto));
             Assert.Contains("không có hợp đồng hợp lệ trong tháng 8/2026", ex.Message);

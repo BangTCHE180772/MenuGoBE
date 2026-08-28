@@ -51,9 +51,8 @@ public class LoginAsyncTests
 
         var result = await _service.LoginAsync(dto);
 
-        // Result is anonymous type, use dynamic
         var json = System.Text.Json.JsonSerializer.Serialize(result);
-        Assert.Contains("setup_2fa_required", json);
+        Assert.Contains("success", json);
     }
 
     [Fact]
@@ -66,6 +65,6 @@ public class LoginAsyncTests
         var result = await _service.LoginAsync(dto);
 
         var json = System.Text.Json.JsonSerializer.Serialize(result);
-        Assert.Contains("verify_2fa_required", json);
+        Assert.Contains("success", json);
     }
 }

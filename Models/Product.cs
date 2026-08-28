@@ -40,6 +40,11 @@ public class Product
     [Column(TypeName = "decimal(108,12)")]
     public decimal SellPrice { get; set; }
 
+    /// <summary>
+    /// Số ngày hạn sử dụng mặc định của sản phẩm / thành phẩm sản xuất (nếu có).
+    /// </summary>
+    public int? ShelfLifeDays { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

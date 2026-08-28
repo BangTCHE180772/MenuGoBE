@@ -31,6 +31,14 @@ namespace MenuGoBE.Dtos.Document
 
         public long? UnitConversionId { get; set; }
 
+        public long? BatchId { get; set; }
+
+        public string? BatchCodeSnapshot { get; set; }
+
+        public DateTime? ManufactureDateSnapshot { get; set; }
+
+        public DateTime? ExpiryDateSnapshot { get; set; }
+
         [Range(0, double.MaxValue, ErrorMessage = "Số lượng tồn thực tế không được nhỏ hơn 0.")]
         public decimal ActualQuantity { get; set; }
 
@@ -63,6 +71,14 @@ namespace MenuGoBE.Dtos.Document
         public long BInventoryId { get; set; }
 
         public long? UnitConversionId { get; set; }
+
+        public long? BatchId { get; set; }
+
+        public string? BatchCodeSnapshot { get; set; }
+
+        public DateTime? ManufactureDateSnapshot { get; set; }
+
+        public DateTime? ExpiryDateSnapshot { get; set; }
 
         [Range(0, double.MaxValue, ErrorMessage = "Số lượng tồn thực tế không được nhỏ hơn 0.")]
         public decimal ActualQuantity { get; set; }

@@ -20,6 +20,7 @@ public abstract class ReservationServiceTestBase
     protected readonly Mock<IReservationSignalService> _signalServiceMock;
     protected readonly Mock<IHubContext<NotificationHub>> _hubContextMock;
     protected readonly Mock<INotificationRepository> _notificationRepoMock;
+    protected readonly Mock<IOrderDetailService> _orderDetailServiceMock;
     protected readonly IMapper _mapper;
     protected readonly ReservationService _service;
 
@@ -34,6 +35,7 @@ public abstract class ReservationServiceTestBase
         _signalServiceMock = new Mock<IReservationSignalService>();
         _hubContextMock = new Mock<IHubContext<NotificationHub>>();
         _notificationRepoMock = new Mock<INotificationRepository>();
+        _orderDetailServiceMock = new Mock<IOrderDetailService>();
 
         // Setup HubContext mock
         var mockClients = new Mock<IHubClients>();
@@ -49,6 +51,7 @@ public abstract class ReservationServiceTestBase
         _service = new ReservationService(
             _reservationRepoMock.Object, _orderRepoMock.Object, _tableRepoMock.Object,
             _detailRepoMock.Object, _productRepoMock.Object, _customerRepoMock.Object,
-            _mapper, _signalServiceMock.Object, _hubContextMock.Object, _notificationRepoMock.Object);
+            _mapper, _signalServiceMock.Object, _hubContextMock.Object, _notificationRepoMock.Object,
+            _orderDetailServiceMock.Object);
     }
 }

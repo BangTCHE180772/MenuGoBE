@@ -50,4 +50,5 @@ public class BInventory
 
     public ICollection<InventoryLedger> InventoryLedgers { get; set; } = new List<InventoryLedger>();
     public ICollection<DocumentDetail> DocumentDetails { get; set; } = new List<DocumentDetail>();
+    public ICollection<BInventoryBatch> Batches { get; set; } = new List<BInventoryBatch>();
 }
