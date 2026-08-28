@@ -157,6 +157,7 @@ builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
 builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<ISalaryDetailService, SalaryDetailService>();
+builder.Services.AddScoped<IHolidayConfigService, HolidayConfigService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<ICashFlowService, CashFlowService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();

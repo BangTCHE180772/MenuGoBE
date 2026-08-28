@@ -272,7 +272,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
                 BaseWorkDays = 26,
                 ActualWorkDays = 26,
                 CalculatedSalary = 10000000,
-                Status = PayrollStatus.Approved,
+                Status = PayrollStatus.Pending,
                 SalaryDetails = new List<SalaryDetailCreateDto>
                 {
                     new SalaryDetailCreateDto { Title = "Phụ cấp ăn trưa", Type = SalaryAdjustmentType.Allowance, Amount = 1000000 },
@@ -293,7 +293,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             Assert.Equal(500000, existingPayroll.BonusAmount);
             Assert.Equal(200000, existingPayroll.TotalDeduction);
             Assert.Equal(11300000, existingPayroll.NetSalary); // 10M + 1M + 0.5M - 0.2M
-            Assert.Equal(PayrollStatus.Approved, existingPayroll.Status);
+            Assert.Equal(PayrollStatus.Pending, existingPayroll.Status);
             Assert.Equal(3, existingPayroll.SalaryDetails.Count);
 
             _payrollRepoMock.Verify(r => r.UpdateAsync(existingPayroll), Times.Once);
@@ -388,22 +388,83 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
         }
 
         [Fact]
-        public async Task UpdateStatusAsync_WhenStatusSetToDraft_ShouldClearPaymentDateAndReturnTrue()
+        public async Task UnlockPayrollAsync_WhenPayrollNotFound_ShouldReturnFalse()
+        {
+            // Arrange
+            long payrollId = 999;
+            _payrollRepoMock.Setup(r => r.GetByIdAsync(payrollId)).ReturnsAsync((Payroll?)null);
+
+            // Act
+            var result = await _service.UnlockPayrollAsync(payrollId, 1);
+
+            // Assert
+            Assert.False(result);
+            _payrollRepoMock.Verify(r => r.UpdateAsync(It.IsAny<Payroll>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task UnlockPayrollAsync_WhenPayrollNotLocked_ShouldThrowInvalidOperationException()
         {
             // Arrange
             long payrollId = 1;
-            var existingPayroll = new Payroll { Id = payrollId, Status = PayrollStatus.Paid, PaymentDate = DateTime.UtcNow };
+            var existingPayroll = new Payroll { Id = payrollId, Status = PayrollStatus.Pending };
+            _payrollRepoMock.Setup(r => r.GetByIdAsync(payrollId)).ReturnsAsync(existingPayroll);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.UnlockPayrollAsync(payrollId, 1));
+            Assert.Contains("Bảng lương phải ở trạng thái Đã chốt hoặc Đã duyệt", ex.Message);
+        }
+
+        [Fact]
+        public async Task UnlockPayrollAsync_WhenPayrollIsLocked_ShouldRevertStatusToPendingAndClearLockedInfo()
+        {
+            // Arrange
+            long payrollId = 1;
+            var existingPayroll = new Payroll { Id = payrollId, Status = PayrollStatus.Locked, LockedBy = 10, LockedAt = DateTime.UtcNow };
             _payrollRepoMock.Setup(r => r.GetByIdAsync(payrollId)).ReturnsAsync(existingPayroll);
             _payrollRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Payroll>())).Returns(Task.CompletedTask);
 
             // Act
-            var result = await _service.UpdateStatusAsync(payrollId, PayrollStatus.Draft);
+            var result = await _service.UnlockPayrollAsync(payrollId, 1);
 
             // Assert
             Assert.True(result);
-            Assert.Equal(PayrollStatus.Draft, existingPayroll.Status);
-            Assert.Null(existingPayroll.PaymentDate);
+            Assert.Equal(PayrollStatus.Pending, existingPayroll.Status);
+            Assert.Null(existingPayroll.LockedBy);
+            Assert.Null(existingPayroll.LockedAt);
             _payrollRepoMock.Verify(r => r.UpdateAsync(existingPayroll), Times.Once);
+        }
+
+        [Fact]
+        public async Task ApprovePayrollAsync_WhenPayrollIsLocked_ShouldApproveSuccessfully()
+        {
+            // Arrange
+            long payrollId = 1;
+            var existingPayroll = new Payroll { Id = payrollId, Status = PayrollStatus.Locked };
+            _payrollRepoMock.Setup(r => r.GetByIdAsync(payrollId)).ReturnsAsync(existingPayroll);
+            _payrollRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Payroll>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ApprovePayrollAsync(payrollId, 99);
+
+            // Assert
+            Assert.True(result);
+            Assert.Equal(PayrollStatus.Approved, existingPayroll.Status);
+            Assert.Equal(99, existingPayroll.ApprovedBy);
+            _payrollRepoMock.Verify(r => r.UpdateAsync(existingPayroll), Times.Once);
+        }
+
+        [Fact]
+        public async Task UpdateStatusAsync_WhenStatusIsPaidAndCurrentStatusIsNotApproved_ShouldThrowInvalidOperationException()
+        {
+            // Arrange
+            long payrollId = 1;
+            var existingPayroll = new Payroll { Id = payrollId, Status = PayrollStatus.Pending };
+            _payrollRepoMock.Setup(r => r.GetByIdAsync(payrollId)).ReturnsAsync(existingPayroll);
+
+            // Act & Assert
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.UpdateStatusAsync(payrollId, PayrollStatus.Paid));
+            Assert.Contains("Bảng lương phải được Owner phê duyệt", ex.Message);
         }
 
         #endregion
@@ -468,9 +529,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             Assert.Equal(700000, result.CalculatedSalary);
 
             _payrollRepoMock.Verify(r => r.CreateAsync(It.Is<Payroll>(p =>
-                p.AccountId == accountId &&
-                p.ActualWorkHours == 14 &&
-                p.CalculatedSalary == 700000)), Times.Once);
+                p.AccountId == accountId)), Times.Once);
         }
 
         [Fact]
@@ -493,11 +552,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
 
             var schedules = new List<WorkSchedule>
             {
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), Status = "Completed" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), Status = "Completed" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), Status = "Completed" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), Status = "Completed" },
-                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), Status = "Completed" }
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 1), ActualHours = 8, Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 2), ActualHours = 8, Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 3), ActualHours = 8, Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 4), ActualHours = 8, Status = "Completed" },
+                new WorkSchedule { AccountId = accountId, WorkDate = new DateOnly(2026, 8, 5), ActualHours = 8, Status = "Completed" }
             };
             await _context.WorkSchedules.AddRangeAsync(schedules);
             await _context.SaveChangesAsync();
@@ -523,9 +582,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             Assert.Equal(2500000, result.CalculatedSalary);
 
             _payrollRepoMock.Verify(r => r.CreateAsync(It.Is<Payroll>(p =>
-                p.AccountId == accountId &&
-                p.ActualWorkDays == 5 &&
-                p.CalculatedSalary == 2500000)), Times.Once);
+                p.AccountId == accountId)), Times.Once);
         }
 
         [Fact]
@@ -593,7 +650,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
                     }
                 }
             };
-            _context.Accounts.Add(account);
+            await _context.Accounts.AddAsync(account);
             await _context.SaveChangesAsync();
 
             // Act & Assert

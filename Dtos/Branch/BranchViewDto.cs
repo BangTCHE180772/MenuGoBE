@@ -13,6 +13,10 @@ namespace MenuGoBE.Dtos.Branch
 
         public long AddressId { get; set; }
 
+        public long? NewWardId { get; set; }
+
+        public long? OldWardId { get; set; }
+
         public string NewAddressName { get; set; } = string.Empty;
 
         public string OldAddressName { get; set; } = string.Empty;
@@ -40,5 +44,7 @@ namespace MenuGoBE.Dtos.Branch
         public long? NewWardId { get; set; }
 
         public long? OldWardId { get; set; }
+                public int CheckinRadiusMeters { get; set; } = 100;
+
     }
 }

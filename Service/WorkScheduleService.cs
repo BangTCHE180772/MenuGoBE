@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using MenuGoBE.Data;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Hubs;
 
 namespace MenuGoBE.Service
@@ -19,7 +22,7 @@ namespace MenuGoBE.Service
         private readonly IShiftRepository _shiftRepo;
         private readonly IAccountRepository _accountRepo;
         private readonly IHubContext<NotificationHub> _hubContext;
-        private readonly INotificationRepository _notificationRepo;
+        private readonly AppDbContext _context;
 
         public WorkScheduleService(
             IWorkScheduleRepository repo, 
@@ -28,7 +31,7 @@ namespace MenuGoBE.Service
             IShiftRepository shiftRepo,
             IAccountRepository accountRepo,
             IHubContext<NotificationHub> hubContext,
-            INotificationRepository notificationRepo)
+            AppDbContext context)
         {
             _repo = repo;
             _mapper = mapper;
@@ -36,8 +39,10 @@ namespace MenuGoBE.Service
             _shiftRepo = shiftRepo;
             _accountRepo = accountRepo;
             _hubContext = hubContext;
-            _notificationRepo = notificationRepo;
+            _context = context;
         }
+
+
 
         private async Task CheckAndMarkExpiredAbsentSchedulesAsync()
         {
@@ -316,6 +321,19 @@ namespace MenuGoBE.Service
 
             _mapper.Map(dto, entity);
 
+            if (dto.ApprovedOTHours.HasValue)
+            {
+                entity.ApprovedOTHours = dto.ApprovedOTHours.Value;
+            }
+            if (!string.IsNullOrWhiteSpace(dto.OTStatus))
+            {
+                entity.OTStatus = dto.OTStatus;
+            }
+            if (dto.OTNotes != null)
+            {
+                entity.OTNotes = dto.OTNotes;
+            }
+
             if (entity.CheckInAt.HasValue && entity.CheckInAt.Value.Kind == DateTimeKind.Unspecified)
             {
                 entity.CheckInAt = DateTime.SpecifyKind(entity.CheckInAt.Value, DateTimeKind.Utc);
@@ -365,7 +383,8 @@ namespace MenuGoBE.Service
             var data = await _repo.GetByAccountIdAsync(accountId);
             return _mapper.Map<List<WorkScheduleViewDto>>(data);
         }
-        public async Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId)
+        public async Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(
+            long accountId, long branchId, long? workScheduleId = null)
         {
             var now = DateTime.UtcNow;
             var localNow = now.AddHours(7);
@@ -379,11 +398,71 @@ namespace MenuGoBE.Service
                 return (false, "Bạn không có ca làm việc hôm nay tại chi nhánh này.", "");
             }
 
+            // Nếu nhân viên chỉ định ca cụ thể để điểm danh
+            if (workScheduleId.HasValue && workScheduleId.Value > 0)
+            {
+                var targetWs = schedules.FirstOrDefault(s => s.Id == workScheduleId.Value) 
+                               ?? await _repo.GetByIdAsync(workScheduleId.Value);
+
+                if (targetWs == null || targetWs.AccountId != accountId)
+                {
+                    return (false, "Không tìm thấy ca làm việc đã chọn.", "");
+                }
+
+                // Nếu ca đang ở trạng thái Working -> Thực hiện Check-out (Không giới hạn giờ check-out)
+                if (targetWs.Status == "Working")
+                {
+                    targetWs.CheckOutAt = now;
+                    targetWs.ActualHours = CalculateBoundedActualHours(targetWs);
+                    targetWs.Status = "Completed";
+                    await _repo.UpdateAsync(targetWs);
+                    await _repo.SaveChangesAsync();
+                    
+                    var shiftName = targetWs.Shift?.Name ?? "ca làm";
+                    return (true, $"Check-out ca '{shiftName}' thành công!", "checkout");
+                }
+                else
+                {
+                    // Check-in ca này -> Kiểm tra quy tắc 30 phút
+                    if (targetWs.Shift == null && targetWs.ShiftId > 0)
+                    {
+                        targetWs.Shift = await _shiftRepo.GetByIdAsync(targetWs.ShiftId);
+                    }
+
+                    var shiftName = targetWs.Shift?.Name ?? "ca làm";
+
+                    if (targetWs.Shift != null)
+                    {
+                        var shiftStartLocal = targetWs.WorkDate.ToDateTime(targetWs.Shift.StartTime);
+                        var earliestCheckIn = shiftStartLocal.AddMinutes(-30);
+
+                        if (localNow < earliestCheckIn)
+                        {
+                            var startTimeStr = targetWs.Shift.StartTime.ToString("HH:mm");
+                            var earliestStr = earliestCheckIn.ToString("HH:mm");
+                            return (
+                                false,
+                                $"Chưa đến giờ điểm danh cho ca '{shiftName}' ({startTimeStr}). Bạn chỉ có thể điểm danh trước ca làm tối đa 30 phút (từ {earliestStr}).",
+                                ""
+                            );
+                        }
+                    }
+
+                    targetWs.CheckInAt = now;
+                    targetWs.Status = "Working";
+                    await _repo.UpdateAsync(targetWs);
+                    await _repo.SaveChangesAsync();
+
+                    return (true, $"Check-in ca '{shiftName}' thành công!", "checkin");
+                }
+            }
+
+            // Fallback: Tự động chọn ca nếu không truyền workScheduleId
             var workingIndex = schedules.FindIndex(s => s.Status == "Working");
 
             if (workingIndex >= 0)
             {
-                // Có ca đang Working -> Tiến hành Check-out
+                // Có ca đang Working -> Tiến hành Check-out (Không giới hạn giờ)
                 bool autoSplitOccurred = false;
                 
                 while (workingIndex >= 0 && workingIndex < schedules.Count - 1)
@@ -391,11 +470,8 @@ namespace MenuGoBE.Service
                     var currentWs = schedules[workingIndex];
                     var nextWs = schedules[workingIndex + 1];
                     
-                    // Nếu thời điểm quét thẻ đã vượt qua giờ kết thúc của ca hiện tại một khoảng đáng kể (ví dụ > 30 phút)
-                    // Hoặc đơn giản là vượt qua hẳn giờ kết thúc và nhân viên có ca tiếp theo.
                     if (currentTimeOnly >= nextWs.Shift.StartTime && currentTimeOnly >= currentWs.Shift.EndTime)
                     {
-                        // Auto-split: Chốt ca hiện tại ở đúng giờ EndTime
                         var localEndTime = today.ToDateTime(currentWs.Shift.EndTime);
                         var utcEndTime = DateTime.SpecifyKind(localEndTime.AddHours(-7), DateTimeKind.Utc);
                         
@@ -404,7 +480,6 @@ namespace MenuGoBE.Service
                         currentWs.Status = "Completed";
                         await _repo.UpdateAsync(currentWs);
                         
-                        // Mở ca tiếp theo ở đúng giờ StartTime
                         var localStartTime = today.ToDateTime(nextWs.Shift.StartTime);
                         var utcStartTime = DateTime.SpecifyKind(localStartTime.AddHours(-7), DateTimeKind.Utc);
                         
@@ -421,7 +496,6 @@ namespace MenuGoBE.Service
                     }
                 }
 
-                // Chốt ca Working cuối cùng với thời gian quét thực tế
                 var finalWorking = schedules[workingIndex];
                 finalWorking.CheckOutAt = now;
                 finalWorking.ActualHours = CalculateBoundedActualHours(finalWorking);
@@ -438,7 +512,6 @@ namespace MenuGoBE.Service
             }
             else
             {
-                // Không có ca nào đang Working -> Tìm ca đầu tiên chưa check-in và chưa kết thúc
                 var nextSchedule = schedules
                     .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
                     .OrderBy(s => s.Shift.StartTime)
@@ -446,7 +519,6 @@ namespace MenuGoBE.Service
 
                 if (nextSchedule == null)
                 {
-                    // Nếu đã qua giờ kết thúc của TẤT CẢ các ca, lấy ca cuối cùng trong ngày
                     nextSchedule = schedules
                         .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
                         .OrderBy(s => s.Shift.StartTime)
@@ -455,7 +527,25 @@ namespace MenuGoBE.Service
 
                 if (nextSchedule != null)
                 {
-                    // Đánh dấu các ca trước đó là "Absent" (vắng mặt)
+                    // Kiểm tra quy tắc 30 phút trước ca làm
+                    if (nextSchedule.Shift != null)
+                    {
+                        var shiftStartLocal = nextSchedule.WorkDate.ToDateTime(nextSchedule.Shift.StartTime);
+                        var earliestCheckIn = shiftStartLocal.AddMinutes(-30);
+
+                        if (localNow < earliestCheckIn)
+                        {
+                            var shiftName = nextSchedule.Shift.Name;
+                            var startTimeStr = nextSchedule.Shift.StartTime.ToString("HH:mm");
+                            var earliestStr = earliestCheckIn.ToString("HH:mm");
+                            return (
+                                false,
+                                $"Chưa đến giờ điểm danh cho ca '{shiftName}' ({startTimeStr}). Bạn chỉ có thể điểm danh trước ca làm tối đa 30 phút (từ {earliestStr}).",
+                                ""
+                            );
+                        }
+                    }
+
                     var missedSchedules = schedules
                         .Where(s => s.CheckInAt == null 
                                  && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending")
@@ -477,7 +567,6 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
-                    // Nếu tất cả đã Completed, cập nhật lại giờ Check-out cho ca cuối cùng
                     var lastCompleted = schedules.LastOrDefault(s => s.Status == "Completed");
                     if (lastCompleted != null)
                     {
@@ -496,6 +585,86 @@ namespace MenuGoBE.Service
         public async Task<List<long>> GetActiveRoleIdsAsync(long accountId)
         {
             return await _accountRepo.GetActiveRoleIdsAsync(accountId);
+        }
+
+        // ---- Hàm tiện ích tính khoảng cách Haversine (mét) ----
+        private static double HaversineDistance(double lat1, double lon1, double lat2, double lon2)
+        {
+            const double R = 6371000; // bán kính Trái Đất tính bằng mét
+            var dLat = (lat2 - lat1) * Math.PI / 180.0;
+            var dLon = (lon2 - lon1) * Math.PI / 180.0;
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2)
+                  + Math.Cos(lat1 * Math.PI / 180.0) * Math.Cos(lat2 * Math.PI / 180.0)
+                  * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return R * c;
+        }
+
+        public async Task<(bool Success, string Message, string Action)> CheckInWithLocationAsync(
+            long accountId, long branchId, double latitude, double longitude, long? workScheduleId = null)
+        {
+            // 1. Kiểm tra xem ca làm việc này có phải là Check-out hay không trước khi kiểm tra GPS
+            var localNow = DateTime.UtcNow.AddHours(7);
+            var today = DateOnly.FromDateTime(localNow);
+            var schedules = await _repo.GetTodaySchedulesAsync(accountId, branchId, today);
+
+            bool isCheckOut = false;
+
+            if (workScheduleId.HasValue && workScheduleId.Value > 0)
+            {
+                var targetWs = schedules?.FirstOrDefault(s => s.Id == workScheduleId.Value) 
+                               ?? await _repo.GetByIdAsync(workScheduleId.Value);
+
+                if (targetWs != null && targetWs.Status == "Working")
+                {
+                    isCheckOut = true;
+                }
+            }
+            else if (schedules != null && schedules.Any(s => s.Status == "Working"))
+            {
+                isCheckOut = true;
+            }
+
+            // Nếu là Check-out -> Cho phép Check-out ngay không cần kiểm tra vị trí GPS!
+            if (isCheckOut)
+            {
+                return await RecordAttendanceAsync(accountId, branchId, workScheduleId);
+            }
+
+            // 2. Lấy thông tin chi nhánh đối với lượt Check-in
+            var branch = await _branchRepo.GetByIdAsync(branchId);
+            if (branch == null)
+                return (false, $"Không tìm thấy chi nhánh (ID: {branchId}).", "");
+
+            // 3. Kiểm tra xem chi nhánh đã có tọa độ GPS chưa
+            if (branch.Latitude == null || branch.Longitude == null
+                || (branch.Latitude == 0 && branch.Longitude == 0))
+            {
+                // Nếu chưa cài đặt vị trí, bỏ qua kiểm tra và ghi nhận điểm danh bình thường
+                return await RecordAttendanceAsync(accountId, branchId, workScheduleId);
+            }
+
+            // 4. Tính khoảng cách vị trí đối với lượt Check-in
+            double distance = HaversineDistance(
+                latitude, longitude,
+                branch.Latitude.Value, branch.Longitude.Value);
+
+            double radiusMeters = branch.CheckinRadiusMeters > 0 ? branch.CheckinRadiusMeters : 100;
+
+            if (distance > radiusMeters)
+            {
+                int displayDist = (int)Math.Round(distance);
+                int displayRadius = (int)radiusMeters;
+                return (
+                    false,
+                    $"❗ Bạn đang ở cách nhà hàng ≈ {displayDist}m (bán kính cho phép: {displayRadius}m). " +
+                    $"Vui lòng đến đúng địa điểm chi nhánh để điểm danh.",
+                    ""
+                );
+            }
+
+            // 5. Vị trí hợp lệ → ghi nhận điểm danh
+            return await RecordAttendanceAsync(accountId, branchId, workScheduleId);
         }
 
         public async Task<bool> RequestLeaveAsync(long accountId, LeaveRequestDto dto)
@@ -615,6 +784,90 @@ namespace MenuGoBE.Service
             await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có yêu cầu đổi ca mới đang được xử lý." });
 
             return true;
+        }
+
+        public async Task<bool> ApproveOTAsync(WorkScheduleOTApproveDto dto)
+        {
+            var ws = await _repo.GetByIdAsync(dto.WorkScheduleId);
+            if (ws == null) return false;
+
+            ws.ApprovedOTHours = dto.ApprovedOTHours;
+            ws.OTStatus = string.IsNullOrWhiteSpace(dto.OTStatus) ? "Approved" : dto.OTStatus;
+            ws.OTNotes = dto.OTNotes ?? string.Empty;
+
+            await _repo.UpdateAsync(ws);
+            await _repo.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<WorkSchedulePOSActivityDto> VerifyPOSActivityAsync(long workScheduleId)
+        {
+            var ws = await _repo.GetByIdAsync(workScheduleId);
+            if (ws == null) throw new KeyNotFoundException($"Không tìm thấy lịch làm việc ID {workScheduleId}");
+
+            var account = await _accountRepo.GetByIdAsync(ws.AccountId);
+            var accountName = account?.Name ?? $"ID {ws.AccountId}";
+
+            decimal actualHours = ws.ActualHours ?? 0m;
+            decimal standardHours = ws.Shift != null ? ws.Shift.StandardHours : 8.0m;
+            if (standardHours <= 0) standardHours = 8.0m;
+
+            decimal excessHours = Math.Max(0m, actualHours - standardHours);
+
+            var result = new WorkSchedulePOSActivityDto
+            {
+                WorkScheduleId = ws.Id,
+                AccountId = ws.AccountId,
+                AccountName = accountName,
+                WorkDate = ws.WorkDate,
+                CheckInAt = ws.CheckInAt,
+                CheckOutAt = ws.CheckOutAt,
+                ActualHours = actualHours,
+                StandardHours = standardHours,
+                ExcessHours = excessHours,
+                OrderCountDuringExcessTime = 0,
+                TotalOrderAmountDuringExcessTime = 0m,
+                HasPOSActivity = false,
+                SuspicionReason = ""
+            };
+
+            if (excessHours <= 0 || !ws.CheckInAt.HasValue || !ws.CheckOutAt.HasValue)
+            {
+                result.SuspicionReason = "Không có số giờ dư ra so với ca tiêu chuẩn.";
+                return result;
+            }
+
+            // Expected end of standard shift
+            var expectedEndTime = ws.CheckInAt.Value.AddHours((double)standardHours);
+            var actualCheckOutTime = ws.CheckOutAt.Value;
+
+            if (actualCheckOutTime <= expectedEndTime)
+            {
+                result.SuspicionReason = "Thời gian check-out nằm trong khung giờ ca chuẩn.";
+                return result;
+            }
+
+            // Query orders created by this staff account during the excess time interval
+            var orders = await _context.Orders
+                .Where(o => o.CreatedBy == ws.AccountId 
+                         && o.CreatedAt >= expectedEndTime 
+                         && o.CreatedAt <= actualCheckOutTime)
+                .ToListAsync();
+
+            result.OrderCountDuringExcessTime = orders.Count;
+            result.TotalOrderAmountDuringExcessTime = orders.Sum(o => o.TotalAmount);
+            result.HasPOSActivity = orders.Count > 0;
+
+            if (!result.HasPOSActivity)
+            {
+                result.SuspicionReason = $"Không ghi nhận bất kỳ đơn POS/Order nào từ {expectedEndTime:HH:mm dd/MM} đến {actualCheckOutTime:HH:mm dd/MM}. Có thể nhân viên đã quên check-out khi về.";
+            }
+            else
+            {
+                result.SuspicionReason = $"Xác nhận có phát sinh {orders.Count} đơn POS trong thời gian dư ({result.TotalOrderAmountDuringExcessTime:N0}đ). Có khả năng làm tăng ca (OT) thật.";
+            }
+
+            return result;
         }
     }
 }
