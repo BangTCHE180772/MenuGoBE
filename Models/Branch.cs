@@ -30,8 +30,13 @@ public class Branch
 
     public bool IsDeleted { get; set; } = false;
 
+    // GPS location for check-in validation
     public double? Latitude { get; set; }
+
     public double? Longitude { get; set; }
+
+    /// <summary>Bán kính tính bằng mét cho phép điểm danh (mặc định 100m)</summary>
+    public int CheckinRadiusMeters { get; set; } = 100;
 
     // Navigation
     [ForeignKey("ChainId")]

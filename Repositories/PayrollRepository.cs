@@ -24,7 +24,10 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(a => a.Contracts)
                 .Include(p => p.Branch)
                 .Include(p => p.Contract)
+                .Include(p => p.Locker)
+                .Include(p => p.Approver)
                 .Include(p => p.SalaryDetails)
+                .Include(p => p.PayrollShiftDetails)
                 .AsQueryable();
 
             if (branchId.HasValue && branchId.Value > 0)
@@ -57,8 +60,11 @@ namespace MenuGoBE.Repositories
                 .Include(p => p.Account)
                 .Include(p => p.Branch)
                 .Include(p => p.Contract)
+                .Include(p => p.Locker)
+                .Include(p => p.Approver)
                 .Include(p => p.SalaryDetails)
                     .ThenInclude(sd => sd.Account)
+                .Include(p => p.PayrollShiftDetails)
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
 
@@ -68,8 +74,11 @@ namespace MenuGoBE.Repositories
                 .Include(p => p.Account)
                 .Include(p => p.Branch)
                 .Include(p => p.Contract)
+                .Include(p => p.Locker)
+                .Include(p => p.Approver)
                 .Include(p => p.SalaryDetails)
                     .ThenInclude(sd => sd.Account)
+                .Include(p => p.PayrollShiftDetails)
                 .Where(p => p.AccountId == accountId);
 
             if (month.HasValue && month.Value > 0)
@@ -89,7 +98,10 @@ namespace MenuGoBE.Repositories
                 .Include(p => p.Account)
                 .Include(p => p.Branch)
                 .Include(p => p.Contract)
+                .Include(p => p.Locker)
+                .Include(p => p.Approver)
                 .Include(p => p.SalaryDetails)
+                .Include(p => p.PayrollShiftDetails)
                 .FirstOrDefaultAsync(p => p.AccountId == accountId && p.Month == month && p.Year == year);
         }
 

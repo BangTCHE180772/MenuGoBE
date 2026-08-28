@@ -54,6 +54,8 @@ namespace MenuGoBE.Mapper
 
             //Branch
             CreateMap<Branch, BranchViewDto>()
+                .ForMember(dest => dest.NewWardId, opt => opt.MapFrom(src => src.Address != null ? src.Address.NewWardId : null))
+                .ForMember(dest => dest.OldWardId, opt => opt.MapFrom(src => src.Address != null ? src.Address.OldWardId : null))
                 .ForMember(
                     dest => dest.NewAddressName,
                     opt => opt.MapFrom(src =>
@@ -226,6 +228,7 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : string.Empty));
             CreateMap<PayrollCreateDto, Payroll>();
             CreateMap<PayrollUpdateDto, Payroll>();
+            CreateMap<PayrollShiftDetail, PayrollShiftDetailViewDto>();
 
             CreateMap<SalaryDetail, SalaryDetailViewDto>()
                 .ForMember(dest => dest.AccountName, opt => opt.MapFrom(src => src.Account != null ? src.Account.Name : string.Empty))

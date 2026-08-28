@@ -135,7 +135,7 @@ namespace MenuGoBE.Controllers
                 return StatusCode(400, new
                 {
                     message = "Đã xảy ra lỗi khi sửa chi nhánh.",
-                    error = ex.Message
+                    error = ex.InnerException != null ? $"{ex.Message} -> {ex.InnerException.Message}" : ex.Message
                 });
             }
         }

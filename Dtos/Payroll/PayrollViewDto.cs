@@ -15,6 +15,11 @@ public class PayrollViewDto
     public int Year { get; set; }
     public string SalaryType { get; set; } = string.Empty;
     public decimal BaseSalary { get; set; }
+    public decimal HourlyRate { get; set; }
+    public decimal TotalBaseShiftPay { get; set; }
+    public decimal TotalNightPay { get; set; }
+    public decimal TotalOTPay { get; set; }
+    public decimal TotalHolidayBonus { get; set; }
     public int BaseWorkDays { get; set; }
     public decimal ActualWorkDays { get; set; }
     public decimal ActualWorkHours { get; set; }
@@ -28,7 +33,17 @@ public class PayrollViewDto
     public string StatusName => Status.ToString();
     public DateTime? PaymentDate { get; set; }
     public string Note { get; set; } = string.Empty;
+
+    public long? LockedBy { get; set; }
+    public string? LockedByName { get; set; }
+    public DateTime? LockedAt { get; set; }
+
+    public long? ApprovedBy { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+
     public long CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<SalaryDetailViewDto> SalaryDetails { get; set; } = new();
+    public List<PayrollShiftDetailViewDto> PayrollShiftDetails { get; set; } = new();
 }
