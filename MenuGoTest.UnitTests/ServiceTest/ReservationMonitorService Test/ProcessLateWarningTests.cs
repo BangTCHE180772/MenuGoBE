@@ -25,6 +25,8 @@ public class ProcessLateWarningTests
 
         var services = new ServiceCollection();
         services.AddTransient(_ => new AppDbContext(_dbOptions));
+        services.AddTransient(_ => new Mock<MenuGoBE.Interface.Services.IReservationService>().Object);
+        services.AddTransient(_ => new Mock<MenuGoBE.Interface.Repository.INotificationRepository>().Object);
         _serviceProvider = services.BuildServiceProvider();
 
         _hubContextMock = new Mock<IHubContext<NotificationHub>>();

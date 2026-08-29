@@ -200,6 +200,101 @@ namespace MenuGoBE.Migrations
                     b.ToTable("BInventories");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.BInventoryBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BInventoryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("BatchCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiryDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ManufactureDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("QuantityOriginal")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal>("QuantityRemaining")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<DateTime>("ReceivedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("SourceBatchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(108,12)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceBatchId");
+
+                    b.HasIndex("BInventoryId", "BatchCode")
+                        .IsUnique();
+
+                    b.HasIndex("BInventoryId", "Status", "ExpiryDate");
+
+                    b.ToTable("BInventoryBatches");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.BatchAllocation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AllocationType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("BatchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("DocumentDetailId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("QuantityAllocated")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(108,12)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("DocumentDetailId");
+
+                    b.ToTable("BatchAllocations");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Branch", b =>
                 {
                     b.Property<long>("Id")
@@ -213,6 +308,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<long>("ChainId")
                         .HasColumnType("bigint");
+
+                    b.Property<int>("CheckinRadiusMeters")
+                        .HasColumnType("integer");
 
                     b.Property<TimeOnly>("CloseTime")
                         .HasColumnType("time without time zone");
@@ -791,6 +889,10 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("BaseQuantity")
                         .HasColumnType("decimal(51,3)");
 
+                    b.Property<string>("BatchCodeSnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<decimal>("ConversionRate")
                         .HasColumnType("decimal(18,6)");
 
@@ -800,11 +902,17 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("DocumentId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ExpiryDateSnapshot")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<long?>("FatherId")
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ManufactureDateSnapshot")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("NewAvgCost")
                         .HasColumnType("decimal(108,12)");
@@ -884,6 +992,54 @@ namespace MenuGoBE.Migrations
                         .IsUnique();
 
                     b.ToTable("Groups");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.HolidayConfig", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("BranchIds")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Coefficient")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRecurring")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("ToDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.ToTable("HolidayConfigs");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Image", b =>
@@ -1609,6 +1765,12 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("ActualWorkHours")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint");
+
                     b.Property<decimal>("BaseSalary")
                         .HasColumnType("decimal(18,4)");
 
@@ -1631,6 +1793,15 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("LockedBy")
                         .HasColumnType("bigint");
 
                     b.Property<int>("Month")
@@ -1660,7 +1831,19 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("TotalAllowance")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal>("TotalBaseShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<decimal>("TotalDeduction")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalHolidayBonus")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalNightPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalOTPay")
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("Year")
@@ -1668,13 +1851,77 @@ namespace MenuGoBE.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ApprovedBy");
+
                     b.HasIndex("BranchId");
 
                     b.HasIndex("ContractId");
 
+                    b.HasIndex("LockedBy");
+
                     b.HasIndex("AccountId", "Month", "Year");
 
                     b.ToTable("Payrolls");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PayrollShiftDetail", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("ActualHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("ApprovedOTHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("BaseShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DateCoefficient")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("HourlyRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<bool>("IsNightShift")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("NightShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("OTPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long>("PayrollId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("StandardHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("TotalShiftPay")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("WorkScheduleId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollId");
+
+                    b.HasIndex("WorkScheduleId");
+
+                    b.ToTable("PayrollShiftDetails");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
@@ -1726,6 +1973,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<decimal>("SellPrice")
                         .HasColumnType("decimal(108,12)");
+
+                    b.Property<int?>("ShelfLifeDays")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1943,9 +2193,30 @@ namespace MenuGoBE.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsNightShift")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("NightAllowance")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("NightBonusRate")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<TimeOnly?>("NightEndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<decimal>("NightHours")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<TimeOnly?>("NightStartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<decimal>("StandardHours")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<TimeOnly>("StartTime")
                         .HasColumnType("time without time zone");
@@ -2285,6 +2556,9 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal?>("ActualHours")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<decimal>("ApprovedOTHours")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
@@ -2304,11 +2578,25 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
 
+                    b.Property<bool>("IsAutoCheckout")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("ManagerApproved")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("OTNotes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("OTStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<long>("ShiftId")
                         .HasColumnType("bigint");
+
+                    b.Property<decimal>("StandardHours")
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2383,6 +2671,43 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Branch");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.BInventoryBatch", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.BInventory", "BInventory")
+                        .WithMany("Batches")
+                        .HasForeignKey("BInventoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.BInventoryBatch", "SourceBatch")
+                        .WithMany("DerivedBatches")
+                        .HasForeignKey("SourceBatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("BInventory");
+
+                    b.Navigation("SourceBatch");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.BatchAllocation", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.BInventoryBatch", "Batch")
+                        .WithMany("BatchAllocations")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.DocumentDetail", "DocumentDetail")
+                        .WithMany("BatchAllocations")
+                        .HasForeignKey("DocumentDetailId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Batch");
+
+                    b.Navigation("DocumentDetail");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Branch", b =>
@@ -2636,6 +2961,23 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Father");
 
                     b.Navigation("UnitConversion");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.HolidayConfig", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Creator");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.InventoryLedger", b =>
@@ -2924,6 +3266,11 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MenuGoBE.Models.Account", "Approver")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MenuGoBE.Models.Branch", "Branch")
                         .WithMany()
                         .HasForeignKey("BranchId")
@@ -2935,11 +3282,39 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("ContractId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.Account", "Locker")
+                        .WithMany()
+                        .HasForeignKey("LockedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Account");
+
+                    b.Navigation("Approver");
 
                     b.Navigation("Branch");
 
                     b.Navigation("Contract");
+
+                    b.Navigation("Locker");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PayrollShiftDetail", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Payroll", "Payroll")
+                        .WithMany("PayrollShiftDetails")
+                        .HasForeignKey("PayrollId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.WorkSchedule", "WorkSchedule")
+                        .WithMany()
+                        .HasForeignKey("WorkScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Payroll");
+
+                    b.Navigation("WorkSchedule");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
@@ -3257,9 +3632,18 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.BInventory", b =>
                 {
+                    b.Navigation("Batches");
+
                     b.Navigation("DocumentDetails");
 
                     b.Navigation("InventoryLedgers");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.BInventoryBatch", b =>
+                {
+                    b.Navigation("BatchAllocations");
+
+                    b.Navigation("DerivedBatches");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Branch", b =>
@@ -3313,6 +3697,8 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.DocumentDetail", b =>
                 {
+                    b.Navigation("BatchAllocations");
+
                     b.Navigation("Children");
                 });
 
@@ -3381,6 +3767,8 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Payroll", b =>
                 {
+                    b.Navigation("PayrollShiftDetails");
+
                     b.Navigation("SalaryDetails");
                 });
 

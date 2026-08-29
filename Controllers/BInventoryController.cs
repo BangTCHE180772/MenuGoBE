@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Dtos;
+using MenuGoBE.Dtos.Document;
 using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -713,6 +714,582 @@ namespace MenuGoBE.Controllers
                 _ => delta >= 0 ? "Nhập kho" : "Xuất kho"
             };
         }
+        #endregion
+
+        #region Phase 4: Quản lý Lô Hàng, Hạn Sử Dụng & Báo Cáo Truy Vết (Batch APIs)
+
+        #region API Lấy danh sách Lô hàng phân trang và lọc (GET /api/BInventory/batches)
+        [HttpGet("batches")]
+        [HttpGet("/api/Batch")]
+        public async Task<IActionResult> GetBatches(
+            [FromQuery] long? branchId,
+            [FromQuery] long? productId,
+            [FromQuery] long? binventoryId,
+            [FromQuery] string? search,
+            [FromQuery] BatchStatus? status,
+            [FromQuery] string? expiryStatus,
+            [FromQuery] int nearExpiryDays = 7,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var today = now.Date;
+                var nearExpiryLimit = today.AddDays(nearExpiryDays > 0 ? nearExpiryDays : 7);
+
+                var query = _context.BInventoryBatches
+                    .AsNoTracking()
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Branch)
+                    .Include(b => b.SourceBatch)
+                        .ThenInclude(sb => sb!.BInventory)
+                            .ThenInclude(sbi => sbi.Branch)
+                    .AsQueryable();
+
+                // Lọc theo Chi nhánh
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    query = query.Where(b => b.BInventory.BranchId == branchId.Value);
+                }
+
+                // Lọc theo Sản phẩm
+                if (productId.HasValue && productId.Value > 0)
+                {
+                    query = query.Where(b => b.BInventory.ProductId == productId.Value);
+                }
+
+                // Lọc theo BInventory
+                if (binventoryId.HasValue && binventoryId.Value > 0)
+                {
+                    query = query.Where(b => b.BInventoryId == binventoryId.Value);
+                }
+
+                // Lọc theo Trạng thái Lô
+                if (status.HasValue)
+                {
+                    query = query.Where(b => b.Status == status.Value);
+                }
+
+                // Tìm kiếm theo từ khóa (Mã Lô, Tên sản phẩm, Mã SKU)
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    var kw = search.Trim().ToLower();
+                    query = query.Where(b =>
+                        b.BatchCode.ToLower().Contains(kw) ||
+                        b.BInventory.Product.Name.ToLower().Contains(kw) ||
+                        (b.BInventory.Product.SKUCode != null && b.BInventory.Product.SKUCode.ToLower().Contains(kw)));
+                }
+
+                // Lọc theo Trạng thái Hạn sử dụng
+                if (!string.IsNullOrWhiteSpace(expiryStatus) && !expiryStatus.Equals("all", StringComparison.OrdinalIgnoreCase))
+                {
+                    var exp = expiryStatus.Trim().ToLower();
+                    if (exp == "expired")
+                    {
+                        query = query.Where(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date < today);
+                    }
+                    else if (exp == "near_expiry" || exp == "nearexpiry")
+                    {
+                        query = query.Where(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= nearExpiryLimit);
+                    }
+                    else if (exp == "valid")
+                    {
+                        query = query.Where(b => !b.ExpiryDate.HasValue || b.ExpiryDate.Value.Date > nearExpiryLimit);
+                    }
+                    else if (exp == "no_expiry" || exp == "noexpiry")
+                    {
+                        query = query.Where(b => !b.ExpiryDate.HasValue);
+                    }
+                }
+
+                var totalCount = await query.CountAsync();
+
+                var items = await query
+                    .OrderBy(b => b.ExpiryDate.HasValue ? 0 : 1)
+                    .ThenBy(b => b.ExpiryDate)
+                    .ThenByDescending(b => b.CreatedAt)
+                    .Skip((Math.Max(page, 1) - 1) * Math.Max(pageSize, 1))
+                    .Take(Math.Max(pageSize, 1))
+                    .Select(b => new BatchDetailDto
+                    {
+                        Id = b.Id,
+                        BInventoryId = b.BInventoryId,
+                        BatchCode = b.BatchCode,
+                        QuantityOriginal = b.QuantityOriginal,
+                        QuantityRemaining = b.QuantityRemaining,
+                        UnitCost = b.UnitCost,
+                        ManufactureDate = b.ManufactureDate,
+                        ExpiryDate = b.ExpiryDate,
+                        ReceivedDate = b.ReceivedDate,
+                        SourceBatchId = b.SourceBatchId,
+                        SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
+                        Status = b.Status,
+                        CreatedAt = b.CreatedAt,
+                        UpdatedAt = b.UpdatedAt,
+                        ProductId = b.BInventory.ProductId,
+                        ProductName = b.BInventory.Product.Name,
+                        ProductCode = b.BInventory.Product.SKUCode ?? $"SP{b.BInventory.ProductId}",
+                        UnitName = b.BInventory.Product.UnitConversions
+                            .Where(uc => uc.BaseId == null)
+                            .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                            .FirstOrDefault() ?? "Đơn vị",
+                        BranchId = b.BInventory.BranchId,
+                        BranchName = b.BInventory.Branch.Name,
+                        SourceBranchId = b.SourceBatch != null ? b.SourceBatch.BInventory.BranchId : (long?)null,
+                        SourceBranchName = b.SourceBatch != null ? b.SourceBatch.BInventory.Branch.Name : null,
+                        DaysUntilExpiry = b.ExpiryDate.HasValue ? (int?)(b.ExpiryDate.Value.Date - today).TotalDays : null,
+                        ExpiryStatus = !b.ExpiryDate.HasValue
+                            ? "NoExpiry"
+                            : (b.ExpiryDate.Value.Date < today
+                                ? "Expired"
+                                : (b.ExpiryDate.Value.Date <= nearExpiryLimit ? "NearExpiry" : "Valid"))
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    totalCount,
+                    page = Math.Max(page, 1),
+                    pageSize = Math.Max(pageSize, 1),
+                    totalPages = (int)Math.Ceiling((double)totalCount / Math.Max(pageSize, 1)),
+                    items
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy danh sách Lô hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Lấy danh sách Lô theo BInventoryId (GET /api/BInventory/{binventoryId}/batches)
+        [HttpGet("{binventoryId:long}/batches")]
+        public async Task<IActionResult> GetBatchesByBInventoryId(long binventoryId)
+        {
+            try
+            {
+                var today = DateTime.UtcNow.Date;
+                var nearExpiryLimit = today.AddDays(7);
+
+                var list = await _context.BInventoryBatches
+                    .AsNoTracking()
+                    .Where(b => b.BInventoryId == binventoryId)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Branch)
+                    .Include(b => b.SourceBatch)
+                        .ThenInclude(sb => sb!.BInventory)
+                            .ThenInclude(sbi => sbi.Branch)
+                    .OrderBy(b => b.ExpiryDate.HasValue ? 0 : 1)
+                    .ThenBy(b => b.ExpiryDate)
+                    .ThenByDescending(b => b.CreatedAt)
+                    .Select(b => new BatchDetailDto
+                    {
+                        Id = b.Id,
+                        BInventoryId = b.BInventoryId,
+                        BatchCode = b.BatchCode,
+                        QuantityOriginal = b.QuantityOriginal,
+                        QuantityRemaining = b.QuantityRemaining,
+                        UnitCost = b.UnitCost,
+                        ManufactureDate = b.ManufactureDate,
+                        ExpiryDate = b.ExpiryDate,
+                        ReceivedDate = b.ReceivedDate,
+                        SourceBatchId = b.SourceBatchId,
+                        SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
+                        Status = b.Status,
+                        CreatedAt = b.CreatedAt,
+                        UpdatedAt = b.UpdatedAt,
+                        ProductId = b.BInventory.ProductId,
+                        ProductName = b.BInventory.Product.Name,
+                        ProductCode = b.BInventory.Product.SKUCode ?? $"SP{b.BInventory.ProductId}",
+                        UnitName = b.BInventory.Product.UnitConversions
+                            .Where(uc => uc.BaseId == null)
+                            .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                            .FirstOrDefault() ?? "Đơn vị",
+                        BranchId = b.BInventory.BranchId,
+                        BranchName = b.BInventory.Branch.Name,
+                        SourceBranchId = b.SourceBatch != null ? b.SourceBatch.BInventory.BranchId : (long?)null,
+                        SourceBranchName = b.SourceBatch != null ? b.SourceBatch.BInventory.Branch.Name : null,
+                        DaysUntilExpiry = b.ExpiryDate.HasValue ? (int?)(b.ExpiryDate.Value.Date - today).TotalDays : null,
+                        ExpiryStatus = !b.ExpiryDate.HasValue
+                            ? "NoExpiry"
+                            : (b.ExpiryDate.Value.Date < today
+                                ? "Expired"
+                                : (b.ExpiryDate.Value.Date <= nearExpiryLimit ? "NearExpiry" : "Valid"))
+                    })
+                    .ToListAsync();
+
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy danh sách Lô theo mặt hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Lấy chi tiết một Lô hàng (GET /api/BInventory/batches/{id})
+        [HttpGet("batches/{id:long}")]
+        [HttpGet("/api/Batch/{id:long}")]
+        public async Task<IActionResult> GetBatchById(long id)
+        {
+            try
+            {
+                var today = DateTime.UtcNow.Date;
+                var nearExpiryLimit = today.AddDays(7);
+
+                var batch = await _context.BInventoryBatches
+                    .AsNoTracking()
+                    .Where(b => b.Id == id)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Branch)
+                    .Include(b => b.SourceBatch)
+                        .ThenInclude(sb => sb!.BInventory)
+                            .ThenInclude(sbi => sbi.Branch)
+                    .Select(b => new BatchDetailDto
+                    {
+                        Id = b.Id,
+                        BInventoryId = b.BInventoryId,
+                        BatchCode = b.BatchCode,
+                        QuantityOriginal = b.QuantityOriginal,
+                        QuantityRemaining = b.QuantityRemaining,
+                        UnitCost = b.UnitCost,
+                        ManufactureDate = b.ManufactureDate,
+                        ExpiryDate = b.ExpiryDate,
+                        ReceivedDate = b.ReceivedDate,
+                        SourceBatchId = b.SourceBatchId,
+                        SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
+                        Status = b.Status,
+                        CreatedAt = b.CreatedAt,
+                        UpdatedAt = b.UpdatedAt,
+                        ProductId = b.BInventory.ProductId,
+                        ProductName = b.BInventory.Product.Name,
+                        ProductCode = b.BInventory.Product.SKUCode ?? $"SP{b.BInventory.ProductId}",
+                        UnitName = b.BInventory.Product.UnitConversions
+                            .Where(uc => uc.BaseId == null)
+                            .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                            .FirstOrDefault() ?? "Đơn vị",
+                        BranchId = b.BInventory.BranchId,
+                        BranchName = b.BInventory.Branch.Name,
+                        SourceBranchId = b.SourceBatch != null ? b.SourceBatch.BInventory.BranchId : (long?)null,
+                        SourceBranchName = b.SourceBatch != null ? b.SourceBatch.BInventory.Branch.Name : null,
+                        DaysUntilExpiry = b.ExpiryDate.HasValue ? (int?)(b.ExpiryDate.Value.Date - today).TotalDays : null,
+                        ExpiryStatus = !b.ExpiryDate.HasValue
+                            ? "NoExpiry"
+                            : (b.ExpiryDate.Value.Date < today
+                                ? "Expired"
+                                : (b.ExpiryDate.Value.Date <= nearExpiryLimit ? "NearExpiry" : "Valid"))
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (batch == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy Lô hàng với ID: {id}" });
+                }
+
+                return Ok(batch);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy chi tiết Lô hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Lấy lịch sử phân bổ của Lô hàng (GET /api/BInventory/batches/{id}/allocations)
+        [HttpGet("batches/{id:long}/allocations")]
+        [HttpGet("/api/Batch/{id:long}/allocations")]
+        public async Task<IActionResult> GetBatchAllocations(
+            long id,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var query = _context.BatchAllocations
+                    .AsNoTracking()
+                    .Where(a => a.BatchId == id)
+                    .Include(a => a.Batch)
+                    .Include(a => a.DocumentDetail)
+                        .ThenInclude(dd => dd.Document)
+                            .ThenInclude(d => d.Branch)
+                    .Include(a => a.DocumentDetail)
+                        .ThenInclude(dd => dd.Document)
+                            .ThenInclude(d => d.Partner)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .AsQueryable();
+
+                var totalCount = await query.CountAsync();
+
+                var items = await query
+                    .Skip((Math.Max(page, 1) - 1) * Math.Max(pageSize, 1))
+                    .Take(Math.Max(pageSize, 1))
+                    .Select(a => new BatchAllocationTraceDto
+                    {
+                        Id = a.Id,
+                        DocumentDetailId = a.DocumentDetailId,
+                        BatchId = a.BatchId,
+                        BatchCode = a.Batch != null ? a.Batch.BatchCode : string.Empty,
+                        AllocationType = a.AllocationType,
+                        AllocationTypeName = GetAllocationTypeLabel(a.AllocationType),
+                        QuantityAllocated = a.QuantityAllocated,
+                        UnitCost = a.UnitCost,
+                        CreatedAt = a.CreatedAt,
+                        DocumentId = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Id : (long?)null,
+                        DocumentCode = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Code : null,
+                        DocumentType = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type : null,
+                        DocumentTypeName = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type.ToString() : null,
+                        DocumentPostedAt = a.DocumentDetail != null && a.DocumentDetail.Document != null ? (a.DocumentDetail.Document.OrderDate != default ? a.DocumentDetail.Document.OrderDate : a.DocumentDetail.Document.CreatedAt) : null,
+                        BranchName = a.DocumentDetail != null && a.DocumentDetail.Document != null && a.DocumentDetail.Document.Branch != null ? a.DocumentDetail.Document.Branch.Name : null,
+                        PartnerName = a.DocumentDetail != null && a.DocumentDetail.Document != null
+                            ? (a.DocumentDetail.Document.SnapshotPartnerName ?? (a.DocumentDetail.Document.Partner != null ? a.DocumentDetail.Document.Partner.Name : null))
+                            : null,
+                        Note = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Note : null
+                    })
+                    .ToListAsync();
+
+                return Ok(new
+                {
+                    totalCount,
+                    page = Math.Max(page, 1),
+                    pageSize = Math.Max(pageSize, 1),
+                    totalPages = (int)Math.Ceiling((double)totalCount / Math.Max(pageSize, 1)),
+                    items
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy lịch sử phân bổ Lô.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Báo cáo Truy vết vòng đời Lô (GET /api/BInventory/batches/{id}/traceability)
+        [HttpGet("batches/{id:long}/traceability")]
+        [HttpGet("/api/Batch/{id:long}/traceability")]
+        public async Task<IActionResult> GetBatchTraceability(long id)
+        {
+            try
+            {
+                var today = DateTime.UtcNow.Date;
+                var nearExpiryLimit = today.AddDays(7);
+
+                var currentBatch = await _context.BInventoryBatches
+                    .AsNoTracking()
+                    .Where(b => b.Id == id)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Product)
+                            .ThenInclude(p => p.UnitConversions)
+                                .ThenInclude(uc => uc.Unit)
+                    .Include(b => b.BInventory)
+                        .ThenInclude(bi => bi.Branch)
+                    .Include(b => b.SourceBatch)
+                        .ThenInclude(sb => sb!.BInventory)
+                            .ThenInclude(sbi => sbi.Branch)
+                    .Select(b => new BatchDetailDto
+                    {
+                        Id = b.Id,
+                        BInventoryId = b.BInventoryId,
+                        BatchCode = b.BatchCode,
+                        QuantityOriginal = b.QuantityOriginal,
+                        QuantityRemaining = b.QuantityRemaining,
+                        UnitCost = b.UnitCost,
+                        ManufactureDate = b.ManufactureDate,
+                        ExpiryDate = b.ExpiryDate,
+                        ReceivedDate = b.ReceivedDate,
+                        SourceBatchId = b.SourceBatchId,
+                        SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
+                        Status = b.Status,
+                        CreatedAt = b.CreatedAt,
+                        UpdatedAt = b.UpdatedAt,
+                        ProductId = b.BInventory.ProductId,
+                        ProductName = b.BInventory.Product.Name,
+                        ProductCode = b.BInventory.Product.SKUCode ?? $"SP{b.BInventory.ProductId}",
+                        UnitName = b.BInventory.Product.UnitConversions
+                            .Where(uc => uc.BaseId == null)
+                            .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                            .FirstOrDefault() ?? "Đơn vị",
+                        BranchId = b.BInventory.BranchId,
+                        BranchName = b.BInventory.Branch.Name,
+                        SourceBranchId = b.SourceBatch != null ? b.SourceBatch.BInventory.BranchId : (long?)null,
+                        SourceBranchName = b.SourceBatch != null ? b.SourceBatch.BInventory.Branch.Name : null,
+                        DaysUntilExpiry = b.ExpiryDate.HasValue ? (int?)(b.ExpiryDate.Value.Date - today).TotalDays : null,
+                        ExpiryStatus = !b.ExpiryDate.HasValue
+                            ? "NoExpiry"
+                            : (b.ExpiryDate.Value.Date < today
+                                ? "Expired"
+                                : (b.ExpiryDate.Value.Date <= nearExpiryLimit ? "NearExpiry" : "Valid"))
+                    })
+                    .FirstOrDefaultAsync();
+
+                if (currentBatch == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy Lô hàng ID: {id}" });
+                }
+
+                BatchDetailDto? sourceBatch = null;
+                if (currentBatch.SourceBatchId.HasValue)
+                {
+                    sourceBatch = await _context.BInventoryBatches
+                        .AsNoTracking()
+                        .Where(b => b.Id == currentBatch.SourceBatchId.Value)
+                        .Include(b => b.BInventory)
+                            .ThenInclude(bi => bi.Product)
+                                .ThenInclude(p => p.UnitConversions)
+                                    .ThenInclude(uc => uc.Unit)
+                        .Include(b => b.BInventory)
+                            .ThenInclude(bi => bi.Branch)
+                        .Select(b => new BatchDetailDto
+                        {
+                            Id = b.Id,
+                            BInventoryId = b.BInventoryId,
+                            BatchCode = b.BatchCode,
+                            QuantityOriginal = b.QuantityOriginal,
+                            QuantityRemaining = b.QuantityRemaining,
+                            UnitCost = b.UnitCost,
+                            ManufactureDate = b.ManufactureDate,
+                            ExpiryDate = b.ExpiryDate,
+                            ReceivedDate = b.ReceivedDate,
+                            Status = b.Status,
+                            CreatedAt = b.CreatedAt,
+                            ProductId = b.BInventory.ProductId,
+                            ProductName = b.BInventory.Product.Name,
+                            ProductCode = b.BInventory.Product.SKUCode ?? $"SP{b.BInventory.ProductId}",
+                            UnitName = b.BInventory.Product.UnitConversions
+                                .Where(uc => uc.BaseId == null)
+                                .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                                .FirstOrDefault() ?? "Đơn vị",
+                            BranchId = b.BInventory.BranchId,
+                            BranchName = b.BInventory.Branch.Name
+                        })
+                        .FirstOrDefaultAsync();
+                }
+
+                var allocations = await _context.BatchAllocations
+                    .AsNoTracking()
+                    .Where(a => a.BatchId == id)
+                    .Include(a => a.Batch)
+                    .Include(a => a.DocumentDetail)
+                        .ThenInclude(dd => dd.Document)
+                            .ThenInclude(d => d.Branch)
+                    .Include(a => a.DocumentDetail)
+                        .ThenInclude(dd => dd.Document)
+                            .ThenInclude(d => d.Partner)
+                    .OrderByDescending(a => a.CreatedAt)
+                    .Select(a => new BatchAllocationTraceDto
+                    {
+                        Id = a.Id,
+                        DocumentDetailId = a.DocumentDetailId,
+                        BatchId = a.BatchId,
+                        BatchCode = a.Batch != null ? a.Batch.BatchCode : string.Empty,
+                        AllocationType = a.AllocationType,
+                        AllocationTypeName = GetAllocationTypeLabel(a.AllocationType),
+                        QuantityAllocated = a.QuantityAllocated,
+                        UnitCost = a.UnitCost,
+                        CreatedAt = a.CreatedAt,
+                        DocumentId = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Id : (long?)null,
+                        DocumentCode = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Code : null,
+                        DocumentType = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type : null,
+                        DocumentTypeName = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type.ToString() : null,
+                        DocumentPostedAt = a.DocumentDetail != null && a.DocumentDetail.Document != null ? (a.DocumentDetail.Document.OrderDate != default ? a.DocumentDetail.Document.OrderDate : a.DocumentDetail.Document.CreatedAt) : null,
+                        BranchName = a.DocumentDetail != null && a.DocumentDetail.Document != null && a.DocumentDetail.Document.Branch != null ? a.DocumentDetail.Document.Branch.Name : null,
+                        PartnerName = a.DocumentDetail != null && a.DocumentDetail.Document != null
+                            ? (a.DocumentDetail.Document.SnapshotPartnerName ?? (a.DocumentDetail.Document.Partner != null ? a.DocumentDetail.Document.Partner.Name : null))
+                            : null,
+                        Note = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Note : null
+                    })
+                    .ToListAsync();
+
+                return Ok(new BatchTraceabilityDto
+                {
+                    CurrentBatch = currentBatch,
+                    SourceBatch = sourceBatch,
+                    Allocations = allocations
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy thông tin truy vết Lô.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Thống kê tổng hợp Hạn sử dụng (GET /api/BInventory/batches/expiry-summary)
+        [HttpGet("batches/expiry-summary")]
+        [HttpGet("/api/Batch/expiry-summary")]
+        public async Task<IActionResult> GetBatchExpirySummary(
+            [FromQuery] long? branchId,
+            [FromQuery] int nearExpiryDays = 7)
+        {
+            try
+            {
+                var today = DateTime.UtcNow.Date;
+                var nearLimit = today.AddDays(nearExpiryDays > 0 ? nearExpiryDays : 7);
+                var criticalLimit = today.AddDays(3);
+
+                var query = _context.BInventoryBatches.AsNoTracking().AsQueryable();
+
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    query = query.Where(b => b.BInventory.BranchId == branchId.Value);
+                }
+
+                var totalBatches = await query.CountAsync();
+                var activeBatches = await query.CountAsync(b => b.Status == BatchStatus.Active);
+                var expiredBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date < today);
+                var nearExpiryBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= nearLimit);
+                var criticalBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= criticalLimit);
+                var validBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date > nearLimit);
+                var noExpiryBatches = await query.CountAsync(b => !b.ExpiryDate.HasValue);
+
+                return Ok(new BatchExpirySummaryDto
+                {
+                    TotalBatches = totalBatches,
+                    ActiveBatches = activeBatches,
+                    ExpiredBatches = expiredBatches,
+                    NearExpiryBatches = nearExpiryBatches,
+                    CriticalBatches = criticalBatches,
+                    ValidBatches = validBatches,
+                    NoExpiryBatches = noExpiryBatches
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi tổng hợp hạn sử dụng Lô hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Helper: Chuyển đổi tên loại phân bổ tiếng Việt
+        private static string GetAllocationTypeLabel(BatchAllocationType type)
+        {
+            return type switch
+            {
+                BatchAllocationType.Sale => "Xuất bán món / hàng hóa",
+                BatchAllocationType.Disposal => "Xuất hủy / Hao hụt",
+                BatchAllocationType.TransferOut => "Chuyển kho (Gửi đi)",
+                BatchAllocationType.TransferReturn => "Hoàn trả chuyển kho (Từ chối)",
+                BatchAllocationType.ProductionConsumption => "Tiêu hao sản xuất",
+                BatchAllocationType.ReturnToSupplier => "Trả hàng nhà cung cấp",
+                BatchAllocationType.CustomerReturn => "Khách trả hàng hoàn kho",
+                BatchAllocationType.StockCheck => "Cân đối kiểm kho",
+                _ => type.ToString()
+            };
+        }
+        #endregion
+
         #endregion
     }
 }

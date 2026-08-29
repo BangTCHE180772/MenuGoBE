@@ -128,6 +128,43 @@ namespace MenuGoBE.Interface.Repository.Document
         void SoftDeletePending(Models.Document document, long deletedBy, string deleteNote);
         #endregion
 
+        #region Thao tác với Lô hàng (BInventoryBatch) & Phân bổ (BatchAllocation)
+        /// <summary>
+        /// Lấy thông tin Lô theo BInventoryId và BatchCode.
+        /// </summary>
+        Task<BInventoryBatch?> GetBatchByInventoryAndCodeAsync(long bInventoryId, string batchCode);
+
+        /// <summary>
+        /// Lấy thông tin Lô theo Id.
+        /// </summary>
+        Task<BInventoryBatch?> GetBatchByIdAsync(long batchId);
+
+        /// <summary>
+        /// Lấy danh sách tất cả các Lô của một BInventory.
+        /// </summary>
+        Task<List<BInventoryBatch>> GetBatchesByInventoryIdAsync(long bInventoryId);
+
+        /// <summary>
+        /// Thêm mới một Lô hàng vào DbContext.
+        /// </summary>
+        Task AddBatchAsync(BInventoryBatch batch);
+
+        /// <summary>
+        /// Thêm mới một bản ghi phân bổ Lô vào DbContext.
+        /// </summary>
+        Task AddBatchAllocationAsync(BatchAllocation batchAllocation);
+
+        /// <summary>
+        /// Thêm mới danh sách bản ghi phân bổ Lô vào DbContext.
+        /// </summary>
+        Task AddBatchAllocationsAsync(IEnumerable<BatchAllocation> batchAllocations);
+
+        /// <summary>
+        /// Lấy danh sách phân bổ Lô theo danh sách DocumentDetailId.
+        /// </summary>
+        Task<List<BatchAllocation>> GetBatchAllocationsByDetailIdsAsync(IEnumerable<long> documentDetailIds);
+        #endregion
+
         #region Lưu thay đổi DB
         /// <summary>
         /// Lưu tất cả thay đổi trong DbContext xuống Database.

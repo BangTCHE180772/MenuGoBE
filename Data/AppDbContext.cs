@@ -48,6 +48,8 @@ public class AppDbContext : DbContext
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
+    public DbSet<HolidayConfig> HolidayConfigs { get; set; } = null!;
+    public DbSet<PayrollShiftDetail> PayrollShiftDetails { get; set; } = null!;
 
     // 7. Orders Module
     public DbSet<Area> Areas { get; set; } = null!;
@@ -73,6 +75,8 @@ public class AppDbContext : DbContext
     // 9. Inventory Module
     public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<BInventory> BInventories { get; set; } = null!;
+    public DbSet<BInventoryBatch> BInventoryBatches { get; set; } = null!;
+    public DbSet<BatchAllocation> BatchAllocations { get; set; } = null!;
     public DbSet<InventoryLedger> InventoryLedgers { get; set; } = null!;
     public DbSet<Document> Documents { get; set; } = null!;
     public DbSet<DocumentDetail> DocumentDetails { get; set; } = null!;
@@ -240,6 +244,45 @@ public class AppDbContext : DbContext
             .Property(b => b.Type)
             .HasConversion<string>();
 
+        modelBuilder.Entity<BInventoryBatch>(entity =>
+        {
+            entity.Property(b => b.Status)
+                .HasConversion<string>();
+
+            // Unique index: Mỗi mã lô chỉ xuất hiện duy nhất 1 lần trong 1 bản ghi BInventory (chi nhánh + sản phẩm)
+            entity.HasIndex(b => new { b.BInventoryId, b.BatchCode })
+                .IsUnique();
+
+            // Index tối ưu hóa truy vấn FEFO
+            entity.HasIndex(b => new { b.BInventoryId, b.Status, b.ExpiryDate });
+
+            entity.HasOne(b => b.BInventory)
+                .WithMany(bi => bi.Batches)
+                .HasForeignKey(b => b.BInventoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(b => b.SourceBatch)
+                .WithMany(sb => sb.DerivedBatches)
+                .HasForeignKey(b => b.SourceBatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BatchAllocation>(entity =>
+        {
+            entity.Property(ba => ba.AllocationType)
+                .HasConversion<string>();
+
+            entity.HasOne(ba => ba.DocumentDetail)
+                .WithMany(dd => dd.BatchAllocations)
+                .HasForeignKey(ba => ba.DocumentDetailId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(ba => ba.Batch)
+                .WithMany(b => b.BatchAllocations)
+                .HasForeignKey(ba => ba.BatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         modelBuilder.Entity<InventoryLedger>()
             .Property(il => il.DocumentType)
             .HasConversion<string>();
@@ -331,6 +374,12 @@ public class AppDbContext : DbContext
             .HasMany(p => p.SalaryDetails)
             .WithOne(sd => sd.Payroll)
             .HasForeignKey(sd => sd.PayrollId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Payroll>()
+            .HasMany(p => p.PayrollShiftDetails)
+            .WithOne(psd => psd.Payroll)
+            .HasForeignKey(psd => psd.PayrollId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 

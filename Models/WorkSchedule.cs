@@ -27,6 +27,18 @@ public class WorkSchedule
     [Column(TypeName = "decimal(18,4)")]
     public decimal? ActualHours { get; set; }
 
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal StandardHours { get; set; } = 8.0m;
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal ApprovedOTHours { get; set; } = 0m;
+
+    public string OTStatus { get; set; } = "None"; // None | Pending | Approved | Rejected
+
+    public bool IsAutoCheckout { get; set; } = false;
+
+    public string OTNotes { get; set; } = string.Empty;
+
     public string Status { get; set; } = string.Empty;
 
     public bool ManagerApproved { get; set; }

@@ -137,6 +137,7 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IFefoAllocationService, FefoAllocationService>();
 // builder.Services.AddScoped<IProductionDocumentService, ProductionDocumentService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
@@ -162,6 +163,7 @@ builder.Services.AddScoped<IOldProvinceService, OldProvinceService>();
 builder.Services.AddScoped<IOldDistrictService, OldDistrictService>();
 builder.Services.AddScoped<IPayrollService, PayrollService>();
 builder.Services.AddScoped<ISalaryDetailService, SalaryDetailService>();
+builder.Services.AddScoped<IHolidayConfigService, HolidayConfigService>();
 builder.Services.AddScoped<IDocumentService, DocumentService>();
 builder.Services.AddScoped<ICashFlowService, CashFlowService>();
 builder.Services.AddScoped<IPartnerService, PartnerService>();
@@ -305,5 +307,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<MenuGoBE.Hubs.NotificationHub>("/notificationHub");
+
+// Tự động khởi tạo Lô hàng kế thừa (LEGACY-INIT) cho các bản ghi tồn kho dương hiện có
+await MenuGoBE.Data.LegacyBatchSeeder.SeedLegacyBatchesAsync(app.Services);
 
 app.Run();
