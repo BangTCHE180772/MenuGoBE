@@ -23,15 +23,17 @@ namespace MenuGoBE.Service
         private readonly IAccountRepository _accountRepo;
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly AppDbContext _context;
+        private readonly INotificationRepository _notificationRepo;
 
         public WorkScheduleService(
-            IWorkScheduleRepository repo, 
+            IWorkScheduleRepository repo,
             IMapper mapper,
             IBranchRepository branchRepo,
             IShiftRepository shiftRepo,
             IAccountRepository accountRepo,
             IHubContext<NotificationHub> hubContext,
-            AppDbContext context)
+            AppDbContext context,
+            INotificationRepository notificationRepo)
         {
             _repo = repo;
             _mapper = mapper;
@@ -40,6 +42,7 @@ namespace MenuGoBE.Service
             _accountRepo = accountRepo;
             _hubContext = hubContext;
             _context = context;
+            _notificationRepo = notificationRepo;
         }
 
 
@@ -779,6 +782,7 @@ namespace MenuGoBE.Service
                 CreatedAt = DateTime.UtcNow
             };
             await _notificationRepo.CreateAsync(notification);
+            await _notificationRepo.SaveChangesAsync();
 
             await _hubContext.Clients.Group($"user_{dto.TargetAccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Bạn có lời mời nhận ca làm việc mới." });
             await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có yêu cầu đổi ca mới đang được xử lý." });
