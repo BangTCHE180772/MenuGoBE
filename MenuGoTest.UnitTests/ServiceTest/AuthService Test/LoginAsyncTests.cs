@@ -45,24 +45,11 @@ public class LoginAsyncTests
     [Fact]
     public async Task ReturnsToken_WhenLoginSuccess()
     {
-        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), Name = "Test User", TwoFACode = null };
+        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), Name = "Test User" };
         var accountWithRoles = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), Name = "Test User", Contracts = new List<Contract>() };
         var dto = new LoginDto { Email = "test@test.com", Password = "123456" };
         _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
         _accountRepoMock.Setup(r => r.GetAccountWithRolesAsync(1)).ReturnsAsync(accountWithRoles);
-
-        var result = await _service.LoginAsync(dto);
-
-        var json = System.Text.Json.JsonSerializer.Serialize(result);
-        Assert.Contains("success", json);
-    }
-
-    [Fact]
-    public async Task ReturnsVerify2FA_WhenTwoFAEnabled()
-    {
-        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), TwoFACode = "ABCDEFGHIJ" };
-        var dto = new LoginDto { Email = "test@test.com", Password = "123456" };
-        _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
 
         var result = await _service.LoginAsync(dto);
 

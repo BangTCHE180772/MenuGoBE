@@ -26,8 +26,6 @@ public class Account
 
     public string HashedPassword { get; set; } = string.Empty;
 
-    public string TwoFACode { get; set; } = string.Empty;
-
     public bool IsActive { get; set; }
 
     public long? AddressId { get; set; }
