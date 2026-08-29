@@ -43,11 +43,13 @@ public class LoginAsyncTests
     }
 
     [Fact]
-    public async Task ReturnsSetup2FA_WhenNoTwoFACode()
+    public async Task ReturnsToken_WhenLoginSuccess()
     {
-        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), TwoFACode = null };
+        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), Name = "Test User", TwoFACode = null };
+        var accountWithRoles = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), Name = "Test User", Contracts = new List<Contract>() };
         var dto = new LoginDto { Email = "test@test.com", Password = "123456" };
         _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
+        _accountRepoMock.Setup(r => r.GetAccountWithRolesAsync(1)).ReturnsAsync(accountWithRoles);
 
         var result = await _service.LoginAsync(dto);
 

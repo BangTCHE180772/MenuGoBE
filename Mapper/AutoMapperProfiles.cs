@@ -6,6 +6,7 @@ using MenuGoBE.Dtos.Chain;
 using MenuGoBE.Dtos.Table;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Dtos.Area;
+using MenuGoBE.Dtos.KitchenStation;
 using MenuGoBE.Dtos.Account;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Dtos.Contract;
@@ -104,6 +105,10 @@ namespace MenuGoBE.Mapper
             CreateMap<AreaCreateDto, Area>();
             CreateMap<AreaUpdateDto, Area>();
 
+            CreateMap<KitchenStation, KitchenStationViewDto>();
+            CreateMap<KitchenStationCreateDto, KitchenStation>();
+            CreateMap<KitchenStationUpdateDto, KitchenStation>();
+
             //order
             CreateMap<Order, OrderViewDto>()
                 .ForMember(dest => dest.TableName, opt => opt.MapFrom(src => src.Table != null ? (src.ChildOrders.Any() ? src.Table.Name + ", " + string.Join(", ", src.ChildOrders.Select(c => c.Table.Name)) : src.Table.Name) : null))
@@ -178,6 +183,7 @@ namespace MenuGoBE.Mapper
             CreateMap<Product, ProductViewDto>()
                 .ForMember(dest => dest.GroupName, opt => opt.MapFrom(src => src.Group != null ? src.Group.Name : null))
                 .ForMember(dest => dest.ImageUrl, opt => opt.MapFrom(src => src.Image != null ? src.Image.ImageLink : null))
+                .ForMember(dest => dest.KitchenStationName, opt => opt.MapFrom(src => src.KitchenStation != null ? src.KitchenStation.Name : null))
                 .ForMember(dest => dest.MenuIds, opt => opt.MapFrom(src => src.MenuProducts.Select(mp => mp.MenuId).ToList()))
                 .ForMember(dest => dest.Menus, opt => opt.MapFrom(src => src.MenuProducts.Where(mp => mp.Menu != null).Select(mp => new ProductMenuInfoViewDto { Id = mp.Menu.Id, Name = mp.Menu.Name }).ToList()))
                 .ForMember(dest => dest.UnitConversions, opt => opt.MapFrom(src => src.UnitConversions))

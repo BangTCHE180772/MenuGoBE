@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<Menu> Menus { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
     public DbSet<MenuProduct> MenuProducts { get; set; } = null!;
+    public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
 
     // 4. Units & Conversions Module
     public DbSet<Unit> Units { get; set; } = null!;
@@ -43,6 +44,7 @@ public class AppDbContext : DbContext
     public DbSet<Contract> Contracts { get; set; } = null!;
     public DbSet<Shift> Shifts { get; set; } = null!;
     public DbSet<WorkSchedule> WorkSchedules { get; set; } = null!;
+    public DbSet<ShiftChangeRequest> ShiftChangeRequests { get; set; } = null!;
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
@@ -55,6 +57,7 @@ public class AppDbContext : DbContext
     public DbSet<Customer> Customers { get; set; } = null!;
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
+    public DbSet<LeftoverRecord> LeftoverRecords { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<ReservationDetail> ReservationDetails { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
@@ -127,6 +130,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<KitchenStation>()
+            .HasIndex(k => new { k.BranchId, k.Name })
             .IsUnique();
 
         modelBuilder.Entity<Product>()

@@ -1,0 +1,145 @@
+using MenuGoBE.Dtos.Leftover;
+using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Services;
+using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
+using MenuGoBE.Exceptions;
+
+namespace MenuGoBE.Service
+{
+    public class LeftoverRecordService : ILeftoverRecordService
+    {
+        private readonly ILeftoverRecordRepository _repo;
+
+        public LeftoverRecordService(ILeftoverRecordRepository repo)
+        {
+            _repo = repo;
+        }
+
+        public async Task<List<LeftoverRecordViewDto>> GetByBranchAsync(long branchId, LeftoverType? type, DateOnly? fromDate, DateOnly? toDate)
+        {
+            var data = await _repo.GetByBranchAsync(branchId, type, fromDate, toDate);
+
+            return data.Select(l => new LeftoverRecordViewDto
+            {
+                Id = l.Id,
+                BranchId = l.BranchId,
+                Type = l.Type,
+                ProductId = l.ProductId,
+                ProductName = l.Product?.Name ?? string.Empty,
+                Quantity = l.Quantity,
+                Reason = l.Reason,
+                OrderDetailId = l.OrderDetailId,
+                TableName = l.OrderDetail?.Order?.Table?.Name,
+                HandlingAction = l.HandlingAction,
+                RefundAmount = l.RefundAmount,
+                DiscountAmount = l.DiscountAmount,
+                ShiftId = l.ShiftId,
+                ShiftName = l.Shift?.Name,
+                RecordDate = l.RecordDate,
+                CreatedBy = l.CreatedBy,
+                CreatedByName = l.Creator?.Name,
+                CreatedAt = l.CreatedAt,
+            }).ToList();
+        }
+
+        public async Task<LeftoverRecordViewDto> CreateAsync(LeftoverRecordCreateDto dto, long? createdBy)
+        {
+            if (dto.Quantity <= 0)
+            {
+                throw new MenuGoException(new ErrorResult(400, "Số lượng phải lớn hơn 0.", 400));
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.Reason))
+            {
+                throw new MenuGoException(new ErrorResult(400, "Phải nhập lý do.", 400));
+            }
+
+            OrderDetail? orderDetail = null;
+
+            if (dto.Type == LeftoverType.Return)
+            {
+                if (!dto.OrderDetailId.HasValue)
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Khách trả món phải gắn với một chi tiết đơn hàng (OrderDetailId).", 400));
+                }
+                if (!dto.HandlingAction.HasValue)
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Phải chọn cách xử lý (huỷ / nhân viên dùng / tái sử dụng).", 400));
+                }
+
+                orderDetail = await _repo.GetOrderDetailWithTableAsync(dto.OrderDetailId.Value);
+                if (orderDetail == null)
+                {
+                    throw new MenuGoException(new ErrorResult(404, "Không tìm thấy chi tiết đơn hàng.", 404));
+                }
+            }
+            else // Extra: không gắn đơn khách, không đụng tổng tiền order, không cộng trả kho
+            {
+                if (dto.OrderDetailId.HasValue)
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không được gắn với đơn hàng của khách.", 400));
+                }
+                if (dto.RefundAmount.HasValue || dto.DiscountAmount.HasValue)
+                {
+                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không có hoàn tiền/giảm giá.", 400));
+                }
+            }
+
+            var entity = new LeftoverRecord
+            {
+                BranchId = dto.BranchId,
+                Type = dto.Type,
+                ProductId = dto.ProductId,
+                Quantity = dto.Quantity,
+                Reason = dto.Reason.Trim(),
+                OrderDetailId = dto.OrderDetailId,
+                HandlingAction = dto.HandlingAction,
+                RefundAmount = dto.RefundAmount,
+                DiscountAmount = dto.DiscountAmount,
+                ShiftId = dto.ShiftId,
+                RecordDate = dto.RecordDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow,
+            };
+
+            // Chủ đích KHÔNG chạm vào Order.TotalAmount hay BInventory.Quantity ở đây —
+            // đây là bảng ghi nhận (log) thuần túy cho cả 2 nghiệp vụ Return/Extra.
+            await _repo.CreateAsync(entity);
+            await _repo.SaveChangesAsync();
+
+            var saved = await _repo.GetByIdAsync(entity.Id);
+
+            return new LeftoverRecordViewDto
+            {
+                Id = entity.Id,
+                BranchId = entity.BranchId,
+                Type = entity.Type,
+                ProductId = entity.ProductId,
+                ProductName = saved?.Product?.Name ?? string.Empty,
+                Quantity = entity.Quantity,
+                Reason = entity.Reason,
+                OrderDetailId = entity.OrderDetailId,
+                TableName = orderDetail?.Order?.Table?.Name,
+                HandlingAction = entity.HandlingAction,
+                RefundAmount = entity.RefundAmount,
+                DiscountAmount = entity.DiscountAmount,
+                ShiftId = entity.ShiftId,
+                RecordDate = entity.RecordDate,
+                CreatedBy = entity.CreatedBy,
+                CreatedAt = entity.CreatedAt,
+            };
+        }
+
+        public async Task<bool> DeleteAsync(long id)
+        {
+            var entity = await _repo.GetByIdAsync(id);
+            if (entity == null) return false;
+
+            await _repo.DeleteAsync(id);
+            await _repo.SaveChangesAsync();
+
+            return true;
+        }
+    }
+}

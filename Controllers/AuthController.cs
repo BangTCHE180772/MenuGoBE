@@ -43,67 +43,7 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Đăng xuất thành công" });
         }
 
-        [HttpPost("setup-2fa")]
-        public async Task<IActionResult> Setup2FA([FromBody] Setup2FADto dto)
-        {
-            try
-            {
-                var result = await _authService.Setup2FAAsync(dto);
-                return Ok(result);
-            }
-            catch (ArgumentException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
-            }
-        }
 
-        [HttpPost("confirm-setup-2fa")]
-        public async Task<IActionResult> ConfirmSetup2FA([FromBody] ConfirmSetup2FADto dto)
-        {
-            try
-            {
-                var result = await _authService.ConfirmSetup2FAAsync(dto);
-                return Ok(result);
-            }
-            catch (ArgumentException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
-            }
-        }
-
-        [HttpPost("verify-2fa")]
-        public async Task<IActionResult> Verify2FA([FromBody] Verify2FADto dto)
-        {
-            try
-            {
-                var result = await _authService.Verify2FAAsync(dto);
-                return Ok(result);
-            }
-            catch (ArgumentException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
-            }
-        }
 
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
