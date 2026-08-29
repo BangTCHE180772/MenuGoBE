@@ -676,7 +676,7 @@ namespace MenuGoBE.Service
             return result;
         }
 
-        public async Task<bool> CancelOrderDetailAsync(long orderDetailId)
+        public async Task<bool> CancelOrderDetailAsync(long orderDetailId, long? cancelledBy = null)
         {
             var entity = await _detailRepo.GetByIdAsync(orderDetailId);
             if (entity == null) return false;
@@ -726,10 +726,12 @@ namespace MenuGoBE.Service
                                 }
                             }
                         }
-                        // Processed + đã làm xong (Ready) mà vẫn bị huỷ = lỗi của bếp
-                        // (bếp làm chậm, khách đi về không nhận món nữa). Không cộng trả
-                        // kho nguyên liệu (đã dùng), chỉ ghi nhận vào "Món thừa" (Extra)
-                        // để lên thống kê admin xem bếp làm chậm bao nhiêu lần.
+                        // Processed + đã làm xong (Ready) mà vẫn bị huỷ = khách không nhận món
+                        // đã hoàn thành (thường do nhân viên phục vụ/waiter huỷ giúp khách,
+                        // không phải bếp tự phát sinh) — gắn với đúng OrderDetail/bàn cụ thể
+                        // nên ghi nhận là "Khách trả món" (Return), không phải "Bếp làm dư"
+                        // (Extra vốn dành cho trường hợp không gắn đơn khách nào cả). Không
+                        // cộng trả kho nguyên liệu (đã dùng), chỉ ghi nhận để lên thống kê.
                         else if (productType == "Processed" && wasReady)
                         {
                             var table = await _tableRepo.GetByIdAsync(order.TableId);
@@ -743,11 +745,13 @@ namespace MenuGoBE.Service
                                         await _leftoverRecordService.CreateAsync(new LeftoverRecordCreateDto
                                         {
                                             BranchId = area.BranchId,
-                                            Type = LeftoverType.Extra,
+                                            Type = LeftoverType.Return,
                                             ProductId = entity.ProductId,
                                             Quantity = entity.Quantity,
                                             Reason = "Bếp làm chậm, khách không nhận món đã hoàn thành",
-                                        }, null);
+                                            OrderDetailId = entity.Id,
+                                            HandlingAction = LeftoverHandlingAction.Discard,
+                                        }, cancelledBy);
                                     }
                                     catch
                                     {

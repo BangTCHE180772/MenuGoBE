@@ -692,7 +692,8 @@ namespace MenuGoBE.Controllers
         [HttpPut("details/{id}/cancel")]
         public async Task<IActionResult> CancelOrderDetail(long id)
         {
-            var result = await _detailService.CancelOrderDetailAsync(id);
+            var currentUserId = GetCurrentUserId();
+            var result = await _detailService.CancelOrderDetailAsync(id, currentUserId);
             if (!result)
                 return BadRequest(new { message = "Không thể hủy món. Món đã được nhận bởi bếp hoặc đã bị hủy trước đó." });
 
