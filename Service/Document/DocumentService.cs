@@ -1748,7 +1748,7 @@ namespace MenuGoBE.Service.Document
                     {
                         var batchAlloc = new BatchAllocation
                         {
-                            DocumentDetailId = createdOrMatchedDetail.Id,
+                            DocumentDetail = createdOrMatchedDetail,
                             BatchId = alloc.BatchId,
                             AllocationType = BatchAllocationType.Sale,
                             QuantityAllocated = alloc.QuantityAllocated,
@@ -1967,7 +1967,9 @@ namespace MenuGoBE.Service.Document
                     {
                         var batchAlloc = new BatchAllocation
                         {
-                            DocumentDetailId = childDetail.Id,
+                            // childDetail.Id chưa được EF gán (chưa SaveChanges) — dùng navigation
+                            // property để EF tự fix-up FK khi save, thay vì gán thẳng Id = 0.
+                            DocumentDetail = childDetail,
                             BatchId = alloc.BatchId,
                             AllocationType = BatchAllocationType.Sale,
                             QuantityAllocated = alloc.QuantityAllocated,
@@ -2054,7 +2056,7 @@ namespace MenuGoBE.Service.Document
 
                     var returnAlloc = new BatchAllocation
                     {
-                        DocumentDetailId = childDetail.Id,
+                        DocumentDetail = childDetail,
                         BatchId = targetBatch.Id,
                         AllocationType = BatchAllocationType.CustomerReturn,
                         QuantityAllocated = baseQuantity,
@@ -3409,7 +3411,7 @@ namespace MenuGoBE.Service.Document
                     {
                         var batchAlloc = new BatchAllocation
                         {
-                            DocumentDetailId = childDetail.Id,
+                            DocumentDetail = childDetail,
                             BatchId = alloc.BatchId,
                             AllocationType = BatchAllocationType.ProductionConsumption,
                             QuantityAllocated = alloc.QuantityAllocated,
