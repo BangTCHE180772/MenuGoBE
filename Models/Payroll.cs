@@ -23,6 +23,21 @@ public class Payroll
     public string SalaryType { get; set; } = string.Empty;
 
     [Column(TypeName = "decimal(18,4)")]
+    public decimal HourlyRate { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal TotalBaseShiftPay { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal TotalNightPay { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal TotalOTPay { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal TotalHolidayBonus { get; set; }
+
+    [Column(TypeName = "decimal(18,4)")]
     public decimal BaseSalary { get; set; }
 
     public int BaseWorkDays { get; set; }
@@ -57,6 +72,13 @@ public class Payroll
 
     public string Note { get; set; } = string.Empty;
 
+    // Audit fields for locking/approval
+    public long? LockedBy { get; set; }
+    public DateTime? LockedAt { get; set; }
+
+    public long? ApprovedBy { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+
     public long CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -71,5 +93,13 @@ public class Payroll
     [ForeignKey("ContractId")]
     public Contract? Contract { get; set; }
 
+    [ForeignKey("LockedBy")]
+    public Account? Locker { get; set; }
+
+    [ForeignKey("ApprovedBy")]
+    public Account? Approver { get; set; }
+
     public ICollection<SalaryDetail> SalaryDetails { get; set; } = new List<SalaryDetail>();
+
+    public ICollection<PayrollShiftDetail> PayrollShiftDetails { get; set; } = new List<PayrollShiftDetail>();
 }

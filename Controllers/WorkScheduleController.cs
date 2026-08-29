@@ -301,5 +301,71 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        [HttpPost("approve-ot")]
+        public async Task<IActionResult> ApproveOT([FromBody] WorkScheduleOTApproveDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+            {
+                return StatusCode(403, new { message = "Chỉ Quản lý hoặc Chủ cửa hàng mới được phê duyệt tăng ca (OT)." });
+            }
+
+            try
+            {
+                var success = await _service.ApproveOTAsync(dto);
+                if (!success) return NotFound(new { message = "Không tìm thấy lịch làm việc để phê duyệt OT." });
+                return Ok(new { message = "Cập nhật phê duyệt OT thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}/verify-pos-activity")]
+        public async Task<IActionResult> VerifyPOSActivity(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var result = await _service.VerifyPOSActivityAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Điểm danh có xác minh vị trí GPS. Được gọi từ thiết bị di động / trình duyệt của nhân viên.
+        /// </summary>
+        [HttpPost("check-in-with-location")]
+        public async Task<IActionResult> CheckInWithLocation([FromBody] CheckInWithLocationDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var (success, msg, action) = await _service.CheckInWithLocationAsync(
+                    currentUserId.Value, dto.BranchId, dto.Latitude, dto.Longitude, dto.WorkScheduleId);
+
+                return Ok(new { success, message = msg, action });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }

@@ -54,6 +54,8 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.DocumentDetails)
                     .ThenInclude(dt => dt.UnitConversion)
                         .ThenInclude(uc => uc.Unit)
+                .Include(d => d.DocumentDetails)
+                    .ThenInclude(dt => dt.BatchAllocations)
                 .Include(d => d.Branch)
                 .Include(d => d.ToBranch)
                 .Include(d => d.Partner)
@@ -233,6 +235,49 @@ namespace MenuGoBE.Repositories.Document
             {
                 _context.DocumentDetails.RemoveRange(details);
             }
+        }
+        #endregion
+
+        #region Thao tác với Lô hàng (BInventoryBatch) & Phân bổ (BatchAllocation)
+        public async Task<BInventoryBatch?> GetBatchByInventoryAndCodeAsync(long bInventoryId, string batchCode)
+        {
+            return await _context.BInventoryBatches
+                .FirstOrDefaultAsync(b => b.BInventoryId == bInventoryId && b.BatchCode == batchCode);
+        }
+
+        public async Task<BInventoryBatch?> GetBatchByIdAsync(long batchId)
+        {
+            return await _context.BInventoryBatches.FirstOrDefaultAsync(b => b.Id == batchId);
+        }
+
+        public async Task<List<BInventoryBatch>> GetBatchesByInventoryIdAsync(long bInventoryId)
+        {
+            return await _context.BInventoryBatches
+                .Where(b => b.BInventoryId == bInventoryId)
+                .ToListAsync();
+        }
+
+        public async Task AddBatchAsync(BInventoryBatch batch)
+        {
+            await _context.BInventoryBatches.AddAsync(batch);
+        }
+
+        public async Task AddBatchAllocationAsync(BatchAllocation batchAllocation)
+        {
+            await _context.BatchAllocations.AddAsync(batchAllocation);
+        }
+
+        public async Task AddBatchAllocationsAsync(IEnumerable<BatchAllocation> batchAllocations)
+        {
+            await _context.BatchAllocations.AddRangeAsync(batchAllocations);
+        }
+
+        public async Task<List<BatchAllocation>> GetBatchAllocationsByDetailIdsAsync(IEnumerable<long> documentDetailIds)
+        {
+            return await _context.BatchAllocations
+                .Include(a => a.Batch)
+                .Where(a => documentDetailIds.Contains(a.DocumentDetailId))
+                .ToListAsync();
         }
         #endregion
 

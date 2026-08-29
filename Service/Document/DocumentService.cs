@@ -20,24 +20,27 @@ namespace MenuGoBE.Service.Document
     {
         #region Khai báo Repository & Constructor
 
-        #region Repository & Mapper Dependency
+        #region Repository, Mapper & FEFO Service Dependency
         /// <summary>
         /// Instance DocumentRepository thao tác với DB.
         /// </summary>
         private readonly IDocumentRepository _repo;
         private readonly IMapper _mapper;
+        private readonly IFefoAllocationService? _fefoService;
         #endregion
 
         #region Constructor
         /// <summary>
-        /// Khởi tạo DocumentService với IDocumentRepository và IMapper.
+        /// Khởi tạo DocumentService với IDocumentRepository, IMapper và IFefoAllocationService.
         /// </summary>
         /// <param name="repo">Repository chứng từ</param>
         /// <param name="mapper">AutoMapper instance</param>
-        public DocumentService(IDocumentRepository repo, IMapper mapper)
+        /// <param name="fefoService">Dịch vụ phân bổ FEFO</param>
+        public DocumentService(IDocumentRepository repo, IMapper mapper, IFefoAllocationService? fefoService = null)
         {
             _repo = repo;
             _mapper = mapper;
+            _fefoService = fefoService;
         }
         #endregion
 
@@ -549,6 +552,52 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddInventoryLedgerAsync(ledger);
+
+                // 8b. Xử lý Lô hàng (BInventoryBatch) khi nhập kho
+                string batchCode = !string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot)
+                    ? detail.BatchCodeSnapshot
+                    : $"LOT-IMP-{document.Code}-{detail.Id}";
+
+                detail.BatchCodeSnapshot = batchCode;
+
+                var existingBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, batchCode);
+                if (existingBatch != null)
+                {
+                    // Nếu Lô đã tồn tại, cộng dồn số lượng
+                    existingBatch.QuantityOriginal += q_import;
+                    existingBatch.QuantityRemaining += q_import;
+                    if (existingBatch.Status == BatchStatus.Depleted)
+                    {
+                        existingBatch.Status = BatchStatus.Active;
+                    }
+                    if (detail.ManufactureDateSnapshot.HasValue)
+                    {
+                        existingBatch.ManufactureDate = detail.ManufactureDateSnapshot;
+                    }
+                    if (detail.ExpiryDateSnapshot.HasValue)
+                    {
+                        existingBatch.ExpiryDate = detail.ExpiryDateSnapshot;
+                    }
+                    existingBatch.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    // Tạo Lô mới
+                    var newBatch = new BInventoryBatch
+                    {
+                        BInventoryId = binventory.Id,
+                        BatchCode = batchCode,
+                        QuantityOriginal = q_import,
+                        QuantityRemaining = q_import,
+                        UnitCost = unit_cost_import,
+                        ManufactureDate = detail.ManufactureDateSnapshot,
+                        ExpiryDate = detail.ExpiryDateSnapshot,
+                        ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
+                        Status = BatchStatus.Active,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _repo.AddBatchAsync(newBatch);
+                }
             }
         }
         #endregion
@@ -1148,6 +1197,39 @@ namespace MenuGoBE.Service.Document
                     };
 
                     await _repo.AddInventoryLedgerAsync(ledger);
+
+                    // Xử lý trừ Lô hàng nhập gốc & Ghi nhận phân bổ Trả hàng NCC
+                    var fatherDetail = parentImport?.DocumentDetails?.FirstOrDefault(d => d.Id == detail.FatherId);
+                    string targetBatchCode = fatherDetail?.BatchCodeSnapshot ?? detail.BatchCodeSnapshot ?? $"LOT-IMP-{parentImport?.Code}-{detail.FatherId}";
+
+                    detail.BatchCodeSnapshot = targetBatchCode;
+
+                    var targetBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, targetBatchCode);
+                    if (targetBatch != null)
+                    {
+                        if (q_return > targetBatch.QuantityRemaining)
+                        {
+                            throw new MenuGoException(ErrorCodes.DocumentReturnInsufficientInventory, $"Số lượng trả hàng ({q_return:N3}) vượt quá số lượng còn lại của Lô hàng nhập gốc '{targetBatch.BatchCode}' ({targetBatch.QuantityRemaining:N3}).");
+                        }
+
+                        targetBatch.QuantityRemaining -= q_return;
+                        if (targetBatch.QuantityRemaining == 0)
+                        {
+                            targetBatch.Status = BatchStatus.Depleted;
+                        }
+                        targetBatch.UpdatedAt = DateTime.UtcNow;
+
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = targetBatch.Id,
+                            AllocationType = BatchAllocationType.ReturnToSupplier,
+                            QuantityAllocated = q_return,
+                            UnitCost = targetBatch.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
                 }
             }
 
@@ -1621,24 +1703,59 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddInventoryLedgerAsync(ledger);
 
+                // Phân bổ Lô hàng theo chuẩn FEFO
+                IReadOnlyList<FefoAllocationResult> fefoAllocations = new List<FefoAllocationResult>();
+                if (_fefoService != null)
+                {
+                    fefoAllocations = await _fefoService.AllocateAsync(binventory.Id, item.TotalRequiredQuantity);
+                }
+
+                DocumentDetail? createdOrMatchedDetail = null;
                 foreach (var parentId in item.ParentDetailIds)
                 {
                     var parentDetail = document.DocumentDetails.FirstOrDefault(d => d.Id == parentId);
-                    if (parentDetail != null && parentDetail.BInventoryId != binventory.Id)
+                    if (parentDetail != null)
                     {
-                        var childDetail = new DocumentDetail
+                        if (parentDetail.BInventoryId != binventory.Id)
                         {
-                            DocumentId = document.Id,
-                            FatherId = parentDetail.Id,
-                            BInventoryId = binventory.Id,
-                            Quantity = item.TotalRequiredQuantity,
-                            ConversionRate = 1,
-                            BaseQuantity = item.TotalRequiredQuantity,
-                            UnitPrice = binventory.Avg,
-                            SnapshotProductName = item.Product.Name,
-                            SnapshotAvgCost = binventory.Avg
+                            var childDetail = new DocumentDetail
+                            {
+                                DocumentId = document.Id,
+                                FatherId = parentDetail.Id,
+                                BInventoryId = binventory.Id,
+                                Quantity = item.TotalRequiredQuantity,
+                                ConversionRate = 1,
+                                BaseQuantity = item.TotalRequiredQuantity,
+                                UnitPrice = binventory.Avg,
+                                SnapshotProductName = item.Product.Name,
+                                SnapshotAvgCost = binventory.Avg
+                            };
+                            document.DocumentDetails.Add(childDetail);
+                            createdOrMatchedDetail = childDetail;
+                        }
+                        else
+                        {
+                            createdOrMatchedDetail = parentDetail;
+                        }
+                    }
+                }
+
+                createdOrMatchedDetail ??= document.DocumentDetails.FirstOrDefault(d => d.BInventoryId == binventory.Id);
+
+                if (createdOrMatchedDetail != null && fefoAllocations.Any())
+                {
+                    foreach (var alloc in fefoAllocations)
+                    {
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = createdOrMatchedDetail.Id,
+                            BatchId = alloc.BatchId,
+                            AllocationType = BatchAllocationType.Sale,
+                            QuantityAllocated = alloc.QuantityAllocated,
+                            UnitCost = alloc.UnitCost,
+                            CreatedAt = DateTime.UtcNow
                         };
-                        document.DocumentDetails.Add(childDetail);
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
                     }
                 }
             }
@@ -1823,10 +1940,17 @@ namespace MenuGoBE.Service.Document
 
                 await _repo.AddInventoryLedgerAsync(ledger);
 
+                // Phân bổ Lô hàng theo chuẩn FEFO cho Sale POS
+                IReadOnlyList<FefoAllocationResult> fefoAllocations = new List<FefoAllocationResult>();
+                if (_fefoService != null)
+                {
+                    fefoAllocations = await _fefoService.AllocateAsync(binventory.Id, item.TotalRequiredQuantity);
+                }
+
                 var childDetail = new DocumentDetail
                 {
                     DocumentId = document.Id,
-                    FatherId = null, // Since we unrolled it, keeping it null for top-level, or we can use parentDetailId if we change schema.
+                    FatherId = null,
                     BInventoryId = binventory.Id,
                     Quantity = item.TotalRequiredQuantity,
                     ConversionRate = 1,
@@ -1836,6 +1960,23 @@ namespace MenuGoBE.Service.Document
                     SnapshotAvgCost = binventory.Avg
                 };
                 document.DocumentDetails.Add(childDetail);
+
+                if (fefoAllocations.Any())
+                {
+                    foreach (var alloc in fefoAllocations)
+                    {
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = childDetail.Id,
+                            BatchId = alloc.BatchId,
+                            AllocationType = BatchAllocationType.Sale,
+                            QuantityAllocated = alloc.QuantityAllocated,
+                            UnitCost = alloc.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                }
             }
             _repo.Update(document);
             await _repo.SaveChangesAsync();
@@ -1851,45 +1992,36 @@ namespace MenuGoBE.Service.Document
             {
                 string note = "";
                 
-                // Logic kiểm tra Regular và IsIntact nằm ở đây
-                // if (product.Type == ProductType.Regular && isIntact)
-                // {
-                    // Cộng lại tồn kho
-                    binventory.Quantity += baseQuantity;
-                    
-                    var account = await _repo.GetAccountByIdAsync(userId);
-                    string snapshotPostedByName = account != null ? account.Name : "System";
+                // Cộng lại tồn kho
+                binventory.Quantity += baseQuantity;
+                
+                var account = await _repo.GetAccountByIdAsync(userId);
+                string snapshotPostedByName = account != null ? account.Name : "System";
 
-                    // Ghi thẻ kho (Inventory Ledger)
-                    var ledger = new InventoryLedger
-                    {
-                        BInventoryId = binventory.Id,
-                        DocumentId = document.Id,
-                        PostedAt = DateTime.UtcNow,
-                        PostedBy = userId,
-                        DocumentType = DocumentType.CustomerReturn,
-                        SnapshotPostedByName = snapshotPostedByName,
-                        SnapshotBranchName = document.SnapshotBranchName ?? "",
-                        SnapshotProductName = product.Name,
-                        SnapshotUnitName = product.Name,
-                        ConversionRateSnapshot = 1m,
-                        QuantityDelta = baseQuantity,
-                        InventoryValueDelta = baseQuantity * binventory.Avg,
-                        RunningQuantity = binventory.Quantity,
-                        RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
-                        RunningAverageCost = binventory.Avg,
-                        UnitCost = binventory.Avg,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    await _repo.AddInventoryLedgerAsync(ledger);
-                    
-                    note = "Trả lại nguyên vẹn - Đã cộng tồn kho";
-                // }
-                // else
-                // {
-                //     // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho
-                //     note = "Hàng lỗi/Đã chế biến - Không cộng tồn kho";
-                // }
+                // Ghi thẻ kho (Inventory Ledger)
+                var ledger = new InventoryLedger
+                {
+                    BInventoryId = binventory.Id,
+                    DocumentId = document.Id,
+                    PostedAt = DateTime.UtcNow,
+                    PostedBy = userId,
+                    DocumentType = DocumentType.CustomerReturn,
+                    SnapshotPostedByName = snapshotPostedByName,
+                    SnapshotBranchName = document.SnapshotBranchName ?? "",
+                    SnapshotProductName = product.Name,
+                    SnapshotUnitName = product.Name,
+                    ConversionRateSnapshot = 1m,
+                    QuantityDelta = baseQuantity,
+                    InventoryValueDelta = baseQuantity * binventory.Avg,
+                    RunningQuantity = binventory.Quantity,
+                    RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                    RunningAverageCost = binventory.Avg,
+                    UnitCost = binventory.Avg,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _repo.AddInventoryLedgerAsync(ledger);
+                
+                note = "Trả lại nguyên vẹn - Đã cộng tồn kho";
 
                 // LUÔN LUÔN ghi nhận vào chi tiết phiếu trả (DocumentDetail)
                 var childDetail = new DocumentDetail
@@ -1905,6 +2037,32 @@ namespace MenuGoBE.Service.Document
                     Note = note
                 };
                 document.DocumentDetails.Add(childDetail);
+
+                // Hoàn trả số lượng vào Lô hàng (Lô Active gần nhất hoặc Lô kế thừa)
+                var batches = await _repo.GetBatchesByInventoryIdAsync(binventory.Id);
+                var targetBatch = batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault(b => b.Status == BatchStatus.Active) 
+                               ?? batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault();
+                
+                if (targetBatch != null)
+                {
+                    targetBatch.QuantityRemaining += baseQuantity;
+                    if (targetBatch.Status == BatchStatus.Depleted)
+                    {
+                        targetBatch.Status = BatchStatus.Active;
+                    }
+                    targetBatch.UpdatedAt = DateTime.UtcNow;
+
+                    var returnAlloc = new BatchAllocation
+                    {
+                        DocumentDetailId = childDetail.Id,
+                        BatchId = targetBatch.Id,
+                        AllocationType = BatchAllocationType.CustomerReturn,
+                        QuantityAllocated = baseQuantity,
+                        UnitCost = targetBatch.UnitCost,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _repo.AddBatchAllocationAsync(returnAlloc);
+                }
             }
             
             _repo.Update(document);
@@ -2205,6 +2363,32 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddInventoryLedgerAsync(ledgerSend);
+
+                // Phân bổ Lô hàng xuất chuyển theo chuẩn FEFO
+                IReadOnlyList<FefoAllocationResult> sendAllocations = new List<FefoAllocationResult>();
+                if (_fefoService != null)
+                {
+                    sendAllocations = await _fefoService.AllocateAsync(binventorySend.Id, detail.BaseQuantity);
+                }
+
+                if (sendAllocations.Any())
+                {
+                    foreach (var alloc in sendAllocations)
+                    {
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = alloc.BatchId,
+                            AllocationType = BatchAllocationType.TransferOut,
+                            QuantityAllocated = alloc.QuantityAllocated,
+                            UnitCost = alloc.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                    detail.BatchCodeSnapshot = sendAllocations.First().BatchCode;
+                    detail.ExpiryDateSnapshot = sendAllocations.First().ExpiryDate;
+                }
             }
 
             // Sinh phiếu CashFlow Thu tiền (Inflow) tự động cho chi nhánh gửi (Bên A)
@@ -2321,6 +2505,32 @@ namespace MenuGoBE.Service.Document
                     };
 
                     await _repo.AddInventoryLedgerAsync(ledgerReturn);
+
+                    // Hoàn trả chính xác các Lô nguồn đã xuất trong Transfer Send
+                    var allocations = (await _repo.GetBatchAllocationsByDetailIdsAsync(new[] { detail.Id })) ?? new List<BatchAllocation>();
+                    foreach (var alloc in allocations.Where(a => a.AllocationType == BatchAllocationType.TransferOut))
+                    {
+                        if (alloc.Batch != null)
+                        {
+                            alloc.Batch.QuantityRemaining += alloc.QuantityAllocated;
+                            if (alloc.Batch.Status == BatchStatus.Depleted)
+                            {
+                                alloc.Batch.Status = BatchStatus.Active;
+                            }
+                            alloc.Batch.UpdatedAt = DateTime.UtcNow;
+
+                            var rejectAlloc = new BatchAllocation
+                            {
+                                DocumentDetailId = detail.Id,
+                                BatchId = alloc.BatchId,
+                                AllocationType = BatchAllocationType.TransferReturn,
+                                QuantityAllocated = alloc.QuantityAllocated,
+                                UnitCost = alloc.UnitCost,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _repo.AddBatchAllocationAsync(rejectAlloc);
+                        }
+                    }
                 }
 
                 document.TransferStatus = DocumentTransferStatus.Rejected;
@@ -2365,7 +2575,10 @@ namespace MenuGoBE.Service.Document
                         SnapshotProductName = detail.SnapshotProductName,
                         SnapshotProductCode = detail.SnapshotProductCode,
                         SnapshotUnitName = detail.SnapshotUnitName,
-                        SnapshotBaseUnitName = detail.SnapshotBaseUnitName
+                        SnapshotBaseUnitName = detail.SnapshotBaseUnitName,
+                        BatchCodeSnapshot = detail.BatchCodeSnapshot,
+                        ManufactureDateSnapshot = detail.ManufactureDateSnapshot,
+                        ExpiryDateSnapshot = detail.ExpiryDateSnapshot
                     };
                     newImportDetails.Add(newImportDetail);
                 }
@@ -2820,6 +3033,54 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddInventoryLedgerAsync(ledger);
+
+                // Xử lý phân bổ Lô xuất hủy/xuất dùng (Chỉ định Lô cụ thể hoặc FEFO tự động)
+                if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
+                {
+                    var explicitBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, detail.BatchCodeSnapshot);
+                    if (explicitBatch != null)
+                    {
+                        if (q_export > explicitBatch.QuantityRemaining)
+                        {
+                            throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Số lượng xuất ({q_export:N3}) vượt quá số lượng còn lại của Lô được chỉ định '{explicitBatch.BatchCode}' ({explicitBatch.QuantityRemaining:N3}).");
+                        }
+
+                        explicitBatch.QuantityRemaining -= q_export;
+                        if (explicitBatch.QuantityRemaining == 0)
+                        {
+                            explicitBatch.Status = BatchStatus.Depleted;
+                        }
+                        explicitBatch.UpdatedAt = DateTime.UtcNow;
+
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = explicitBatch.Id,
+                            AllocationType = BatchAllocationType.Disposal,
+                            QuantityAllocated = q_export,
+                            UnitCost = explicitBatch.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                }
+                else if (_fefoService != null)
+                {
+                    var exportAllocations = await _fefoService.AllocateAsync(binventory.Id, q_export);
+                    foreach (var alloc in exportAllocations)
+                    {
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = alloc.BatchId,
+                            AllocationType = BatchAllocationType.Disposal,
+                            QuantityAllocated = alloc.QuantityAllocated,
+                            UnitCost = alloc.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                }
             }
 
             document.TotalAmount = document.DocumentDetails.Sum(d => d.BaseQuantity * d.SnapshotAvgCost);
@@ -3124,6 +3385,40 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddInventoryLedgerAsync(ingredientLedger);
+
+                // Tạo dòng chi tiết NVL phụ
+                var childDetail = new DocumentDetail
+                {
+                    DocumentId = document.Id,
+                    FatherId = parentDetail.Id,
+                    BInventoryId = ingredientBinventory.Id,
+                    Quantity = requiredQty,
+                    ConversionRate = 1,
+                    BaseQuantity = requiredQty,
+                    UnitPrice = ingredientBinventory.Avg,
+                    SnapshotProductName = ingredientName,
+                    SnapshotAvgCost = ingredientBinventory.Avg
+                };
+                document.DocumentDetails.Add(childDetail);
+
+                // Phân bổ Lô NVL theo chuẩn FEFO
+                if (_fefoService != null)
+                {
+                    var ingAllocations = await _fefoService.AllocateAsync(ingredientBinventory.Id, requiredQty);
+                    foreach (var alloc in ingAllocations)
+                    {
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = childDetail.Id,
+                            BatchId = alloc.BatchId,
+                            AllocationType = BatchAllocationType.ProductionConsumption,
+                            QuantityAllocated = alloc.QuantityAllocated,
+                            UnitCost = alloc.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                }
             }
 
             // Bước 4: Xử lý cộng kho Thành phẩm TP & Tính giá vốn trung bình TP
@@ -3142,8 +3437,9 @@ namespace MenuGoBE.Service.Document
             parentBinventory.LeftOver = tp_leftover_new;
             parentBinventory.Quantity = b2;
 
+            decimal tpUnitCost = (producedQty > 0) ? (totalProductionCost / producedQty) : tp_avg;
             parentDetail.SnapshotAvgCost = tp_avg;
-            parentDetail.UnitPrice = (producedQty > 0) ? (totalProductionCost / producedQty) : 0m;
+            parentDetail.UnitPrice = tpUnitCost;
 
             // Bản ghi Sổ kho InventoryLedger cho Thành phẩm sản xuất
             var parentLedger = new InventoryLedger
@@ -3163,11 +3459,53 @@ namespace MenuGoBE.Service.Document
                 RunningQuantity = b2,
                 RunningInventoryValue = c1,
                 RunningAverageCost = tp_avg,
-                UnitCost = (producedQty > 0) ? (totalProductionCost / producedQty) : tp_avg,
+                UnitCost = tpUnitCost,
                 CreatedAt = DateTime.UtcNow
             };
 
             await _repo.AddInventoryLedgerAsync(parentLedger);
+
+            // Bước 5: Tạo Lô hàng mới (BInventoryBatch) cho thành phẩm sản xuất
+            string prdBatchCode = !string.IsNullOrWhiteSpace(parentDetail.BatchCodeSnapshot)
+                ? parentDetail.BatchCodeSnapshot
+                : $"LOT-PRD-{document.Code}-{parentDetail.Id}";
+
+            DateTime? expiryDate = parentBinventory.Product.ShelfLifeDays.HasValue
+                ? DateTime.UtcNow.AddDays(parentBinventory.Product.ShelfLifeDays.Value)
+                : null;
+
+            parentDetail.BatchCodeSnapshot = prdBatchCode;
+            parentDetail.ManufactureDateSnapshot = DateTime.UtcNow;
+            parentDetail.ExpiryDateSnapshot = expiryDate;
+
+            var existingPrdBatch = await _repo.GetBatchByInventoryAndCodeAsync(parentBinventory.Id, prdBatchCode);
+            if (existingPrdBatch != null)
+            {
+                existingPrdBatch.QuantityOriginal += producedQty;
+                existingPrdBatch.QuantityRemaining += producedQty;
+                if (existingPrdBatch.Status == BatchStatus.Depleted)
+                {
+                    existingPrdBatch.Status = BatchStatus.Active;
+                }
+                existingPrdBatch.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                var newPrdBatch = new BInventoryBatch
+                {
+                    BInventoryId = parentBinventory.Id,
+                    BatchCode = prdBatchCode,
+                    QuantityOriginal = producedQty,
+                    QuantityRemaining = producedQty,
+                    UnitCost = tpUnitCost,
+                    ManufactureDate = DateTime.UtcNow,
+                    ExpiryDate = expiryDate,
+                    ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
+                    Status = BatchStatus.Active,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _repo.AddBatchAsync(newPrdBatch);
+            }
         }
         #endregion
 
@@ -3455,6 +3793,7 @@ namespace MenuGoBE.Service.Document
                     val_delta = q_delta * binventory.Avg;
                 }
 
+                // Bản ghi Sổ kho InventoryLedger
                 var ledger = new InventoryLedger
                 {
                     BInventoryId = binventory.Id,
@@ -3477,6 +3816,87 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddInventoryLedgerAsync(ledger);
+
+                // Xử lý cập nhật Lô hàng (BInventoryBatch) và ghi nhận phân bổ Kiểm kho (StockCheck)
+                if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
+                {
+                    var targetBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, detail.BatchCodeSnapshot);
+                    if (targetBatch != null)
+                    {
+                        targetBatch.QuantityRemaining = actual_q;
+                        if (actual_q == 0)
+                        {
+                            targetBatch.Status = BatchStatus.Depleted;
+                        }
+                        else if (targetBatch.Status == BatchStatus.Depleted)
+                        {
+                            targetBatch.Status = BatchStatus.Active;
+                        }
+                        targetBatch.UpdatedAt = DateTime.UtcNow;
+
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = targetBatch.Id,
+                            AllocationType = BatchAllocationType.StockCheck,
+                            QuantityAllocated = q_delta,
+                            UnitCost = targetBatch.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                }
+                else
+                {
+                    var batches = (await _repo.GetBatchesByInventoryIdAsync(binventory.Id)) ?? new List<BInventoryBatch>();
+                    if (!batches.Any() && actual_q > 0)
+                    {
+                        var initBatch = new BInventoryBatch
+                        {
+                            BInventoryId = binventory.Id,
+                            BatchCode = "LEGACY-INIT",
+                            QuantityOriginal = actual_q,
+                            QuantityRemaining = actual_q,
+                            UnitCost = binventory.Avg,
+                            ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
+                            Status = BatchStatus.Active,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAsync(initBatch);
+                    }
+                    else if (batches.Any())
+                    {
+                        decimal currentTotalBatch = batches.Sum(b => b.QuantityRemaining);
+                        decimal diff = actual_q - currentTotalBatch;
+                        if (diff != 0)
+                        {
+                            var latestBatch = batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault(b => b.Status == BatchStatus.Active)
+                                           ?? batches.OrderByDescending(b => b.ReceivedDate).First();
+                            
+                            latestBatch.QuantityRemaining = Math.Max(0, latestBatch.QuantityRemaining + diff);
+                            if (latestBatch.QuantityRemaining == 0)
+                            {
+                                latestBatch.Status = BatchStatus.Depleted;
+                            }
+                            else if (latestBatch.Status == BatchStatus.Depleted)
+                            {
+                                latestBatch.Status = BatchStatus.Active;
+                            }
+                            latestBatch.UpdatedAt = DateTime.UtcNow;
+
+                            var batchAlloc = new BatchAllocation
+                            {
+                                DocumentDetailId = detail.Id,
+                                BatchId = latestBatch.Id,
+                                AllocationType = BatchAllocationType.StockCheck,
+                                QuantityAllocated = diff,
+                                UnitCost = latestBatch.UnitCost,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _repo.AddBatchAllocationAsync(batchAlloc);
+                        }
+                    }
+                }
             }
 
             document.TotalAmount = document.DocumentDetails.Sum(d => (d.BaseQuantity - (d.SystemQuantity ?? 0m)) * d.SnapshotAvgCost);

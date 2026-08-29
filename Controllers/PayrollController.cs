@@ -49,8 +49,8 @@ namespace MenuGoBE.Controllers
 
             if (isAdmin)
             {
-                // Owner / Admin can ONLY view / manage Payrolls of employees with Manager role (RoleId == 3)
-                allowedRoleIds = new List<long> { 3 };
+                // Owner / Admin can view & manage payrolls of all employee roles (Managers & Regular Staff)
+                allowedRoleIds = null;
             }
             else
             {
@@ -120,10 +120,7 @@ namespace MenuGoBE.Controllers
 
             if (isAdmin)
             {
-                if (!acc.RoleIds.Contains(3))
-                {
-                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được quản lý bảng lương của nhân sự có vai trò Quản lý." });
-                }
+                // Owner / Admin has full access to view any employee's payroll
             }
             else
             {
@@ -155,15 +152,11 @@ namespace MenuGoBE.Controllers
             if (targetAcc == null)
                 return BadRequest(new { message = "Không tìm thấy thông tin tài khoản nhân viên được chọn." });
 
-            if (isAdmin)
+            if (isAdmin && !isManager)
             {
-                if (!targetAcc.RoleIds.Contains(3))
+                if (!targetAcc.RoleIds.Exists(r => r == 3))
                 {
-                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được tạo bảng lương cho tài khoản có vai trò Quản lý." });
-                }
-                if (targetAcc.BranchId.HasValue && targetAcc.BranchId.Value > 0)
-                {
-                    dto.BranchId = targetAcc.BranchId.Value;
+                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được phép tạo bảng lương cho Quản lý. Bảng lương nhân viên do Quản lý tạo." });
                 }
             }
             else
@@ -216,15 +209,11 @@ namespace MenuGoBE.Controllers
             if (targetAcc == null)
                 return BadRequest(new { message = "Không tìm thấy thông tin tài khoản nhân viên được chọn." });
 
-            if (isAdmin)
+            if (isAdmin && !isManager)
             {
-                if (!targetAcc.RoleIds.Contains(3))
+                if (!targetAcc.RoleIds.Exists(r => r == 3))
                 {
-                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được tự động tính bảng lương cho tài khoản có vai trò Quản lý." });
-                }
-                if (targetAcc.BranchId.HasValue && targetAcc.BranchId.Value > 0)
-                {
-                    dto.BranchId = targetAcc.BranchId.Value;
+                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được phép tự động tính bảng lương cho Quản lý. Bảng lương nhân viên do Quản lý tính." });
                 }
             }
             else
@@ -308,11 +297,11 @@ namespace MenuGoBE.Controllers
             if (acc == null)
                 return NotFound(new { message = "Không tìm thấy thông tin nhân viên của bảng lương này." });
 
-            if (isAdmin)
+            if (isAdmin && !isManager)
             {
-                if (!acc.RoleIds.Contains(3))
+                if (!acc.RoleIds.Exists(r => r == 3))
                 {
-                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được cập nhật bảng lương của nhân sự có vai trò Quản lý." });
+                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được phép chỉnh sửa bảng lương của Quản lý." });
                 }
             }
             else
@@ -394,6 +383,75 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpPost("{id}/lock")]
+        public async Task<IActionResult> LockPayroll(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền chốt (khoá) bảng lương." });
+
+            try
+            {
+                var success = await _payrollService.LockPayrollAsync(id, currentUserId.Value);
+                if (!success) return NotFound(new { message = $"Không tìm thấy bảng lương ID {id}" });
+                return Ok(new { message = "Đã chốt (khóa) bảng lương thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{id}/unlock")]
+        public async Task<IActionResult> UnlockPayroll(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Bạn không có quyền mở khóa bảng lương." });
+
+            try
+            {
+                var success = await _payrollService.UnlockPayrollAsync(id, currentUserId.Value);
+                if (!success) return NotFound(new { message = $"Không tìm thấy bảng lương ID {id}" });
+                return Ok(new { message = "Đã mở khóa bảng lương thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("{id}/approve")]
+        public async Task<IActionResult> ApprovePayroll(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, _, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin)
+                return StatusCode(403, new { message = "Chỉ Owner hoặc Admin mới có quyền phê duyệt bảng lương." });
+
+            try
+            {
+                var success = await _payrollService.ApprovePayrollAsync(id, currentUserId.Value);
+                if (!success) return NotFound(new { message = $"Không tìm thấy bảng lương ID {id}" });
+                return Ok(new { message = "Đã phê duyệt bảng lương thành công." });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
         {
@@ -413,11 +471,11 @@ namespace MenuGoBE.Controllers
             if (acc == null)
                 return NotFound(new { message = "Không tìm thấy thông tin nhân viên của bảng lương này." });
 
-            if (isAdmin)
+            if (isAdmin && !isManager)
             {
-                if (!acc.RoleIds.Contains(3))
+                if (!acc.RoleIds.Exists(r => r == 3))
                 {
-                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được xóa bảng lương của nhân sự có vai trò Quản lý." });
+                    return StatusCode(403, new { message = "Chủ sở hữu chỉ được phép xóa bảng lương của Quản lý." });
                 }
             }
             else

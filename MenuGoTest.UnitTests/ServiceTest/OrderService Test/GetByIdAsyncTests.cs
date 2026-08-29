@@ -9,7 +9,7 @@ public class GetByIdAsyncTests : OrderServiceTestBase
     public async Task ReturnsDto_WhenExists()
     {
         var order = new Order { Id = 1, TableId = 1, Status = "Active", TotalAmount = 100000 };
-        _orderRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(order);
+        _orderRepoMock.Setup(r => r.GetOrderByIdWithDetailsAsync(1)).ReturnsAsync(order);
 
         var result = await _service.GetByIdAsync(1);
 
@@ -20,7 +20,7 @@ public class GetByIdAsyncTests : OrderServiceTestBase
     [Fact]
     public async Task ReturnsNull_WhenNotExists()
     {
-        _orderRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Order?)null);
+        _orderRepoMock.Setup(r => r.GetOrderByIdWithDetailsAsync(999)).ReturnsAsync((Order?)null);
 
         var result = await _service.GetByIdAsync(999);
 

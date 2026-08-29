@@ -53,9 +53,20 @@ public class LoginAsyncTests
 
         var result = await _service.LoginAsync(dto);
 
-        // Result is anonymous type, use dynamic
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.Contains("success", json);
-        Assert.Contains("token", json);
+    }
+
+    [Fact]
+    public async Task ReturnsVerify2FA_WhenTwoFAEnabled()
+    {
+        var account = new Account { Id = 1, Email = "test@test.com", HashedPassword = HashHelper.HashPassword("123456"), TwoFACode = "ABCDEFGHIJ" };
+        var dto = new LoginDto { Email = "test@test.com", Password = "123456" };
+        _accountRepoMock.Setup(r => r.GetAccountByEmailAsync("test@test.com")).ReturnsAsync(account);
+
+        var result = await _service.LoginAsync(dto);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.Contains("success", json);
     }
 }

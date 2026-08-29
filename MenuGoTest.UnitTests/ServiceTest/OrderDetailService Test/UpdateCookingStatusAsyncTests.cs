@@ -1,6 +1,7 @@
 using AutoMapper;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Mapper;
+using MenuGoBE.Models;
 using MenuGoBE.Service;
 using Moq;
 
@@ -28,11 +29,13 @@ public class UpdateCookingStatusAsyncTests
     public async Task ReturnsTrue_WhenValidStatus()
     {
         // Arrange
-        _detailRepoMock.Setup(r => r.UpdateCookingStatusAsync(1, "Cooking")).ReturnsAsync(true);
+        var detail = new OrderDetail { Id = 1, OrderId = 1, ProductId = 1, Quantity = 1 };
+        _detailRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(detail);
+        _detailRepoMock.Setup(r => r.UpdateCookingStatusAsync(1, "Ready")).ReturnsAsync(true);
         _detailRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
         // Act
-        var result = await _service.UpdateCookingStatusAsync(1, "Cooking");
+        var result = await _service.UpdateCookingStatusAsync(1, "Ready");
 
         // Assert
         Assert.True(result);
@@ -42,7 +45,7 @@ public class UpdateCookingStatusAsyncTests
     public async Task ReturnsFalse_WhenUpdateFails()
     {
         // Arrange
-        _detailRepoMock.Setup(r => r.UpdateCookingStatusAsync(999, "Cooking")).ReturnsAsync(false);
+        _detailRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((OrderDetail)null!);
 
         // Act
         var result = await _service.UpdateCookingStatusAsync(999, "Cooking");
@@ -55,6 +58,8 @@ public class UpdateCookingStatusAsyncTests
     public async Task ReturnsTrue_WhenStatusIsReady()
     {
         // Arrange
+        var detail = new OrderDetail { Id = 1, OrderId = 1, ProductId = 1, Quantity = 1 };
+        _detailRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(detail);
         _detailRepoMock.Setup(r => r.UpdateCookingStatusAsync(1, "Ready")).ReturnsAsync(true);
         _detailRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 

@@ -93,6 +93,9 @@ namespace MenuGoBE.Controllers.Document
                 {
                     BInventoryId = d.BInventoryId,
                     UnitConversionId = d.UnitConversionId,
+                    BatchCodeSnapshot = d.BatchCodeSnapshot,
+                    ManufactureDateSnapshot = d.ManufactureDateSnapshot,
+                    ExpiryDateSnapshot = d.ExpiryDateSnapshot,
                     Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
@@ -133,6 +136,9 @@ namespace MenuGoBE.Controllers.Document
                 {
                     BInventoryId = d.BInventoryId,
                     UnitConversionId = d.UnitConversionId,
+                    BatchCodeSnapshot = d.BatchCodeSnapshot,
+                    ManufactureDateSnapshot = d.ManufactureDateSnapshot,
+                    ExpiryDateSnapshot = d.ExpiryDateSnapshot,
                     Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
@@ -181,6 +187,9 @@ namespace MenuGoBE.Controllers.Document
                     Id = d.Id ?? 0,
                     BInventoryId = d.BInventoryId,
                     UnitConversionId = d.UnitConversionId,
+                    BatchCodeSnapshot = d.BatchCodeSnapshot,
+                    ManufactureDateSnapshot = d.ManufactureDateSnapshot,
+                    ExpiryDateSnapshot = d.ExpiryDateSnapshot,
                     Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
