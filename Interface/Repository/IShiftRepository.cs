@@ -8,6 +8,7 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<List<Shift>> GetAllAsync();
         Task<Shift?> GetByIdAsync(long id);
+        Task<Shift?> GetByTimeAsync(TimeOnly startTime, TimeOnly endTime);
         Task CreateAsync(Shift entity);
         Task UpdateAsync(Shift entity);
         Task DeleteAsync(long id);
