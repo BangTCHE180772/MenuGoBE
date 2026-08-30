@@ -136,9 +136,13 @@ namespace MenuGoBE.Service
             }
 
             var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
-            if (shift != null && await _repo.HasOverlappingScheduleAsync(dto.AccountId, dto.WorkDate, shift.StartTime, shift.EndTime))
+            if (shift != null)
             {
-                throw new ArgumentException($"Nhân viên {account.Name} đã có ca làm việc trùng giờ trong ngày {dto.WorkDate:dd/MM/yyyy}.");
+                ValidateShiftApplicability(shift, activeContract, account);
+                if (await _repo.HasOverlappingScheduleAsync(dto.AccountId, dto.WorkDate, shift.StartTime, shift.EndTime))
+                {
+                    throw new ArgumentException($"Nhân viên {account.Name} đã có ca làm việc trùng giờ trong ngày {dto.WorkDate:dd/MM/yyyy}.");
+                }
             }
 
             var entity = _mapper.Map<WorkSchedule>(dto);
@@ -224,9 +228,16 @@ namespace MenuGoBE.Service
                     }
 
                     var shift = await _shiftRepo.GetByIdAsync(dto.ShiftId);
-                    if (shift != null && await _repo.HasOverlappingScheduleAsync(accountId, workDate, shift.StartTime, shift.EndTime))
+                    if (shift != null)
                     {
-                        continue;
+                        if (activeContract != null && !IsShiftApplicable(shift, activeContract))
+                        {
+                            continue;
+                        }
+                        if (await _repo.HasOverlappingScheduleAsync(accountId, workDate, shift.StartTime, shift.EndTime))
+                        {
+                            continue;
+                        }
                     }
 
                     var schedule = new WorkSchedule
@@ -872,6 +883,35 @@ namespace MenuGoBE.Service
             }
 
             return result;
+        }
+
+        private static bool IsShiftApplicable(Shift shift, Contract contract)
+        {
+            if (shift == null || contract == null) return true;
+            var shiftApp = (shift.ApplicableTo ?? "ALL").ToUpperInvariant();
+            if (shiftApp == "ALL") return true;
+
+            bool isHourly = string.Equals(contract.SalaryType, "Hourly", StringComparison.OrdinalIgnoreCase);
+            if (shiftApp == "FULL_TIME" && isHourly) return false;
+            if (shiftApp == "PART_TIME" && !isHourly) return false;
+            return true;
+        }
+
+        private static void ValidateShiftApplicability(Shift shift, Contract contract, Account account)
+        {
+            if (shift == null || contract == null || account == null) return;
+            var shiftApp = (shift.ApplicableTo ?? "ALL").ToUpperInvariant();
+            if (shiftApp == "ALL") return;
+
+            bool isHourly = string.Equals(contract.SalaryType, "Hourly", StringComparison.OrdinalIgnoreCase);
+            if (shiftApp == "FULL_TIME" && isHourly)
+            {
+                throw new ArgumentException($"Ca làm việc '{shift.Name}' chỉ áp dụng cho nhân viên Toàn thời gian. Nhân viên '{account.Name}' là Bán thời gian!");
+            }
+            if (shiftApp == "PART_TIME" && !isHourly)
+            {
+                throw new ArgumentException($"Ca làm việc '{shift.Name}' chỉ áp dụng cho nhân viên Bán thời gian. Nhân viên '{account.Name}' là Toàn thời gian!");
+            }
         }
     }
 }
