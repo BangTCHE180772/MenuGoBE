@@ -42,12 +42,14 @@ public class AppDbContext : DbContext
     public DbSet<TempRole> TempRoles { get; set; } = null!;
     public DbSet<Contract> Contracts { get; set; } = null!;
     public DbSet<Shift> Shifts { get; set; } = null!;
+    public DbSet<ShiftRoleRequirement> ShiftRoleRequirements { get; set; } = null!;
     public DbSet<WorkSchedule> WorkSchedules { get; set; } = null!;
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
     public DbSet<HolidayConfig> HolidayConfigs { get; set; } = null!;
     public DbSet<PayrollShiftDetail> PayrollShiftDetails { get; set; } = null!;
+
 
     // 7. Orders Module
     public DbSet<Area> Areas { get; set; } = null!;
@@ -333,7 +335,14 @@ public class AppDbContext : DbContext
             .WithOne(psd => psd.Payroll)
             .HasForeignKey(psd => psd.PayrollId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ShiftRoleRequirement>()
+            .HasOne(srr => srr.Shift)
+            .WithMany(s => s.RoleRequirements)
+            .HasForeignKey(srr => srr.ShiftId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
+
 
     private static ProductType ParseEnumProductType(string value)
     {

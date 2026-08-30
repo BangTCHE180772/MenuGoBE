@@ -2021,6 +2021,32 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Shifts");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.ShiftRoleRequirement", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("MinQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("RoleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ShiftId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("ShiftId");
+
+                    b.ToTable("ShiftRoleRequirements");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Table", b =>
                 {
                     b.Property<long>("Id")
@@ -3052,6 +3078,25 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Payroll");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.ShiftRoleRequirement", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Role", "Role")
+                        .WithMany("ShiftRoleRequirements")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Shift", "Shift")
+                        .WithMany("RoleRequirements")
+                        .HasForeignKey("ShiftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("Shift");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Table", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Area", "Area")
@@ -3342,11 +3387,15 @@ namespace MenuGoBE.Migrations
                 {
                     b.Navigation("Contracts");
 
+                    b.Navigation("ShiftRoleRequirements");
+
                     b.Navigation("TempRoles");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Shift", b =>
                 {
+                    b.Navigation("RoleRequirements");
+
                     b.Navigation("WorkSchedules");
                 });
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace MenuGoBE.Dtos.Shift
 {
@@ -18,5 +19,7 @@ namespace MenuGoBE.Dtos.Shift
         public bool IsActive { get; set; }
         public long CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
+        public List<ShiftRoleRequirementDto> RoleRequirements { get; set; } = new();
     }
 }
+
