@@ -23,6 +23,19 @@ public class OrderAssignment
     /// </summary>
     public DateTime LastActionAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// true = đang phụ trách, false = đã kết thúc.
+    /// Không xóa bản ghi để giữ lịch sử đối soát.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Lý do deactivate: "Paid", "Cancelled", "Reassigned", "Merged", "ShiftEnded", "ManualUnassign"
+    /// </summary>
+    public string? DeactivatedReason { get; set; }
+
+    public DateTime? DeactivatedAt { get; set; }
+
     // Navigation
     [ForeignKey("OrderId")]
     public Order Order { get; set; } = null!;
