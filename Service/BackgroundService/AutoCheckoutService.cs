@@ -31,6 +31,7 @@ namespace MenuGoBE.Service
                 {
                     // Dọn dẹp tự động check-out cho các ca đã hết hạn
                     await ProcessAutoCheckoutsAsync();
+                    await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -40,8 +41,6 @@ namespace MenuGoBE.Service
                 {
                     _logger.LogError(ex, "Error occurred during AutoCheckoutService execution.");
                 }
-
-                await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
             }
         }
 

@@ -18,17 +18,26 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Shift>> GetAllAsync()
         {
-            return await _context.Shifts.ToListAsync();
+            return await _context.Shifts
+                .Include(s => s.RoleRequirements)
+                .ThenInclude(rr => rr.Role)
+                .ToListAsync();
         }
 
         public async Task<Shift?> GetByIdAsync(long id)
         {
-            return await _context.Shifts.FirstOrDefaultAsync(s => s.Id == id);
+            return await _context.Shifts
+                .Include(s => s.RoleRequirements)
+                .ThenInclude(rr => rr.Role)
+                .FirstOrDefaultAsync(s => s.Id == id);
         }
 
         public async Task<Shift?> GetByTimeAsync(TimeOnly startTime, TimeOnly endTime)
         {
-            return await _context.Shifts.FirstOrDefaultAsync(s => s.StartTime == startTime && s.EndTime == endTime);
+            return await _context.Shifts
+                .Include(s => s.RoleRequirements)
+                .ThenInclude(rr => rr.Role)
+                .FirstOrDefaultAsync(s => s.StartTime == startTime && s.EndTime == endTime);
         }
 
         public async Task CreateAsync(Shift entity)

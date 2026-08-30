@@ -14,8 +14,6 @@ public class Product
 
     public long? ImageId { get; set; }
 
-    public long? KitchenStationId { get; set; }
-
     public long ChainId { get; set; }
 
     public ProductType Type { get; set; }
@@ -55,9 +53,6 @@ public class Product
 
     [ForeignKey("ImageId")]
     public Image? Image { get; set; }
-
-    [ForeignKey("KitchenStationId")]
-    public KitchenStation? KitchenStation { get; set; }
 
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;

@@ -25,9 +25,9 @@ namespace MenuGoBE.Repositories
                 .Where(a => !a.Contracts.Any() || !a.Contracts.Any(c => excludedRoles.Contains(c.RoleId)))
                 .AsQueryable();
 
-            if (branchIds != null)
+            if (branchIds != null && branchIds.Any())
             {
-                query = query.Where(a => !a.Contracts.Any() || a.Contracts.Any(c => branchIds.Contains(c.BranchId)) || (managerAccountId.HasValue && a.CreatedBy == managerAccountId.Value));
+                query = query.Where(a => a.Contracts.Any(c => branchIds.Contains(c.BranchId)) || (!a.Contracts.Any() && managerAccountId.HasValue && a.CreatedBy == managerAccountId.Value));
             }
 
             return await query.ToListAsync();

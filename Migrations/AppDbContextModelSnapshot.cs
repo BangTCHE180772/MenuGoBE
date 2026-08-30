@@ -1141,35 +1141,6 @@ namespace MenuGoBE.Migrations
                     b.ToTable("InventoryLedgers");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.KitchenStation", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<long>("BranchId")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("KitchenStations");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.LeftoverRecord", b =>
                 {
                     b.Property<long>("Id")
@@ -1959,9 +1930,6 @@ namespace MenuGoBE.Migrations
                     b.Property<bool>("IsSellable")
                         .HasColumnType("boolean");
 
-                    b.Property<long?>("KitchenStationId")
-                        .HasColumnType("bigint");
-
                     b.Property<decimal>("MaxStorage")
                         .HasColumnType("decimal(51,3)");
 
@@ -1993,8 +1961,6 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("GroupId");
 
                     b.HasIndex("ImageId");
-
-                    b.HasIndex("KitchenStationId");
 
                     b.HasIndex("Name")
                         .IsUnique();
@@ -2186,6 +2152,10 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("ApplicableTo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2317,6 +2287,32 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("WorkScheduleId");
 
                     b.ToTable("ShiftChangeRequests");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ShiftRoleRequirement", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("MinQuantity")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("RoleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ShiftId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("ShiftId");
+
+                    b.ToTable("ShiftRoleRequirements");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Table", b =>
@@ -2619,6 +2615,68 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("ShiftId");
 
                     b.ToTable("WorkSchedules");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.WorkScheduleFeedback", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FeedbackType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ResolvedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ResponseMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<long>("WorkScheduleId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("ResolvedBy");
+
+                    b.HasIndex("WorkScheduleId");
+
+                    b.ToTable("WorkScheduleFeedbacks");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Account", b =>
@@ -3003,17 +3061,6 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Document");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.KitchenStation", b =>
-                {
-                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Branch");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.LeftoverRecord", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Branch", "Branch")
@@ -3341,18 +3388,11 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("ImageId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("MenuGoBE.Models.KitchenStation", "KitchenStation")
-                        .WithMany("Products")
-                        .HasForeignKey("KitchenStationId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("Chain");
 
                     b.Navigation("Group");
 
                     b.Navigation("Image");
-
-                    b.Navigation("KitchenStation");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.RecipesDetailed", b =>
@@ -3495,6 +3535,25 @@ namespace MenuGoBE.Migrations
                     b.Navigation("WorkSchedule");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.ShiftRoleRequirement", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Role", "Role")
+                        .WithMany("ShiftRoleRequirements")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Shift", "Shift")
+                        .WithMany("RoleRequirements")
+                        .HasForeignKey("ShiftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("Shift");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Table", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Area", "Area")
@@ -3607,6 +3666,40 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Shift");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.WorkScheduleFeedback", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Resolver")
+                        .WithMany()
+                        .HasForeignKey("ResolvedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.WorkSchedule", "WorkSchedule")
+                        .WithMany()
+                        .HasForeignKey("WorkScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Resolver");
+
+                    b.Navigation("WorkSchedule");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Account", b =>
                 {
                     b.Navigation("Contracts");
@@ -3717,11 +3810,6 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Products");
                 });
 
-            modelBuilder.Entity("MenuGoBE.Models.KitchenStation", b =>
-                {
-                    b.Navigation("Products");
-                });
-
             modelBuilder.Entity("MenuGoBE.Models.Menu", b =>
                 {
                     b.Navigation("MenuProducts");
@@ -3801,11 +3889,15 @@ namespace MenuGoBE.Migrations
                 {
                     b.Navigation("Contracts");
 
+                    b.Navigation("ShiftRoleRequirements");
+
                     b.Navigation("TempRoles");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Shift", b =>
                 {
+                    b.Navigation("RoleRequirements");
+
                     b.Navigation("WorkSchedules");
                 });
 
