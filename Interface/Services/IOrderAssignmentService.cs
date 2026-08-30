@@ -1,45 +1,59 @@
-namespace MenuGoBE.Interface.Services;
+using MenuGoBE.Models;
 
-public interface IOrderAssignmentService
+namespace MenuGoBE.Interface.Services
 {
-    /// <summary>
-    /// Auto-assign nhân viên cho order nếu chưa có ai assign.
-    /// Return true nếu assign thành công, false nếu đã có người khác.
-    /// </summary>
-    Task<bool> TryAssignAsync(long orderId, long accountId, long branchId);
+    public interface IOrderAssignmentService
+    {
+        /// <summary>
+        /// Waiter tự nhận bàn. Trả false nếu đã có người assign.
+        /// </summary>
+        Task<bool> TryAssignAsync(long orderId, long accountId, long branchId);
 
-    /// <summary>
-    /// Manager force-assign (xoá assignment cũ nếu có, gán mới).
-    /// </summary>
-    Task ForceAssignAsync(long orderId, long accountId, long branchId);
+        /// <summary>
+        /// Manager chỉ định bắt buộc. Deactivate assignment cũ nếu có.
+        /// </summary>
+        Task ForceAssignAsync(long orderId, long accountId, long branchId);
 
-    /// <summary>
-    /// Lấy accountId đang phụ trách order (null nếu chưa assign).
-    /// </summary>
-    Task<long?> GetAssignedAccountIdAsync(long orderId);
+        /// <summary>
+        /// Tự động assign waiter theo thuật toán Global Least-Loaded + Area Tiebreaker.
+        /// Dùng khi khách tự order (CustomerPending) hoặc reassign sau orphaned.
+        /// Trả về AccountId của waiter được assign, null nếu không tìm được.
+        /// </summary>
+        Task<long?> AutoAssignWaiterAsync(long orderId, long tableId, long branchId);
 
-    /// <summary>
-    /// Cập nhật LastActionAt (gọi khi waiter thao tác trên order).
-    /// </summary>
-    Task TouchAsync(long orderId);
+        /// <summary>
+        /// Lấy AccountId của waiter đang phụ trách order (active assignment).
+        /// </summary>
+        Task<long?> GetAssignedAccountIdAsync(long orderId);
 
-    /// <summary>
-    /// Clear assignment (thanh toán / huỷ đơn).
-    /// </summary>
-    Task ClearAssignmentAsync(long orderId);
+        /// <summary>
+        /// Lấy AccountId theo TableId (cho CustomerAction targeted notification).
+        /// </summary>
+        Task<long?> GetAssignedAccountByTableAsync(long tableId);
 
-    /// <summary>
-    /// Clear tất cả assignment của 1 nhân viên (hết ca / disconnect).
-    /// </summary>
-    Task ClearAllByAccountAsync(long accountId);
+        /// <summary>
+        /// Cập nhật LastActionAt khi waiter thao tác trên order.
+        /// </summary>
+        Task TouchAsync(long orderId);
 
-    /// <summary>
-    /// Lấy danh sách orderIds nhân viên đang phụ trách.
-    /// </summary>
-    Task<List<long>> GetMyOrderIdsAsync(long accountId);
+        /// <summary>
+        /// Soft-delete assignment. Lý do: "Paid", "Cancelled", "Reassigned", "Merged", "ShiftEnded", "ManualUnassign"
+        /// </summary>
+        Task DeactivateAssignmentAsync(long orderId, string reason);
 
-    /// <summary>
-    /// Xử lý merge: xoá assignment bàn con, giữ bàn cha.
-    /// </summary>
-    Task TransferOnMergeAsync(long childOrderId, long fatherOrderId);
+        /// <summary>
+        /// Deactivate tất cả assignment active của 1 account.
+        /// </summary>
+        Task DeactivateAllByAccountAsync(long accountId, string reason);
+
+        /// <summary>
+        /// Lấy danh sách orderId đang active assign cho 1 account.
+        /// </summary>
+        Task<List<long>> GetMyOrderIdsAsync(long accountId);
+
+        /// <summary>
+        /// Xử lý merge: deactivate assignment bàn con.
+        /// </summary>
+        Task TransferOnMergeAsync(long childOrderId, long fatherOrderId);
+    }
 }
