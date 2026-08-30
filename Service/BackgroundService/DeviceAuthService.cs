@@ -76,7 +76,14 @@ namespace MenuGoBE.Service
                         _challenges.TryRemove(kvp.Key, out _);
                     }
                 }
-                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
     }

@@ -162,6 +162,42 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpPost("auto-assign")]
+        public async Task<IActionResult> AutoAssign([FromBody] WorkScheduleAutoAssignDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+
+            if (isAdmin)
+            {
+                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+            }
+            if (!isManager)
+            {
+                return StatusCode(403, new { message = "Chỉ Quản lý mới được tự động phân công ca làm việc." });
+            }
+
+            if (!branchIds.Contains(dto.BranchId))
+            {
+                return StatusCode(403, new { message = "Bạn chỉ có quyền phân công lịch làm việc tại chi nhánh do mình quản lý." });
+            }
+
+            if (dto.CreatedBy <= 0) dto.CreatedBy = currentUserId.Value;
+
+            try
+            {
+                var result = await _service.AutoAssignAsync(dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPut]
         public async Task<IActionResult> Update([FromBody] WorkScheduleUpdateDto dto)
         {
