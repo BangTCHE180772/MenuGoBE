@@ -115,6 +115,7 @@ builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
 builder.Services.AddScoped<IChatRepository, ChatRepository>();
+builder.Services.AddScoped<IShiftFeedbackRepository, ShiftFeedbackRepository>();
 
 // Service
 
@@ -173,6 +174,7 @@ builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailS
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IShiftFeedbackService, ShiftFeedbackService>();
 
 // SignalR
 builder.Services.AddSignalR();
