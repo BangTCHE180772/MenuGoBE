@@ -49,6 +49,7 @@ public class AppDbContext : DbContext
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
     public DbSet<HolidayConfig> HolidayConfigs { get; set; } = null!;
+    public DbSet<WorkScheduleFeedback> WorkScheduleFeedbacks { get; set; } = null!;
     public DbSet<PayrollShiftDetail> PayrollShiftDetails { get; set; } = null!;
 
 
@@ -352,6 +353,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Payroll>()
             .HasIndex(p => new { p.AccountId, p.Month, p.Year });
+
+        modelBuilder.Entity<WorkScheduleFeedback>()
+            .Property(f => f.Status)
+            .HasConversion<string>();
 
         // ── OrderAssignment: 1 order = 1 waiter ──
         modelBuilder.Entity<OrderAssignment>(entity =>

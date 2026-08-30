@@ -25,5 +25,8 @@ namespace MenuGoBE.Interface.Services
         // OT Approval & Forget Check-out verification
         Task<bool> ApproveOTAsync(WorkScheduleOTApproveDto dto);
         Task<WorkSchedulePOSActivityDto> VerifyPOSActivityAsync(long workScheduleId);
+
+        // Auto Work Schedule Assignment
+        Task<WorkScheduleAutoAssignResultDto> AutoAssignAsync(WorkScheduleAutoAssignDto dto);
     }
 }

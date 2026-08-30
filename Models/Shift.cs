@@ -36,6 +36,8 @@ public class Shift
 
     public bool IsActive { get; set; }
 
+    public string ApplicableTo { get; set; } = "ALL"; // "ALL", "FULL_TIME", "PART_TIME"
+
     public long CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

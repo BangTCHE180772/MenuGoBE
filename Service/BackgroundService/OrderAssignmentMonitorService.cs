@@ -40,6 +40,7 @@ namespace MenuGoBE.Service
                     await CheckUnattendedOrdersAsync();
                     await CheckStaleAssignmentsAsync();
                     await CheckOrphanedAssignmentsAsync();
+                    await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -49,8 +50,6 @@ namespace MenuGoBE.Service
                 {
                     _logger.LogError(ex, "OrderAssignmentMonitor error");
                 }
-
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
         }
 
