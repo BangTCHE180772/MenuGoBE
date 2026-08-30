@@ -5,7 +5,6 @@ namespace MenuGoBE.Dtos.Product
         public long GroupId { get; set; }
         public long? ImageId { get; set; }
         public string? ImageUrl { get; set; }
-        public long? KitchenStationId { get; set; }
         public long ChainId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
