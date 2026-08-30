@@ -35,6 +35,8 @@ namespace MenuGoBE.Repositories
         public async Task<Shift?> GetByTimeAsync(TimeOnly startTime, TimeOnly endTime)
         {
             return await _context.Shifts
+                .Include(s => s.RoleRequirements)
+                .ThenInclude(rr => rr.Role)
                 .FirstOrDefaultAsync(s => s.StartTime == startTime && s.EndTime == endTime);
         }
 
