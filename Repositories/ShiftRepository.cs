@@ -32,6 +32,11 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync(s => s.Id == id);
         }
 
+        public async Task<Shift?> GetByTimeAsync(TimeOnly startTime, TimeOnly endTime)
+        {
+            return await _context.Shifts
+                .FirstOrDefaultAsync(s => s.StartTime == startTime && s.EndTime == endTime);
+        }
 
         public async Task CreateAsync(Shift entity)
         {
