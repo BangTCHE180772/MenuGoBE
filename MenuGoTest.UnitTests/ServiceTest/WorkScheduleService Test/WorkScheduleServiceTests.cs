@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using AutoMapper;
+using MenuGoBE.Data;
 using MenuGoBE.Dtos.WorkSchedule;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Service;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
 
@@ -37,6 +39,10 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
 
             var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>();
             var notificationRepoMock = new Mock<INotificationRepository>();
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+            var context = new AppDbContext(options);
 
             _service = new WorkScheduleService(
                 _repoMock.Object,
@@ -45,6 +51,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
                 _shiftRepoMock.Object,
                 _accountRepoMock.Object,
                 hubContextMock.Object,
+                context,
                 notificationRepoMock.Object);
         }
 

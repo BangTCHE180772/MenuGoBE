@@ -52,61 +52,14 @@ namespace MenuGoBE.Service
                 throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng.");
             }
 
-            var (activeRoles, branchIds) = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles, branchIds);
-
-            return new
+            var accountWithRoles = await _accountRepository.GetAccountWithRolesAsync(account.Id);
+            if (accountWithRoles == null)
             {
-                status = "success",
-                token = token,
-                user = new
-                {
-                    id = account.Id,
-                    name = account.Name,
-                    email = account.Email,
-                    roles = activeRoles,
-                    branchIds = branchIds
-                }
-            };
-        }
-
-        public async Task<object> Setup2FAAsync(Setup2FADto dto)
-        {
-            var account = await _accountRepository.GetByIdAsync(dto.AccountId);
-            if (account == null) throw new ArgumentException("Account not found");
-
-            var tfa = new TwoFactorAuthenticator();
-            string secretKey = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 10).ToUpper();
-
-            var setupInfo = tfa.GenerateSetupCode("MenuGo", account.Email, secretKey, false, 3);
-
-            return new
-            {
-                secretKey = secretKey,
-                qrCodeUrl = setupInfo.QrCodeSetupImageUrl,
-                manualEntryKey = setupInfo.ManualEntryKey
-            };
-        }
-
-        public async Task<object> ConfirmSetup2FAAsync(ConfirmSetup2FADto dto)
-        {
-            var account = await _accountRepository.GetAccountWithRolesAsync(dto.AccountId);
-
-            if (account == null) throw new ArgumentException("Account not found");
-
-            var tfa = new TwoFactorAuthenticator();
-            bool isCorrectPin = tfa.ValidateTwoFactorPIN(dto.SecretKey, dto.Code);
-
-            if (!isCorrectPin)
-            {
-                throw new UnauthorizedAccessException("Mã xác thực không chính xác.");
+                throw new UnauthorizedAccessException("Tài khoản không tồn tại.");
             }
 
-            account.TwoFACode = dto.SecretKey;
-            await _accountRepository.SaveChangesAsync();
-
-            var (activeRoles, branchIds) = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles, branchIds);
+            var (activeRoles, branchIds) = GetActiveRoles(accountWithRoles);
+            var token = GenerateJwtToken(accountWithRoles, activeRoles, branchIds);
 
             return new
             {
@@ -114,41 +67,9 @@ namespace MenuGoBE.Service
                 token = token,
                 user = new
                 {
-                    id = account.Id,
-                    name = account.Name,
-                    email = account.Email,
-                    roles = activeRoles,
-                    branchIds = branchIds
-                }
-            };
-        }
-
-        public async Task<object> Verify2FAAsync(Verify2FADto dto)
-        {
-            var account = await _accountRepository.GetAccountWithRolesAsync(dto.AccountId);
-
-            if (account == null) throw new ArgumentException("Account not found");
-
-            var tfa = new TwoFactorAuthenticator();
-            bool isCorrectPin = tfa.ValidateTwoFactorPIN(account.TwoFACode, dto.Code);
-
-            if (!isCorrectPin)
-            {
-                throw new UnauthorizedAccessException("Mã xác thực không chính xác.");
-            }
-
-            var (activeRoles, branchIds) = GetActiveRoles(account);
-            var token = GenerateJwtToken(account, activeRoles, branchIds);
-
-            return new
-            {
-                status = "success",
-                token = token,
-                user = new
-                {
-                    id = account.Id,
-                    name = account.Name,
-                    email = account.Email,
+                    id = accountWithRoles.Id,
+                    name = accountWithRoles.Name,
+                    email = accountWithRoles.Email,
                     roles = activeRoles,
                     branchIds = branchIds
                 }

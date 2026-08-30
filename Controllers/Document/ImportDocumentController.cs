@@ -97,6 +97,9 @@ namespace MenuGoBE.Controllers.Document
                     UnitConversionId = d.UnitConversionId,
                     Quantity = d.Quantity,
                     UnitPrice = d.UnitPrice,
+                    BatchCodeSnapshot = d.BatchCodeSnapshot,
+                    ManufactureDateSnapshot = d.ManufactureDateSnapshot,
+                    ExpiryDateSnapshot = d.ExpiryDateSnapshot,
                     Note = d.Note
                 }).ToList()
             };
@@ -139,6 +142,9 @@ namespace MenuGoBE.Controllers.Document
                     UnitConversionId = d.UnitConversionId,
                     Quantity = d.Quantity,
                     UnitPrice = d.UnitPrice,
+                    BatchCodeSnapshot = d.BatchCodeSnapshot,
+                    ManufactureDateSnapshot = d.ManufactureDateSnapshot,
+                    ExpiryDateSnapshot = d.ExpiryDateSnapshot,
                     Note = d.Note
                 }).ToList()
             };
@@ -189,6 +195,9 @@ namespace MenuGoBE.Controllers.Document
                     UnitConversionId = d.UnitConversionId,
                     Quantity = d.Quantity,
                     UnitPrice = d.UnitPrice,
+                    BatchCodeSnapshot = d.BatchCodeSnapshot,
+                    ManufactureDateSnapshot = d.ManufactureDateSnapshot,
+                    ExpiryDateSnapshot = d.ExpiryDateSnapshot,
                     Note = d.Note
                 }).ToList()
             };

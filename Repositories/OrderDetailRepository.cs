@@ -116,6 +116,27 @@ namespace MenuGoBE.Repositories
             return await query.ToListAsync();
         }
 
+        public async Task<List<OrderDetail>> GetCancelledByBranchAsync(long branchId, DateTime? fromDate, DateTime? toDate)
+        {
+            var query = _context.OrderDetails
+                .Include(od => od.Product)
+                .Include(od => od.Order)
+                    .ThenInclude(o => o.Table)
+                        .ThenInclude(t => t.Area)
+                .Where(od => od.Status == "Cancelled" &&
+                             od.Order.Table != null &&
+                             od.Order.Table.Area != null &&
+                             od.Order.Table.Area.BranchId == branchId);
+
+            if (fromDate.HasValue)
+                query = query.Where(od => od.CreatedAt >= fromDate.Value);
+
+            if (toDate.HasValue)
+                query = query.Where(od => od.CreatedAt <= toDate.Value);
+
+            return await query.OrderByDescending(od => od.CreatedAt).ToListAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

@@ -1,9 +1,11 @@
 using AutoMapper;
+using MenuGoBE.Dtos.Leftover;
 using MenuGoBE.Dtos.Order;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Interface.Services;
 using MenuGoBE.Interface.Services.Document;
 using MenuGoBE.Models;
+using MenuGoBE.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
@@ -23,10 +25,11 @@ namespace MenuGoBE.Service
         private readonly IRecipesDetailedRepository _recipesRepo;
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly IDocumentService _documentService;
+        private readonly ILeftoverRecordService _leftoverRecordService;
 
         public OrderDetailService(
-            IOrderDetailRepository detailRepo, 
-            IOrderRepository orderRepo, 
+            IOrderDetailRepository detailRepo,
+            IOrderRepository orderRepo,
             IMapper mapper,
             ITableRepository tableRepo,
             IProductRepository productRepo,
@@ -35,7 +38,8 @@ namespace MenuGoBE.Service
             IBInventoryRepository bInventoryRepo,
             IRecipesDetailedRepository recipesRepo,
             IHubContext<NotificationHub> hubContext,
-            IDocumentService documentService)
+            IDocumentService documentService,
+            ILeftoverRecordService leftoverRecordService)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
@@ -48,6 +52,7 @@ namespace MenuGoBE.Service
             _recipesRepo = recipesRepo;
             _hubContext = hubContext;
             _documentService = documentService;
+            _leftoverRecordService = leftoverRecordService;
         }
 
 
@@ -671,32 +676,37 @@ namespace MenuGoBE.Service
             return result;
         }
 
-        public async Task<bool> CancelOrderDetailAsync(long orderDetailId)
+        public async Task<bool> CancelOrderDetailAsync(long orderDetailId, long? cancelledBy = null)
         {
             var entity = await _detailRepo.GetByIdAsync(orderDetailId);
             if (entity == null) return false;
 
-            if (entity.CookingStatus != "Waiting" || entity.Status == "Cancelled")
+            // Cho phép huỷ khi món còn đang chờ (Waiting) HOẶC đã làm xong (Ready) —
+            // trường hợp Ready là luồng "bếp làm chậm, khách đi về không nhận món nữa".
+            bool wasWaiting = entity.CookingStatus == "Waiting";
+            bool wasReady = entity.CookingStatus == "Ready";
+
+            if ((!wasWaiting && !wasReady) || entity.Status == "Cancelled")
             {
                 return false;
             }
 
             string oldStatus = entity.Status;
+            var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
 
             var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
             if (result)
             {
                 await _detailRepo.SaveChangesAsync();
-                
+
                 var order = await _orderRepo.GetByIdAsync(entity.OrderId);
                 if (order != null)
                 {
                     await RecalculateTotalAmountAsync(order);
 
-                    // Cộng lại kho nếu đã trừ khi Confirmed (Regular/Manufactured)
                     if (oldStatus == "Confirmed")
                     {
-                        var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+                        // Cộng lại kho nếu đã trừ khi Confirmed (Regular/Manufactured)
                         if (productType == "Regular" || productType == "Manufactured")
                         {
                             var table = await _tableRepo.GetByIdAsync(order.TableId);
@@ -716,10 +726,63 @@ namespace MenuGoBE.Service
                                 }
                             }
                         }
+                        // Processed + đã làm xong (Ready) mà vẫn bị huỷ = khách không nhận món
+                        // đã hoàn thành (thường do nhân viên phục vụ/waiter huỷ giúp khách,
+                        // không phải bếp tự phát sinh) — gắn với đúng OrderDetail/bàn cụ thể
+                        // nên ghi nhận là "Khách trả món" (Return), không phải "Bếp làm dư"
+                        // (Extra vốn dành cho trường hợp không gắn đơn khách nào cả). Không
+                        // cộng trả kho nguyên liệu (đã dùng), chỉ ghi nhận để lên thống kê.
+                        else if (productType == "Processed" && wasReady)
+                        {
+                            var table = await _tableRepo.GetByIdAsync(order.TableId);
+                            if (table != null)
+                            {
+                                var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                                if (area != null)
+                                {
+                                    try
+                                    {
+                                        await _leftoverRecordService.CreateAsync(new LeftoverRecordCreateDto
+                                        {
+                                            BranchId = area.BranchId,
+                                            Type = LeftoverType.Return,
+                                            ProductId = entity.ProductId,
+                                            Quantity = entity.Quantity,
+                                            Reason = "Bếp làm chậm, khách không nhận món đã hoàn thành",
+                                            OrderDetailId = entity.Id,
+                                            HandlingAction = LeftoverHandlingAction.Discard,
+                                        }, cancelledBy);
+                                    }
+                                    catch
+                                    {
+                                        // Không chặn việc huỷ món nếu ghi nhận thống kê thất bại
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
             return result;
+        }
+
+        public async Task<List<CancelledOrderDetailDto>> GetCancelledHistoryAsync(long branchId, DateTime? fromDate, DateTime? toDate)
+        {
+            var details = await _detailRepo.GetCancelledByBranchAsync(branchId, fromDate, toDate);
+
+            return details.Select(od => new CancelledOrderDetailDto
+            {
+                OrderDetailId = od.Id,
+                OrderId = od.OrderId,
+                ProductId = od.ProductId,
+                ProductName = od.Product?.Name ?? string.Empty,
+                TableName = od.Order?.Table?.Name,
+                Quantity = od.Quantity,
+                Price = od.Price,
+                CookingStatusAtCancel = od.CookingStatus,
+                Category = od.CookingStatus == "Ready" ? "Completed" : "Pending",
+                CreatedAt = od.CreatedAt,
+            }).ToList();
         }
 
         public async Task<List<KitchenItemDto>> GetKitchenItemsAsync(long? branchId = null)
@@ -745,6 +808,8 @@ namespace MenuGoBE.Service
                         ProductId = od.ProductId,
                         ProductName = od.Product?.Name ?? "Mon ăn",
                         ProductImage = od.Product?.Image?.ImageLink,
+                        KitchenStationId = od.Product?.KitchenStationId,
+                        KitchenStationName = od.Product?.KitchenStation?.Name,
                         Quantity = od.Quantity,
                         Price = od.Price,
                         Note = od.Note ?? string.Empty,
@@ -813,11 +878,9 @@ namespace MenuGoBE.Service
             if (dto.ReturnQuantity > maxReturnable)
                 throw new InvalidOperationException($"Số lượng trả ({dto.ReturnQuantity}) vượt quá số lượng có thể trả ({maxReturnable}).");
 
-            // Validate: phải có lý do (Bỏ qua vì trả hàng nguyên vẹn không cần lý do)
-            /*
+            // Validate: Bắt buộc phải có lý do trong mọi trường hợp
             if (string.IsNullOrWhiteSpace(dto.ReturnReason))
                 throw new InvalidOperationException("Phải cung cấp lý do trả món.");
-            */
 
             // Update return fields
             entity.ReturnedQuantity += dto.ReturnQuantity;
@@ -830,12 +893,7 @@ namespace MenuGoBE.Service
             if (product == null)
                 throw new InvalidOperationException("Không tìm thấy thông tin sản phẩm.");
 
-            // --- NEW LOGIC: Bắt buộc hàng phải nguyên vẹn (IsIntact = true) và là loại Regular ---
-            if (product.Type != MenuGoBE.Models.Enums.ProductType.Regular)
-                throw new InvalidOperationException("Chỉ cho phép trả hàng đối với sản phẩm loại Thường (Regular).");
-
-            if (dto.IsIntact == false)
-                throw new InvalidOperationException("Chỉ cho phép trả hàng khi hàng còn nguyên vẹn (chưa qua sử dụng/bóc vỏ).");
+            // Bỏ validation chặn hàng không nguyên vẹn hoặc hàng chế biến (cho phép trả mọi loại)
             
             // Re-stock logic: CHỈ Regular + còn nguyên vẹn mới cộng lại kho
             // Logic trừ/cộng kho và ghi sổ kho được quản lý tập trung ở DocumentService
@@ -850,7 +908,7 @@ namespace MenuGoBE.Service
                     {
                         long branchId = area.BranchId;
                         var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
-                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, entity.Id, confirmedByUserId);
+                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, dto.ReturnReason, entity.Id, confirmedByUserId);
                     }
                 }
             }

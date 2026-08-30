@@ -216,6 +216,9 @@ namespace MenuGoBE.Mapper
                             SnapshotUnitName = dt.SnapshotUnitName,
                             SnapshotBaseUnitName = dt.SnapshotBaseUnitName,
                             SnapshotAvgCost = dt.SnapshotAvgCost,
+                            BatchCodeSnapshot = dt.BatchCodeSnapshot,
+                            ManufactureDateSnapshot = dt.ManufactureDateSnapshot,
+                            ExpiryDateSnapshot = dt.ExpiryDateSnapshot,
 
                             // Fallback Display Names (Đảm bảo FE luôn nhận được tên/mã/đơn vị tính dù là phiếu đã chốt hay phiếu nháp)
                             ProductName = !string.IsNullOrWhiteSpace(dt.SnapshotProductName) 

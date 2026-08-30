@@ -24,9 +24,12 @@ public class ProcessAutoCheckoutsTests
         _loggerMock = new Mock<ILogger<AutoCheckoutService>>();
         _hubContextMock = new Mock<IHubContext<NotificationHub>>();
 
+        var orderAssignmentServiceMock = new Mock<MenuGoBE.Interface.Services.IOrderAssignmentService>();
         var serviceProviderMock = new Mock<IServiceProvider>();
         serviceProviderMock.Setup(sp => sp.GetService(typeof(IWorkScheduleRepository)))
             .Returns(_workScheduleRepoMock.Object);
+        serviceProviderMock.Setup(sp => sp.GetService(typeof(MenuGoBE.Interface.Services.IOrderAssignmentService)))
+            .Returns(orderAssignmentServiceMock.Object);
 
         var serviceScopeMock = new Mock<IServiceScope>();
         serviceScopeMock.Setup(s => s.ServiceProvider).Returns(serviceProviderMock.Object);

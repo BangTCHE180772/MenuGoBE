@@ -52,5 +52,12 @@ namespace MenuGoBE.Dtos.Document
 
         [MaxLength(255)]
         public string? Note { get; set; }
+
+        [MaxLength(100)]
+        public string? BatchCodeSnapshot { get; set; }
+
+        public DateTime? ManufactureDateSnapshot { get; set; }
+
+        public DateTime? ExpiryDateSnapshot { get; set; }
     }
 }

@@ -14,6 +14,8 @@ public class Product
 
     public long? ImageId { get; set; }
 
+    public long? KitchenStationId { get; set; }
+
     public long ChainId { get; set; }
 
     public ProductType Type { get; set; }
@@ -40,6 +42,11 @@ public class Product
     [Column(TypeName = "decimal(108,12)")]
     public decimal SellPrice { get; set; }
 
+    /// <summary>
+    /// Số ngày hạn sử dụng mặc định của sản phẩm / thành phẩm sản xuất (nếu có).
+    /// </summary>
+    public int? ShelfLifeDays { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
@@ -48,6 +55,9 @@ public class Product
 
     [ForeignKey("ImageId")]
     public Image? Image { get; set; }
+
+    [ForeignKey("KitchenStationId")]
+    public KitchenStation? KitchenStation { get; set; }
 
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;
