@@ -17,4 +17,6 @@ public class Role
     // Navigation
     public ICollection<TempRole> TempRoles { get; set; } = new List<TempRole>();
     public ICollection<Contract> Contracts { get; set; } = new List<Contract>();
+    public ICollection<ShiftRoleRequirement> ShiftRoleRequirements { get; set; } = new List<ShiftRoleRequirement>();
 }
+

@@ -77,7 +77,6 @@ builder.Services.AddSwaggerGen();
 // Repository
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
 builder.Services.AddScoped<IAreaRepository, AreaRepository>();
-builder.Services.AddScoped<IKitchenStationRepository, KitchenStationRepository>();
 builder.Services.AddScoped<ILeftoverRecordRepository, LeftoverRecordRepository>();
 builder.Services.AddScoped<ITableRepository, TableRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
@@ -115,12 +114,12 @@ builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
 builder.Services.AddScoped<IChatRepository, ChatRepository>();
+builder.Services.AddScoped<IShiftFeedbackRepository, ShiftFeedbackRepository>();
 
 // Service
 
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
-builder.Services.AddScoped<IKitchenStationService, KitchenStationService>();
 builder.Services.AddScoped<ILeftoverRecordService, LeftoverRecordService>();
 builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
@@ -173,6 +172,7 @@ builder.Services.Configure<MailSettings>(builder.Configuration.GetSection("MailS
 builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IShiftFeedbackService, ShiftFeedbackService>();
 
 // SignalR
 builder.Services.AddSignalR();

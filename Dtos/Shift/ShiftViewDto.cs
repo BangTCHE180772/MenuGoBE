@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace MenuGoBE.Dtos.Shift
 {
@@ -16,7 +17,10 @@ namespace MenuGoBE.Dtos.Shift
         public decimal NightHours { get; set; }
         public decimal StandardHours { get; set; }
         public bool IsActive { get; set; }
+        public string ApplicableTo { get; set; } = "ALL";
         public long CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
+        public List<ShiftRoleRequirementDto> RoleRequirements { get; set; } = new();
     }
 }
+

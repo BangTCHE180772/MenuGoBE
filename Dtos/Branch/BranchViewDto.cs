@@ -42,6 +42,5 @@ namespace MenuGoBE.Dtos.Branch
         public double? Longitude { get; set; }
 
         public int CheckinRadiusMeters { get; set; } = 100;
-
     }
 }

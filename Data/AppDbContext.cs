@@ -28,7 +28,6 @@ public class AppDbContext : DbContext
     public DbSet<Menu> Menus { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
     public DbSet<MenuProduct> MenuProducts { get; set; } = null!;
-    public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
 
     // 4. Units & Conversions Module
     public DbSet<Unit> Units { get; set; } = null!;
@@ -43,13 +42,16 @@ public class AppDbContext : DbContext
     public DbSet<TempRole> TempRoles { get; set; } = null!;
     public DbSet<Contract> Contracts { get; set; } = null!;
     public DbSet<Shift> Shifts { get; set; } = null!;
+    public DbSet<ShiftRoleRequirement> ShiftRoleRequirements { get; set; } = null!;
     public DbSet<WorkSchedule> WorkSchedules { get; set; } = null!;
     public DbSet<ShiftChangeRequest> ShiftChangeRequests { get; set; } = null!;
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
     public DbSet<HolidayConfig> HolidayConfigs { get; set; } = null!;
+    public DbSet<WorkScheduleFeedback> WorkScheduleFeedbacks { get; set; } = null!;
     public DbSet<PayrollShiftDetail> PayrollShiftDetails { get; set; } = null!;
+
 
     // 7. Orders Module
     public DbSet<Area> Areas { get; set; } = null!;
@@ -130,10 +132,6 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Name)
-            .IsUnique();
-
-        modelBuilder.Entity<KitchenStation>()
-            .HasIndex(k => new { k.BranchId, k.Name })
             .IsUnique();
 
         modelBuilder.Entity<Product>()
@@ -356,6 +354,10 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Payroll>()
             .HasIndex(p => new { p.AccountId, p.Month, p.Year });
 
+        modelBuilder.Entity<WorkScheduleFeedback>()
+            .Property(f => f.Status)
+            .HasConversion<string>();
+
         // ── OrderAssignment: 1 order = 1 waiter ──
         modelBuilder.Entity<OrderAssignment>(entity =>
         {
@@ -381,7 +383,14 @@ public class AppDbContext : DbContext
             .WithOne(psd => psd.Payroll)
             .HasForeignKey(psd => psd.PayrollId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ShiftRoleRequirement>()
+            .HasOne(srr => srr.Shift)
+            .WithMany(s => s.RoleRequirements)
+            .HasForeignKey(srr => srr.ShiftId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
+
 
     private static ProductType ParseEnumProductType(string value)
     {
