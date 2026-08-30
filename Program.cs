@@ -77,7 +77,6 @@ builder.Services.AddSwaggerGen();
 // Repository
 builder.Services.AddScoped<IChainRepository, ChainRepository>();
 builder.Services.AddScoped<IAreaRepository, AreaRepository>();
-builder.Services.AddScoped<IKitchenStationRepository, KitchenStationRepository>();
 builder.Services.AddScoped<ILeftoverRecordRepository, LeftoverRecordRepository>();
 builder.Services.AddScoped<ITableRepository, TableRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
@@ -120,7 +119,6 @@ builder.Services.AddScoped<IChatRepository, ChatRepository>();
 
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
-builder.Services.AddScoped<IKitchenStationService, KitchenStationService>();
 builder.Services.AddScoped<ILeftoverRecordService, LeftoverRecordService>();
 builder.Services.AddScoped<ITableService, TableService>();
 builder.Services.AddScoped<IOrderService, OrderService>();

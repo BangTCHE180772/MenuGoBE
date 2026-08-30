@@ -9,7 +9,6 @@ namespace MenuGoBE.Dtos.Product
         public long GroupId { get; set; }
         public long? ImageId { get; set; }
         public string? ImageUrl { get; set; }
-        public long? KitchenStationId { get; set; }
         public long ChainId { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
