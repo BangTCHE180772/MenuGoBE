@@ -913,5 +913,222 @@ namespace MenuGoBE.Service
                 throw new ArgumentException($"Ca làm việc '{shift.Name}' chỉ áp dụng cho nhân viên Bán thời gian. Nhân viên '{account.Name}' là Toàn thời gian!");
             }
         }
+
+        public async Task<WorkScheduleAutoAssignResultDto> AutoAssignAsync(WorkScheduleAutoAssignDto dto)
+        {
+            if (dto == null) throw new ArgumentNullException(nameof(dto));
+            if (dto.StartDate > dto.EndDate)
+                throw new ArgumentException("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
+
+            var branch = await _branchRepo.GetByIdAsync(dto.BranchId);
+            if (branch == null)
+                throw new ArgumentException($"Branch with ID {dto.BranchId} does not exist.");
+
+            // 1. Get active shifts for this branch with role requirements
+            var shiftsQuery = _context.Shifts
+                .Include(s => s.RoleRequirements)
+                .Where(s => s.IsActive);
+            if (dto.ShiftIds != null && dto.ShiftIds.Count > 0)
+            {
+                shiftsQuery = shiftsQuery.Where(s => dto.ShiftIds.Contains(s.Id));
+            }
+            var activeShifts = await shiftsQuery.ToListAsync();
+            if (!activeShifts.Any())
+            {
+                throw new ArgumentException("Không tìm thấy ca làm việc nào áp dụng.");
+            }
+
+            // 2. Get active contracts in branch
+            var activeContracts = await _context.Contracts
+                .Include(c => c.Account)
+                .Where(c => c.BranchId == dto.BranchId && (c.Status == "Active" || c.Status == "Hiệu lực"))
+                .ToListAsync();
+
+            if (!activeContracts.Any())
+            {
+                throw new ArgumentException("Không có nhân viên nào có hợp đồng còn hiệu lực tại chi nhánh này.");
+            }
+
+            // Distinct role IDs present among active contracts in this branch
+            var branchRoleIds = activeContracts
+                .Select(c => c.RoleId)
+                .Distinct()
+                .ToList();
+
+            // 3. Get existing schedules in the date range & existing count in the month
+            var startMonthDate = new DateOnly(dto.StartDate.Year, dto.StartDate.Month, 1);
+            var endMonthDate = new DateOnly(dto.EndDate.Year, dto.EndDate.Month, DateTime.DaysInMonth(dto.EndDate.Year, dto.EndDate.Month));
+
+            var monthSchedules = await _context.WorkSchedules
+                .Where(w => w.BranchId == dto.BranchId && w.WorkDate >= startMonthDate && w.WorkDate <= endMonthDate)
+                .ToListAsync();
+
+            var leaveRequests = await _context.WorkSchedules
+                .Where(w => w.BranchId == dto.BranchId 
+                         && w.WorkDate >= dto.StartDate 
+                         && w.WorkDate <= dto.EndDate
+                         && w.Status.StartsWith("LEAVE_APPROVED"))
+                .ToListAsync();
+
+            var leaveSet = new HashSet<(long AccountId, DateOnly WorkDate)>(
+                leaveRequests.Select(l => (l.AccountId, l.WorkDate))
+            );
+
+            // Existing schedules set for date range
+            var rangeSchedules = monthSchedules
+                .Where(w => w.WorkDate >= dto.StartDate && w.WorkDate <= dto.EndDate)
+                .ToList();
+
+            var existingScheduleSet = new HashSet<(long AccountId, DateOnly WorkDate)>(
+                rangeSchedules.Select(w => (w.AccountId, w.WorkDate))
+            );
+
+            // Group staff by Full-Time and Part-Time
+            var fullTimeStaff = activeContracts
+                .Where(c => string.Equals(c.Type, "Full-time", StringComparison.OrdinalIgnoreCase) || !string.Equals(c.SalaryType, "Hourly", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var partTimeStaff = activeContracts
+                .Where(c => string.Equals(c.Type, "Part-time", StringComparison.OrdinalIgnoreCase) || string.Equals(c.SalaryType, "Hourly", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Track scheduled days per staff in current month
+            var staffMonthlyWorkDays = new Dictionary<long, int>();
+            foreach (var c in activeContracts)
+            {
+                var count = monthSchedules.Count(m => m.AccountId == c.AccountId && !m.Status.StartsWith("ABSENT"));
+                staffMonthlyWorkDays[c.AccountId] = count;
+            }
+
+            var result = new WorkScheduleAutoAssignResultDto();
+            var newSchedules = new List<WorkSchedule>();
+
+            // Iterate each date in date range
+            for (var date = dto.StartDate; date <= dto.EndDate; date = date.AddDays(1))
+            {
+                foreach (var shift in activeShifts)
+                {
+                    string shiftApplicableRule = (shift.ApplicableTo ?? "ALL").ToUpperInvariant();
+
+                    // Determine required role slots for this shift
+                    var roleSlots = new List<(long RoleId, int MinQuantity)>();
+                    if (shift.RoleRequirements != null && shift.RoleRequirements.Any())
+                    {
+                        foreach (var req in shift.RoleRequirements)
+                        {
+                            if (req.MinQuantity > 0)
+                            {
+                                roleSlots.Add((req.RoleId, req.MinQuantity));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Default: 1 slot per distinct staff role in branch
+                        foreach (var rId in branchRoleIds)
+                        {
+                            roleSlots.Add((rId, 1));
+                        }
+                    }
+
+                    // Fill slots for each required role
+                    foreach (var (requiredRoleId, minQty) in roleSlots)
+                    {
+                        for (int q = 0; q < minQty; q++)
+                        {
+                            // Check Full-Time candidates matching requiredRoleId
+                            var eligibleFullTime = fullTimeStaff.Where(c =>
+                                c.RoleId == requiredRoleId &&
+                                c.StartDate <= date &&
+                                (!c.EndDate.HasValue || c.EndDate.Value >= date) &&
+                                !leaveSet.Contains((c.AccountId, date)) &&
+                                !existingScheduleSet.Contains((c.AccountId, date)) &&
+                                !newSchedules.Any(ns => ns.AccountId == c.AccountId && ns.WorkDate == date)
+                            ).ToList();
+
+                            // Check Part-Time candidates matching requiredRoleId
+                            var eligiblePartTime = partTimeStaff.Where(c =>
+                                c.RoleId == requiredRoleId &&
+                                c.StartDate <= date &&
+                                (!c.EndDate.HasValue || c.EndDate.Value >= date) &&
+                                !leaveSet.Contains((c.AccountId, date)) &&
+                                !existingScheduleSet.Contains((c.AccountId, date)) &&
+                                !newSchedules.Any(ns => ns.AccountId == c.AccountId && ns.WorkDate == date)
+                            ).ToList();
+
+                            Contract? chosenContract = null;
+                            bool isFullTimeAssigned = false;
+
+                            if (shiftApplicableRule == "FULL_TIME" || shiftApplicableRule == "ALL")
+                            {
+                                // Prioritize Full-time employee furthest below standard work days target
+                                var candidate = eligibleFullTime
+                                    .Where(c => staffMonthlyWorkDays[c.AccountId] < (c.BaseWorkDay ?? 26))
+                                    .OrderBy(c => staffMonthlyWorkDays[c.AccountId])
+                                    .FirstOrDefault();
+
+                                if (candidate == null && shiftApplicableRule == "FULL_TIME")
+                                {
+                                    candidate = eligibleFullTime.OrderBy(c => staffMonthlyWorkDays[c.AccountId]).FirstOrDefault();
+                                }
+
+                                if (candidate != null)
+                                {
+                                    chosenContract = candidate;
+                                    isFullTimeAssigned = true;
+                                }
+                            }
+
+                            if (chosenContract == null && (shiftApplicableRule == "PART_TIME" || shiftApplicableRule == "ALL"))
+                            {
+                                // Distribute evenly among eligible part-time staff
+                                chosenContract = eligiblePartTime
+                                    .OrderBy(c => staffMonthlyWorkDays[c.AccountId])
+                                    .FirstOrDefault();
+                            }
+
+                            if (chosenContract != null)
+                            {
+                                var ws = new WorkSchedule
+                                {
+                                    AccountId = chosenContract.AccountId,
+                                    BranchId = dto.BranchId,
+                                    ShiftId = shift.Id,
+                                    WorkDate = date,
+                                    Code = $"WS-{dto.BranchId}-{shift.Id}-{chosenContract.AccountId}-{date:yyyyMMdd}",
+                                    Status = "Approved",
+                                    CreatedBy = dto.CreatedBy,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                newSchedules.Add(ws);
+                                existingScheduleSet.Add((chosenContract.AccountId, date));
+                                staffMonthlyWorkDays[chosenContract.AccountId] += 1;
+
+                                if (isFullTimeAssigned) result.FullTimeSchedulesCreated++;
+                                else result.PartTimeSchedulesCreated++;
+                                result.TotalCreated++;
+                            }
+                            else
+                            {
+                                result.SkippedSlotsCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (newSchedules.Any())
+            {
+                await _context.WorkSchedules.AddRangeAsync(newSchedules);
+                await _context.SaveChangesAsync();
+            }
+
+            if (result.TotalCreated == 0)
+            {
+                result.Warnings.Add("Không có ca làm việc mới nào được tạo (do nhân viên đã có lịch hoặc không đáp ứng thời hạn hợp đồng/nghỉ phép).");
+            }
+
+            return result;
+        }
     }
 }
