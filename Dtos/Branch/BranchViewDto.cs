@@ -43,4 +43,4 @@ namespace MenuGoBE.Dtos.Branch
 
         public int CheckinRadiusMeters { get; set; } = 100;
     }
-}
+}

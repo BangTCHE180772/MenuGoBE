@@ -37,12 +37,12 @@ public class CreateChallengeTests
     }
 
     [Fact]
-    public void SetsExpiresAt_3MinutesFromNow()
+    public void SetsExpiresAt_5MinutesFromNow()
     {
         // Act
-        var before = DateTime.UtcNow.AddMinutes(3).AddSeconds(-5);
+        var before = DateTime.UtcNow.AddMinutes(5).AddSeconds(-5);
         var result = _service.CreateChallenge("token");
-        var after = DateTime.UtcNow.AddMinutes(3).AddSeconds(5);
+        var after = DateTime.UtcNow.AddMinutes(5).AddSeconds(5);
 
         // Assert
         Assert.InRange(result.ExpiresAt, before, after);

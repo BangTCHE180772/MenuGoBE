@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<Menu> Menus { get; set; } = null!;
     public DbSet<Product> Products { get; set; } = null!;
     public DbSet<MenuProduct> MenuProducts { get; set; } = null!;
+    public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
 
     // 4. Units & Conversions Module
     public DbSet<Unit> Units { get; set; } = null!;
@@ -44,6 +45,7 @@ public class AppDbContext : DbContext
     public DbSet<Shift> Shifts { get; set; } = null!;
     public DbSet<ShiftRoleRequirement> ShiftRoleRequirements { get; set; } = null!;
     public DbSet<WorkSchedule> WorkSchedules { get; set; } = null!;
+    public DbSet<ShiftChangeRequest> ShiftChangeRequests { get; set; } = null!;
     public DbSet<Ticket> Tickets { get; set; } = null!;
     public DbSet<Payroll> Payrolls { get; set; } = null!;
     public DbSet<SalaryDetail> SalaryDetails { get; set; } = null!;
@@ -57,6 +59,7 @@ public class AppDbContext : DbContext
     public DbSet<Customer> Customers { get; set; } = null!;
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
+    public DbSet<LeftoverRecord> LeftoverRecords { get; set; } = null!;
     public DbSet<Reservation> Reservations { get; set; } = null!;
     public DbSet<ReservationDetail> ReservationDetails { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
@@ -74,6 +77,8 @@ public class AppDbContext : DbContext
     // 9. Inventory Module
     public DbSet<Notification> Notifications { get; set; } = null!;
     public DbSet<BInventory> BInventories { get; set; } = null!;
+    public DbSet<BInventoryBatch> BInventoryBatches { get; set; } = null!;
+    public DbSet<BatchAllocation> BatchAllocations { get; set; } = null!;
     public DbSet<InventoryLedger> InventoryLedgers { get; set; } = null!;
     public DbSet<Document> Documents { get; set; } = null!;
     public DbSet<DocumentDetail> DocumentDetails { get; set; } = null!;
@@ -127,6 +132,10 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Product>()
             .HasIndex(p => p.Name)
+            .IsUnique();
+
+        modelBuilder.Entity<KitchenStation>()
+            .HasIndex(k => new { k.BranchId, k.Name })
             .IsUnique();
 
         modelBuilder.Entity<Product>()
@@ -236,6 +245,45 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<BInventory>()
             .Property(b => b.Type)
             .HasConversion<string>();
+
+        modelBuilder.Entity<BInventoryBatch>(entity =>
+        {
+            entity.Property(b => b.Status)
+                .HasConversion<string>();
+
+            // Unique index: Mỗi mã lô chỉ xuất hiện duy nhất 1 lần trong 1 bản ghi BInventory (chi nhánh + sản phẩm)
+            entity.HasIndex(b => new { b.BInventoryId, b.BatchCode })
+                .IsUnique();
+
+            // Index tối ưu hóa truy vấn FEFO
+            entity.HasIndex(b => new { b.BInventoryId, b.Status, b.ExpiryDate });
+
+            entity.HasOne(b => b.BInventory)
+                .WithMany(bi => bi.Batches)
+                .HasForeignKey(b => b.BInventoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(b => b.SourceBatch)
+                .WithMany(sb => sb.DerivedBatches)
+                .HasForeignKey(b => b.SourceBatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<BatchAllocation>(entity =>
+        {
+            entity.Property(ba => ba.AllocationType)
+                .HasConversion<string>();
+
+            entity.HasOne(ba => ba.DocumentDetail)
+                .WithMany(dd => dd.BatchAllocations)
+                .HasForeignKey(ba => ba.DocumentDetailId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(ba => ba.Batch)
+                .WithMany(b => b.BatchAllocations)
+                .HasForeignKey(ba => ba.BatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
         modelBuilder.Entity<InventoryLedger>()
             .Property(il => il.DocumentType)

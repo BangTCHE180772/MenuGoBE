@@ -615,6 +615,14 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        // GET /api/Order/cancelled-history?branchId=1&fromDate=2026-08-01&toDate=2026-08-31
+        [HttpGet("cancelled-history")]
+        public async Task<IActionResult> GetCancelledHistory([FromQuery] long branchId, [FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
+        {
+            var result = await _detailService.GetCancelledHistoryAsync(branchId, fromDate, toDate);
+            return Ok(result);
+        }
+
         [HttpPut("details/{id}/cooking-status")]
         public async Task<IActionResult> UpdateCookingStatus(long id, [FromBody] UpdateCookingStatusDto dto)
         {
@@ -684,7 +692,27 @@ namespace MenuGoBE.Controllers
         [HttpPut("details/{id}/cancel")]
         public async Task<IActionResult> CancelOrderDetail(long id)
         {
-            var result = await _detailService.CancelOrderDetailAsync(id);
+            long? tableId = null;
+            string tableName = "Không rõ";
+            string productName = "Không rõ";
+
+            var detail = await _detailService.GetByIdAsync(id);
+            if (detail != null)
+            {
+                var order = await _service.GetByIdAsync(detail.OrderId);
+                if (order != null)
+                {
+                    tableId = order.TableId;
+                    var table = await _tableService.GetByIdAsync(order.TableId);
+                    if (table != null) tableName = table.Name;
+                }
+
+                var product = await _productService.GetByIdAsync(detail.ProductId);
+                if (product != null) productName = product.Name;
+            }
+
+            var currentUserId = GetCurrentUserId();
+            var result = await _detailService.CancelOrderDetailAsync(id, currentUserId);
             if (!result)
                 return BadRequest(new { message = "Không thể hủy món. Món đã được nhận bởi bếp hoặc đã bị hủy trước đó." });
 
@@ -692,7 +720,10 @@ namespace MenuGoBE.Controllers
             {
                 type = "item-cancelled",
                 orderDetailId = id,
-                message = $"Món #{id} đã bị hủy!",
+                tableId = tableId,
+                tableName = tableName,
+                productName = productName,
+                message = $"Món {productName} ({tableName}) đã bị hủy!",
                 timestamp = DateTime.UtcNow
             });
 

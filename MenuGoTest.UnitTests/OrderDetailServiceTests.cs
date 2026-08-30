@@ -35,7 +35,8 @@ namespace MenuGoTest.UnitTests
                 new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IRecipesDetailedRepository>().Object,
                 new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object,
-                new Mock<MenuGoBE.Interface.Services.Document.IDocumentService>().Object);
+                new Mock<MenuGoBE.Interface.Services.Document.IDocumentService>().Object,
+                new Mock<MenuGoBE.Interface.Services.ILeftoverRecordService>().Object);
         }
 
         [Fact]

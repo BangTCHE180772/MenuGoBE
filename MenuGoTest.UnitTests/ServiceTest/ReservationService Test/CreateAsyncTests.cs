@@ -89,9 +89,12 @@ public class CreateAsyncTests : ReservationServiceTestBase
         };
         _reservationRepoMock.Setup(r => r.GetOverlappingReservationsAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>())).ReturnsAsync(overlapping);
         _orderRepoMock.Setup(r => r.GetChildOrdersWithDetailsAsync(50)).ReturnsAsync(new List<Order>());
+        _reservationRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<long>())).ReturnsAsync(new Reservation { Id = 1, ReservationTime = DateTime.UtcNow.AddHours(2) });
+        _reservationRepoMock.Setup(r => r.GetAllWithDetailsAsync()).ReturnsAsync(new List<Reservation>());
+        _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Table { Id = 1, Status = "Occupied", AreaId = 1 });
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CreateAsync(dto));
-        Assert.Contains("đã được đặt", ex.Message);
+        Assert.Contains("Không thể xếp bàn", ex.Message);
     }
 
     [Fact]
@@ -120,7 +123,12 @@ public class CreateAsyncTests : ReservationServiceTestBase
         _productRepoMock.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(new Product { Id = 10, Name = "Phở", SellPrice = 50000 });
         _detailRepoMock.Setup(r => r.CreateAsync(It.IsAny<OrderDetail>())).Returns(Task.CompletedTask);
         _detailRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
-        _reservationRepoMock.Setup(r => r.CreateAsync(It.IsAny<Reservation>())).Returns(Task.CompletedTask);
+        _reservationRepoMock.Setup(r => r.CreateAsync(It.IsAny<Reservation>()))
+            .Callback<Reservation>(res => {
+                res.Id = 1;
+                _reservationRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(res);
+            })
+            .Returns(Task.CompletedTask);
         _reservationRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
         _reservationRepoMock.Setup(r => r.GetAllWithDetailsAsync()).ReturnsAsync(new List<Reservation>());
 

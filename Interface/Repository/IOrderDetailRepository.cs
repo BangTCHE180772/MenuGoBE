@@ -14,6 +14,7 @@ namespace MenuGoBE.Interface.Repository
         Task<bool> UpdateCookingStatusAsync(long id, string cookingStatus);
         Task<int> GetPendingQuantityAsync(long productId, long branchId);
         Task<List<OrderDetail>> GetPendingByProductIdAsync(long productId, long[] branchIds);
+        Task<List<OrderDetail>> GetCancelledByBranchAsync(long branchId, DateTime? fromDate, DateTime? toDate);
         Task SaveChangesAsync();
     }
 }

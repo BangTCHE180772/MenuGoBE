@@ -144,7 +144,7 @@ namespace MenuGoBE.Interface.Services.Document
         /// <summary>
         /// Thêm 1 item vào CustomerReturn Document (Pending). Thực hiện CỘNG KHO (nếu isIntact) và Ghi Sổ Kho ngay lập tức.
         /// </summary>
-        Task AppendItemToReturnDocumentAsync(long documentId, Product product, decimal baseQuantity, bool isIntact, long parentDetailId, long userId);
+        Task AppendItemToReturnDocumentAsync(long documentId, Product product, decimal baseQuantity, bool isIntact, string returnReason, long parentDetailId, long userId);
 
         /// <summary>
         /// Chốt (Complete) tất cả Pending Documents của một Order khi thanh toán.

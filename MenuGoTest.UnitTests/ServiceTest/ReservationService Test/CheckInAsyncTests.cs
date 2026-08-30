@@ -3,7 +3,7 @@ using Moq;
 
 namespace MenuGoTest.UnitTests.ServiceTest.ReservationServiceTest;
 
-public class CheckInAsyncTests : ReservationServiceTestBase
+public class CheckInReservationAsyncTests : ReservationServiceTestBase
 {
     [Fact]
     public async Task ReturnsTrue_WhenPendingReservation()
@@ -30,33 +30,29 @@ public class CheckInAsyncTests : ReservationServiceTestBase
         _detailRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
         _reservationRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
-        var result = await _service.CheckInAsync(1);
+        var result = await _service.CheckInReservationAsync(1);
 
-        Assert.True(result);
+        Assert.NotNull(result);
         Assert.Equal("Completed", reservation.Status);
         Assert.Equal("Active", order.Status);
         Assert.Equal("Occupied", table.Status);
     }
 
     [Fact]
-    public async Task ReturnsFalse_WhenNotPending()
+    public async Task Throws_WhenNotPendingOrConfirmed()
     {
         var reservation = new Reservation { Id = 1, Status = "Completed" };
         _reservationRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(reservation);
 
-        var result = await _service.CheckInAsync(1);
-
-        Assert.False(result);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CheckInReservationAsync(1));
     }
 
     [Fact]
-    public async Task ReturnsFalse_WhenNotExists()
+    public async Task Throws_WhenNotExists()
     {
         _reservationRepoMock.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Reservation?)null);
 
-        var result = await _service.CheckInAsync(999);
-
-        Assert.False(result);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _service.CheckInReservationAsync(999));
     }
 
     [Fact]
@@ -76,6 +72,7 @@ public class CheckInAsyncTests : ReservationServiceTestBase
         _orderRepoMock.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(order);
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
         _detailRepoMock.Setup(r => r.GetByOrderIdAsync(10)).ReturnsAsync(new List<OrderDetail> { preOrderDetail });
+        _productRepoMock.Setup(r => r.GetByIdAsync(It.IsAny<long>())).ReturnsAsync(new Product { Id = 1, Name = "Món test" });
         _detailRepoMock.Setup(r => r.UpdateStatusAsync(1, "Confirmed")).ReturnsAsync(true);
         _detailRepoMock.Setup(r => r.UpdateCookingStatusAsync(1, "Waiting")).ReturnsAsync(true);
         _orderRepoMock.Setup(r => r.GetChildOrdersWithDetailsAsync(10)).ReturnsAsync(new List<Order>());
@@ -87,10 +84,9 @@ public class CheckInAsyncTests : ReservationServiceTestBase
         _detailRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
         _reservationRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
-        await _service.CheckInAsync(1);
+        await _service.CheckInReservationAsync(1);
 
-        _detailRepoMock.Verify(r => r.UpdateStatusAsync(1, "Confirmed"), Times.Once);
-        _detailRepoMock.Verify(r => r.UpdateCookingStatusAsync(1, "Waiting"), Times.Once);
+        _orderDetailServiceMock.Verify(s => s.ConfirmAsync(1), Times.Once);
     }
 
     [Fact]
@@ -104,11 +100,16 @@ public class CheckInAsyncTests : ReservationServiceTestBase
         _orderRepoMock.Setup(r => r.GetActiveOrderByIdWithDetailsAsync(10)).ReturnsAsync((Order?)null);
         _orderRepoMock.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(order);
         _tableRepoMock.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(table);
+        _detailRepoMock.Setup(r => r.GetByOrderIdAsync(10)).ReturnsAsync(new List<OrderDetail>());
+        _orderRepoMock.Setup(r => r.GetChildOrdersWithDetailsAsync(10)).ReturnsAsync(new List<Order>());
         _reservationRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Reservation>())).Returns(Task.CompletedTask);
+        _reservationRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
+        _orderRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
+        _tableRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
-        var result = await _service.CheckInAsync(1);
+        var result = await _service.CheckInReservationAsync(1);
 
-        Assert.False(result);
+        Assert.NotNull(result);
     }
 
     [Fact]
@@ -135,7 +136,7 @@ public class CheckInAsyncTests : ReservationServiceTestBase
         _detailRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
         _reservationRepoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
 
-        await _service.CheckInAsync(1);
+        await _service.CheckInReservationAsync(1);
 
         Assert.Equal("Active", childOrder.Status);
         Assert.Equal("Occupied", childTable.Status);
