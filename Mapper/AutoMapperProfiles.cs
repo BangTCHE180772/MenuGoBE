@@ -154,6 +154,10 @@ namespace MenuGoBE.Mapper
             CreateMap<Shift, ShiftViewDto>();
             CreateMap<ShiftCreateDto, Shift>();
             CreateMap<ShiftUpdateDto, Shift>();
+            CreateMap<ShiftRoleRequirement, ShiftRoleRequirementDto>()
+                .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : string.Empty));
+            CreateMap<ShiftRoleRequirementDto, ShiftRoleRequirement>();
+
             //Image
             CreateMap<Models.Image, ImageViewDto>();
             CreateMap<ImageCreateDto, Models.Image>();

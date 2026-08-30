@@ -42,4 +42,6 @@ public class Shift
 
     // Navigation
     public ICollection<WorkSchedule> WorkSchedules { get; set; } = new List<WorkSchedule>();
+    public ICollection<ShiftRoleRequirement> RoleRequirements { get; set; } = new List<ShiftRoleRequirement>();
 }
+
