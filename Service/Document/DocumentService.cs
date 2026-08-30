@@ -1984,7 +1984,7 @@ namespace MenuGoBE.Service.Document
             await _repo.SaveChangesAsync();
         }
 
-        public async Task AppendItemToReturnDocumentAsync(long documentId, Product product, decimal baseQuantity, bool isIntact, long parentDetailId, long userId)
+        public async Task AppendItemToReturnDocumentAsync(long documentId, Product product, decimal baseQuantity, bool isIntact, string returnReason, long parentDetailId, long userId)
         {
             var document = await _repo.GetByIdAsync(documentId);
             if (document == null) throw new Exception("Không tìm thấy Return Document.");
@@ -1992,38 +1992,47 @@ namespace MenuGoBE.Service.Document
             var binventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, product.Id);
             if (binventory != null)
             {
-                string note = "";
+                string note = returnReason; // Lưu lý do thực tế khách/nhân viên chọn
                 
-                // Cộng lại tồn kho
-                binventory.Quantity += baseQuantity;
-                
-                var account = await _repo.GetAccountByIdAsync(userId);
-                string snapshotPostedByName = account != null ? account.Name : "System";
-
-                // Ghi thẻ kho (Inventory Ledger)
-                var ledger = new InventoryLedger
+                // Logic kiểm tra Regular và IsIntact: Chỉ cộng lại kho nếu là món Thường và còn nguyên vẹn
+                if (product.Type == MenuGoBE.Models.Enums.ProductType.Regular && isIntact)
                 {
-                    BInventoryId = binventory.Id,
-                    DocumentId = document.Id,
-                    PostedAt = DateTime.UtcNow,
-                    PostedBy = userId,
-                    DocumentType = DocumentType.CustomerReturn,
-                    SnapshotPostedByName = snapshotPostedByName,
-                    SnapshotBranchName = document.SnapshotBranchName ?? "",
-                    SnapshotProductName = product.Name,
-                    SnapshotUnitName = product.Name,
-                    ConversionRateSnapshot = 1m,
-                    QuantityDelta = baseQuantity,
-                    InventoryValueDelta = baseQuantity * binventory.Avg,
-                    RunningQuantity = binventory.Quantity,
-                    RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
-                    RunningAverageCost = binventory.Avg,
-                    UnitCost = binventory.Avg,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _repo.AddInventoryLedgerAsync(ledger);
-                
-                note = "Trả lại nguyên vẹn - Đã cộng tồn kho";
+                    // Cộng lại tồn kho
+                    binventory.Quantity += baseQuantity;
+                    
+                    var account = await _repo.GetAccountByIdAsync(userId);
+                    string snapshotPostedByName = account != null ? account.Name : "System";
+
+                    // Ghi thẻ kho (Inventory Ledger)
+                    var ledger = new InventoryLedger
+                    {
+                        BInventoryId = binventory.Id,
+                        DocumentId = document.Id,
+                        PostedAt = DateTime.UtcNow,
+                        PostedBy = userId,
+                        DocumentType = MenuGoBE.Models.Enums.DocumentType.CustomerReturn,
+                        SnapshotPostedByName = snapshotPostedByName,
+                        SnapshotBranchName = document.SnapshotBranchName ?? "",
+                        SnapshotProductName = product.Name,
+                        SnapshotUnitName = product.Name,
+                        ConversionRateSnapshot = 1m,
+                        QuantityDelta = baseQuantity,
+                        InventoryValueDelta = baseQuantity * binventory.Avg,
+                        RunningQuantity = binventory.Quantity,
+                        RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                        RunningAverageCost = binventory.Avg,
+                        UnitCost = binventory.Avg,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _repo.AddInventoryLedgerAsync(ledger);
+                    note += " (Đã cộng tồn kho)";
+                }
+                else
+                {
+                    // Nếu là Processed/Manufactured HOẶC không nguyên vẹn -> không cộng kho (Phase 1)
+                    // Hàng lỗi/Đã chế biến -> Coi như xuất hủy, chỉ ghi nhận document detail để đối soát.
+                    note += " (Không cộng tồn kho do hàng chế biến/không nguyên vẹn)";
+                }
 
                 // LUÔN LUÔN ghi nhận vào chi tiết phiếu trả (DocumentDetail)
                 var childDetail = new DocumentDetail
