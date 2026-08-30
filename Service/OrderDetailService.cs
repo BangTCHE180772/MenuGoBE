@@ -878,11 +878,9 @@ namespace MenuGoBE.Service
             if (dto.ReturnQuantity > maxReturnable)
                 throw new InvalidOperationException($"Số lượng trả ({dto.ReturnQuantity}) vượt quá số lượng có thể trả ({maxReturnable}).");
 
-            // Validate: phải có lý do (Bỏ qua vì trả hàng nguyên vẹn không cần lý do)
-            /*
+            // Validate: Bắt buộc phải có lý do trong mọi trường hợp
             if (string.IsNullOrWhiteSpace(dto.ReturnReason))
                 throw new InvalidOperationException("Phải cung cấp lý do trả món.");
-            */
 
             // Update return fields
             entity.ReturnedQuantity += dto.ReturnQuantity;
@@ -895,12 +893,7 @@ namespace MenuGoBE.Service
             if (product == null)
                 throw new InvalidOperationException("Không tìm thấy thông tin sản phẩm.");
 
-            // --- NEW LOGIC: Bắt buộc hàng phải nguyên vẹn (IsIntact = true) và là loại Regular ---
-            if (product.Type != MenuGoBE.Models.Enums.ProductType.Regular)
-                throw new InvalidOperationException("Chỉ cho phép trả hàng đối với sản phẩm loại Thường (Regular).");
-
-            if (dto.IsIntact == false)
-                throw new InvalidOperationException("Chỉ cho phép trả hàng khi hàng còn nguyên vẹn (chưa qua sử dụng/bóc vỏ).");
+            // Bỏ validation chặn hàng không nguyên vẹn hoặc hàng chế biến (cho phép trả mọi loại)
             
             // Re-stock logic: CHỈ Regular + còn nguyên vẹn mới cộng lại kho
             // Logic trừ/cộng kho và ghi sổ kho được quản lý tập trung ở DocumentService
@@ -915,7 +908,7 @@ namespace MenuGoBE.Service
                     {
                         long branchId = area.BranchId;
                         var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
-                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, entity.Id, confirmedByUserId);
+                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, dto.ReturnReason, entity.Id, confirmedByUserId);
                     }
                 }
             }
