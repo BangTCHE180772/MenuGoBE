@@ -2177,6 +2177,10 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("ApplicableTo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -2220,6 +2224,94 @@ namespace MenuGoBE.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Shifts");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ShiftChangeRequest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ApprovedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsNightShift")
+                        .HasColumnType("boolean");
+
+                    b.Property<TimeOnly>("NewEndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<long>("NewShiftId")
+                        .HasColumnType("bigint");
+
+                    b.Property<TimeOnly>("NewStartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<TimeOnly>("OldEndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<bool>("OldManagerApproved")
+                        .HasColumnType("boolean");
+
+                    b.Property<long>("OldShiftId")
+                        .HasColumnType("bigint");
+
+                    b.Property<TimeOnly>("OldStartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<string>("OldStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.Property<long>("WorkScheduleId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("NewShiftId");
+
+                    b.HasIndex("OldShiftId");
+
+                    b.HasIndex("WorkScheduleId");
+
+                    b.ToTable("ShiftChangeRequests");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.ShiftRoleRequirement", b =>
@@ -3372,6 +3464,56 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Creator");
 
                     b.Navigation("Payroll");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.ShiftChangeRequest", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Approver")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Shift", "NewShift")
+                        .WithMany()
+                        .HasForeignKey("NewShiftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Shift", "OldShift")
+                        .WithMany()
+                        .HasForeignKey("OldShiftId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.WorkSchedule", "WorkSchedule")
+                        .WithMany()
+                        .HasForeignKey("WorkScheduleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Approver");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("NewShift");
+
+                    b.Navigation("OldShift");
+
+                    b.Navigation("WorkSchedule");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.ShiftRoleRequirement", b =>

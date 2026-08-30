@@ -269,6 +269,9 @@ public class ReservationMonitorService : BackgroundService
                 {
                     await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate", stoppingToken);
                 }
+
+                // Fixed 5-minute interval check
+                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -278,9 +281,6 @@ public class ReservationMonitorService : BackgroundService
             {
                 Console.WriteLine($"ReservationMonitorService Error: {ex.Message}");
             }
-
-            // Fixed 5-minute interval check
-            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
         }
     }
 }
