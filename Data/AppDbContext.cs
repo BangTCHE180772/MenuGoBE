@@ -70,6 +70,7 @@ public class AppDbContext : DbContext
     public DbSet<Device> Devices { get; set; } = null!;
 
     // Chat Module
+    public DbSet<GuestChatSession> GuestChatSessions { get; set; } = null!;
     public DbSet<Conversation> Conversations { get; set; } = null!;
     public DbSet<Message> Messages { get; set; } = null!;
     public DbSet<ConversationAssignmentHistory> ConversationAssignmentHistories { get; set; } = null!;
@@ -364,6 +365,27 @@ public class AppDbContext : DbContext
             entity.HasIndex(e => e.OrderId).IsUnique();
             entity.HasIndex(e => e.AccountId);
             entity.HasIndex(e => e.BranchId);
+        });
+
+        // ── Chat Module: GuestChatSession & Conversation Indexes ──
+        modelBuilder.Entity<GuestChatSession>(entity =>
+        {
+            entity.HasIndex(g => g.GuestId).IsUnique();
+            entity.HasIndex(g => g.Token);
+            entity.HasIndex(g => g.LastActiveTime);
+        });
+
+        modelBuilder.Entity<Conversation>(entity =>
+        {
+            entity.HasIndex(c => c.GuestChatSessionId);
+            entity.HasIndex(c => c.CustomerId);
+            entity.HasIndex(c => c.BranchId);
+        });
+
+        modelBuilder.Entity<Message>(entity =>
+        {
+            entity.HasIndex(m => m.ConversationId);
+            entity.HasIndex(m => m.GuestChatSessionId);
         });
 
         // ── Global: disable cascade deletes to avoid Multiple Cascade Path ──

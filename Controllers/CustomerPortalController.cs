@@ -263,5 +263,36 @@ namespace MenuGoBE.Controllers
             }
         }
         #endregion
+
+        #region POST Gửi yêu cầu tư vấn món ăn từ Menu
+        [HttpPost("consultation")]
+        public async Task<IActionResult> SendProductConsultation([FromBody] ProductConsultationRequestDto dto)
+        {
+            try
+            {
+                var customerId = GetCustomerId();
+                var customer = await _portalService.GetProfileAsync(customerId);
+
+                var msgView = await _chatService.SendProductConsultationAsync(null, customerId, customer.Name, dto);
+                return Ok(msgView);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
+        }
+        #endregion
     }
 }

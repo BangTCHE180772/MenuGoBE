@@ -155,6 +155,7 @@ builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddHostedService<AutoCheckoutService>();
 builder.Services.AddScoped<IOrderAssignmentService, OrderAssignmentService>();
 builder.Services.AddHostedService<OrderAssignmentMonitorService>();
+builder.Services.AddHostedService<GuestChatCleanupService>();
 builder.Services.AddScoped<INewWardService, NewWardService>();
 builder.Services.AddScoped<IOldWardService, OldWardService>();
 builder.Services.AddScoped<INewProvinceService, NewProvinceService>();

@@ -214,6 +214,72 @@ namespace MenuGoBE.Controllers
             }
         }
         #endregion
+
+        #region GET Lấy cấu hình thời gian lưu trữ tin nhắn khách ẩn danh của chi nhánh
+        [HttpGet("settings/retention/{branchId}")]
+        public async Task<IActionResult> GetRetentionSettings(long branchId)
+        {
+            try
+            {
+                if (!TryGetUserId(out _)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+
+                var allowedBranchIds = GetAllowedBranchIds();
+                var isAdminOrOwner = IsAdminOrOwner();
+
+                if (!isAdminOrOwner && !allowedBranchIds.Contains(branchId))
+                {
+                    return Forbid("Bạn không có quyền truy cập cấu hình chi nhánh này.");
+                }
+
+                var minutes = await _chatService.GetBranchRetentionMinutesAsync(branchId);
+                return Ok(new { branchId, retentionMinutes = minutes });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region PUT Cập nhật cấu hình thời gian lưu trữ tin nhắn khách ẩn danh của chi nhánh
+        [HttpPut("settings/retention")]
+        public async Task<IActionResult> UpdateRetentionSettings([FromBody] ChatRetentionSettingDto dto)
+        {
+            try
+            {
+                if (!TryGetUserId(out _)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+
+                var allowedBranchIds = GetAllowedBranchIds();
+                var isAdminOrOwner = IsAdminOrOwner();
+                var isManager = IsManager();
+
+                await _chatService.UpdateBranchRetentionMinutesAsync(
+                    dto.BranchId,
+                    dto.RetentionMinutes,
+                    allowedBranchIds,
+                    isAdminOrOwner,
+                    isManager);
+
+                return Ok(new { success = true, message = "Cập nhật thời gian lưu trữ tin nhắn thành công." });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Lỗi máy chủ", error = ex.Message });
+            }
+        }
+        #endregion
     }
 
     public class ConversationAssignRequest
