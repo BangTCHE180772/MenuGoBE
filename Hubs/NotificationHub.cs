@@ -130,9 +130,19 @@ namespace MenuGoBE.Hubs
             await base.OnDisconnectedAsync(exception);
           
        }    
-    public async Task JoinCustomerGroup(long customerId)
+        public async Task JoinCustomerGroup(long customerId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"customer_{customerId}");
+        }
+
+        public async Task JoinGuestGroup(string guestId)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"guest_{guestId}");
+        }
+
+        public async Task LeaveGuestGroup(string guestId)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"guest_{guestId}");
         }
     }
 }

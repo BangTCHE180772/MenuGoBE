@@ -38,6 +38,9 @@ public class Branch
     /// <summary>Bán kính tính bằng mét cho phép điểm danh (mặc định 100m)</summary>
     public int CheckinRadiusMeters { get; set; } = 100;
 
+    /// <summary>Thời gian lưu trữ tin nhắn của khách ẩn danh (phút, mặc định 43200 phút = 30 ngày)</summary>
+    public int AnonymousChatRetentionMinutes { get; set; } = 43200;
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;

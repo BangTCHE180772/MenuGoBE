@@ -20,13 +20,24 @@ public class Message
     [ForeignKey("CustomerId")]
     public Customer? Customer { get; set; }
 
+    public long? GuestChatSessionId { get; set; }
+
+    [ForeignKey("GuestChatSessionId")]
+    public GuestChatSession? GuestChatSession { get; set; }
+
     public long? EmployeeId { get; set; }
 
     [ForeignKey("EmployeeId")]
     public Account? Employee { get; set; }
 
     [Required]
+    [MaxLength(50)]
+    public string MessageType { get; set; } = "Text"; // Text, ProductReference, System
+
+    [Required]
     public string Content { get; set; } = string.Empty;
+
+    public string? MetadataJson { get; set; }
 
     [MaxLength(50)]
     public string? Topic { get; set; }
