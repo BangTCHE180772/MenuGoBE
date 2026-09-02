@@ -24,6 +24,13 @@ namespace MenuGoBE.Service
             if (await _repo.IsActivelyAssignedAsync(orderId))
                 return false;
 
+            // Kiểm tra role của accountId
+            if (!await _repo.IsWaiterAsync(accountId))
+            {
+                _logger.LogInformation("Tài khoản {AccountId} không phải tài khoản của phục vụ. Dừng phân công trực tiếp cho đơn {OrderId}", accountId, orderId);
+                return false;
+            }
+
             await _repo.CreateAsync(new OrderAssignment
             {
                 OrderId = orderId,
