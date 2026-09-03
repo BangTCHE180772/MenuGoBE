@@ -57,6 +57,7 @@ public class AppDbContext : DbContext
     public DbSet<Area> Areas { get; set; } = null!;
     public DbSet<Table> Tables { get; set; } = null!;
     public DbSet<Customer> Customers { get; set; } = null!;
+    public DbSet<CustomerPointTransaction> CustomerPointTransactions { get; set; } = null!;
     public DbSet<Order> Orders { get; set; } = null!;
     public DbSet<OrderDetail> OrderDetails { get; set; } = null!;
     public DbSet<LeftoverRecord> LeftoverRecords { get; set; } = null!;
@@ -228,6 +229,28 @@ public class AppDbContext : DbContext
             .WithMany(a => a.CreatedPartners)
             .HasForeignKey(p => p.CreatedBy)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // CustomerPointTransaction configuration
+        modelBuilder.Entity<CustomerPointTransaction>(entity =>
+        {
+            entity.Property(c => c.Type)
+                .HasConversion<int>();
+
+            entity.HasOne(t => t.Customer)
+                .WithMany()
+                .HasForeignKey(t => t.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(t => t.Order)
+                .WithMany()
+                .HasForeignKey(t => t.OrderId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(t => t.Creator)
+                .WithMany()
+                .HasForeignKey(t => t.CreatedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
 
 
 

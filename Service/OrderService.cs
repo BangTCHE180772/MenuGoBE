@@ -491,8 +491,54 @@ namespace MenuGoBE.Service
                     var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
                     if (customer != null)
                     {
-                        customer.Point = customer.Point - order.PointsUsed + pointsEarned;
+                        int currentPoint = customer.Point;
+                        string orderCode = $"HD{order.Id:D6}";
+
+                        // 1. Trừ điểm nếu khách có sử dụng điểm
+                        if (order.PointsUsed > 0)
+                        {
+                            int before = currentPoint;
+                            currentPoint = Math.Max(0, currentPoint - order.PointsUsed);
+                            var redeemTrans = new CustomerPointTransaction
+                            {
+                                CustomerId = customer.Id,
+                                OrderId = order.Id,
+                                RelatedCode = orderCode,
+                                Type = MenuGoBE.Models.Enums.PointTransactionType.Redeem,
+                                PointChange = -order.PointsUsed,
+                                PointBefore = before,
+                                PointAfter = currentPoint,
+                                Reason = $"Sử dụng điểm thanh toán hóa đơn {orderCode}",
+                                IsManual = false,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _context.CustomerPointTransactions.AddAsync(redeemTrans);
+                        }
+
+                        // 2. Tích điểm theo số tiền thanh toán
+                        if (pointsEarned > 0)
+                        {
+                            int before = currentPoint;
+                            currentPoint += pointsEarned;
+                            var earnTrans = new CustomerPointTransaction
+                            {
+                                CustomerId = customer.Id,
+                                OrderId = order.Id,
+                                RelatedCode = orderCode,
+                                Type = MenuGoBE.Models.Enums.PointTransactionType.Earn,
+                                PointChange = pointsEarned,
+                                PointBefore = before,
+                                PointAfter = currentPoint,
+                                Reason = $"Tích điểm đơn hàng {orderCode}",
+                                IsManual = false,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _context.CustomerPointTransactions.AddAsync(earnTrans);
+                        }
+
+                        customer.Point = currentPoint;
                         await _customerRepo.UpdateAsync(customer);
+                        await _context.SaveChangesAsync();
                     }
                 }
 
