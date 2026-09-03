@@ -14,67 +14,57 @@ namespace MenuGoBE.Repositories
             _context = context;
         }
 
-        public async Task<OrderAssignment?> GetByOrderIdAsync(long orderId)
+        // === Active assignment queries ===
+
+        public async Task<OrderAssignment?> GetActiveByOrderIdAsync(long orderId)
         {
             return await _context.OrderAssignments
                 .Include(a => a.Account)
                 .Include(a => a.Order)
                     .ThenInclude(o => o.Table)
-                .FirstOrDefaultAsync(a => a.OrderId == orderId);
+                        .ThenInclude(t => t.Area)
+                .FirstOrDefaultAsync(a => a.OrderId == orderId && a.IsActive);
         }
 
-        public async Task<List<OrderAssignment>> GetByAccountIdAsync(long accountId)
+        public async Task<OrderAssignment?> GetActiveByTableIdAsync(long tableId)
+        {
+            return await _context.OrderAssignments
+                .Include(a => a.Account)
+                .Include(a => a.Order)
+                .FirstOrDefaultAsync(a =>
+                    a.Order.TableId == tableId &&
+                    a.Order.Status == "Active" &&
+                    a.IsActive);
+        }
+
+        public async Task<List<OrderAssignment>> GetActiveByAccountIdAsync(long accountId)
         {
             return await _context.OrderAssignments
                 .Include(a => a.Order)
                     .ThenInclude(o => o.Table)
-                .Where(a => a.AccountId == accountId)
+                        .ThenInclude(t => t.Area)
+                .Where(a => a.AccountId == accountId && a.IsActive)
                 .ToListAsync();
         }
 
-        public async Task<List<OrderAssignment>> GetByBranchIdAsync(long branchId)
+        public async Task<List<OrderAssignment>> GetActiveByBranchAsync(long branchId)
         {
             return await _context.OrderAssignments
                 .Include(a => a.Account)
                 .Include(a => a.Order)
                     .ThenInclude(o => o.Table)
-                .Where(a => a.BranchId == branchId)
+                        .ThenInclude(t => t.Area)
+                .Where(a => a.BranchId == branchId && a.IsActive)
                 .ToListAsync();
         }
 
-        public async Task<bool> IsAssignedAsync(long orderId)
+        public async Task<bool> IsActivelyAssignedAsync(long orderId)
         {
-            return await _context.OrderAssignments.AnyAsync(a => a.OrderId == orderId);
+            return await _context.OrderAssignments
+                .AnyAsync(a => a.OrderId == orderId && a.IsActive);
         }
 
-        public async Task CreateAsync(OrderAssignment assignment)
-        {
-            await _context.OrderAssignments.AddAsync(assignment);
-        }
-
-        public Task UpdateAsync(OrderAssignment assignment)
-        {
-            _context.OrderAssignments.Update(assignment);
-            return Task.CompletedTask;
-        }
-
-        public async Task DeleteByOrderIdAsync(long orderId)
-        {
-            var assignment = await _context.OrderAssignments
-                .FirstOrDefaultAsync(a => a.OrderId == orderId);
-            if (assignment != null)
-            {
-                _context.OrderAssignments.Remove(assignment);
-            }
-        }
-
-        public async Task DeleteByAccountIdAsync(long accountId)
-        {
-            var assignments = await _context.OrderAssignments
-                .Where(a => a.AccountId == accountId)
-                .ToListAsync();
-            _context.OrderAssignments.RemoveRange(assignments);
-        }
+        // === Stale & Orphaned detection ===
 
         public async Task<List<OrderAssignment>> GetStaleAssignmentsAsync(int idleMinutes)
         {
@@ -87,6 +77,7 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(o => o.Table)
                 .Include(a => a.Account)
                 .Where(a =>
+                    a.IsActive &&
                     a.LastActionAt <= threshold &&
                     a.Order.Status == "Active" &&
                     a.Order.OrderDetails.Any(od =>
@@ -97,13 +88,14 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<OrderAssignment>> GetOrphanedAssignmentsAsync()
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)); // Vietnam timezone
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
 
             return await _context.OrderAssignments
                 .Include(a => a.Order)
                     .ThenInclude(o => o.Table)
                 .Include(a => a.Account)
                 .Where(a =>
+                    a.IsActive &&
                     a.Order.Status == "Active" &&
                     !_context.WorkSchedules.Any(ws =>
                         ws.AccountId == a.AccountId &&
@@ -113,6 +105,118 @@ namespace MenuGoBE.Repositories
                         ws.CheckOutAt == null &&
                         ws.Status == "Working"))
                 .ToListAsync();
+        }
+
+        // === CRUD ===
+
+        public async Task CreateAsync(OrderAssignment assignment)
+        {
+            await _context.OrderAssignments.AddAsync(assignment);
+        }
+
+        public Task UpdateAsync(OrderAssignment assignment)
+        {
+            _context.OrderAssignments.Update(assignment);
+            return Task.CompletedTask;
+        }
+
+        // === Soft delete ===
+
+        public async Task DeactivateByOrderIdAsync(long orderId, string reason)
+        {
+            var assignment = await _context.OrderAssignments
+                .FirstOrDefaultAsync(a => a.OrderId == orderId && a.IsActive);
+            if (assignment != null)
+            {
+                assignment.IsActive = false;
+                assignment.DeactivatedReason = reason;
+                assignment.DeactivatedAt = DateTime.UtcNow;
+            }
+        }
+
+        public async Task DeactivateByAccountIdAsync(long accountId, string reason)
+        {
+            var assignments = await _context.OrderAssignments
+                .Where(a => a.AccountId == accountId && a.IsActive)
+                .ToListAsync();
+            foreach (var a in assignments)
+            {
+                a.IsActive = false;
+                a.DeactivatedReason = reason;
+                a.DeactivatedAt = DateTime.UtcNow;
+            }
+        }
+
+        // === History ===
+
+        public async Task<OrderAssignment?> GetByOrderIdAsync(long orderId)
+        {
+            return await _context.OrderAssignments
+                .Include(a => a.Account)
+                .Include(a => a.Order)
+                .OrderByDescending(a => a.AssignedAt)
+                .FirstOrDefaultAsync(a => a.OrderId == orderId);
+        }
+
+        public async Task<List<OrderAssignment>> GetByAccountIdAsync(long accountId)
+        {
+            return await _context.OrderAssignments
+                .Include(a => a.Order)
+                    .ThenInclude(o => o.Table)
+                .Where(a => a.AccountId == accountId)
+                .OrderByDescending(a => a.AssignedAt)
+                .ToListAsync();
+        }
+
+        // === Dependency queries ===
+
+        public async Task<long?> GetTableAreaIdAsync(long tableId)
+        {
+            var table = await _context.Tables
+                .Include(t => t.Area)
+                .FirstOrDefaultAsync(t => t.Id == tableId);
+            return table?.AreaId;
+        }
+
+        public async Task<List<long>> GetOnDutyStaffIdsAsync(long branchId, DateOnly today)
+        {
+            return await _context.WorkSchedules
+                .Where(ws =>
+                    ws.BranchId == branchId &&
+                    ws.WorkDate == today &&
+                    ws.CheckInAt != null &&
+                    ws.CheckOutAt == null &&
+                    ws.Status == "Working")
+                .Select(ws => ws.AccountId)
+                .Distinct()
+                .ToListAsync();
+        }
+
+        public async Task<bool> IsWaiterAsync(long accountId)
+        {
+            var now = DateTime.UtcNow;
+
+            // Check qua Contract
+            var hasWaiterContract = await _context.Contracts
+                .Include(c => c.Role)
+                .AnyAsync(c =>
+                    c.AccountId == accountId &&
+                    c.Status == "Active" &&
+                    c.Role.Name.ToLower() == "waiter");
+
+            if (hasWaiterContract) return true;
+
+            // Check qua TempRole
+            var hasWaiterTempRole = await _context.Set<TempRole>()
+                .Include(tr => tr.Role)
+                .AnyAsync(tr =>
+                    tr.AccountId == accountId &&
+                    tr.Status == "Active" &&
+                    tr.StartTime <= now &&
+                    tr.EndTime >= now &&
+                    tr.Role.Name.ToLower() == "waiter");
+
+            return hasWaiterTempRole;
         }
 
         public async Task SaveChangesAsync()

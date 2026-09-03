@@ -13,11 +13,36 @@ namespace MenuGoBE.Controllers
     {
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly ITableService _tableService;
+        private readonly IOrderAssignmentService _assignmentService;
 
-        public CustomerActionController(IHubContext<NotificationHub> hubContext, ITableService tableService)
+        public CustomerActionController(
+            IHubContext<NotificationHub> hubContext, 
+            ITableService tableService,
+            IOrderAssignmentService assignmentService)
         {
             _hubContext = hubContext;
             _tableService = tableService;
+            _assignmentService = assignmentService;
+        }
+
+        private async Task SendTargetedNotificationAsync(long tableId, long branchId, object payload)
+        {
+            var assignedAccountId = await _assignmentService.GetAssignedAccountByTableAsync(tableId);
+
+            if (assignedAccountId.HasValue)
+            {
+                await _hubContext.Clients.Group($"waiter_{assignedAccountId.Value}")
+                    .SendAsync("ReceiveNotification", payload);
+            }
+            else
+            {
+                await _hubContext.Clients.Group($"on_duty_{branchId}")
+                    .SendAsync("ReceiveNotification", payload);
+            }
+
+            // Manager luôn nhận
+            await _hubContext.Clients.Group($"branch_{branchId}")
+                .SendAsync("ReceiveNotification", payload);
         }
 
         [HttpPost("{tableId}/call-staff")]
@@ -27,15 +52,16 @@ namespace MenuGoBE.Controllers
             var table = await _tableService.GetByIdAsync(tableId);
             if (table == null) return NotFound("Bàn không tồn tại");
 
-            var message = $"Khách ở {table.Name} đang gọi nhân viên!";
-            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
+            var payload = new 
             { 
                 type = "call-staff", 
                 tableId = tableId, 
                 tableName = table.Name,
-                message = message,
+                message = $"Khách ở {table.Name} đang gọi nhân viên!",
                 timestamp = System.DateTime.UtcNow
-            });
+            };
+
+            await SendTargetedNotificationAsync(tableId, table.BranchId, payload);
 
             return Ok(new { success = true, message = "Đã gọi nhân viên thành công" });
         }
@@ -47,15 +73,16 @@ namespace MenuGoBE.Controllers
             var table = await _tableService.GetByIdAsync(tableId);
             if (table == null) return NotFound("Bàn không tồn tại");
 
-            var message = $"{table.Name} yêu cầu thanh toán / dọn bàn!";
-            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new 
+            var payload = new 
             { 
                 type = "request-bill", 
                 tableId = tableId, 
                 tableName = table.Name,
-                message = message,
+                message = $"{table.Name} yêu cầu thanh toán / dọn bàn!",
                 timestamp = System.DateTime.UtcNow
-            });
+            };
+
+            await SendTargetedNotificationAsync(tableId, table.BranchId, payload);
 
             return Ok(new { success = true, message = "Đã gửi yêu cầu thanh toán" });
         }
