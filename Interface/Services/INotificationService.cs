@@ -11,6 +11,7 @@ namespace MenuGoBE.Interface.Services
         Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null, long accountId = 0);
         Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null, long accountId = 0);
         Task<bool> MarkAsReadAsync(long id, long[] branchIds);
+        Task<bool> MarkAllAsReadAsync(long[] branchIds, string? userRole = null, long accountId = 0);
         Task SyncBranchAlertsAsync(long[] branchIds);
     }
 }

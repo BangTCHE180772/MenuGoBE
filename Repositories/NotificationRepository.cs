@@ -55,9 +55,12 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Notification>> GetRecentNotificationsAsync(long[] branchIds, int limit, string? userRole = null, long accountId = 0)
         {
+            var todayLocal = DateTime.UtcNow.AddHours(7).Date;
+            var startOfTodayUtc = DateTime.SpecifyKind(todayLocal.AddHours(-7), DateTimeKind.Utc);
+
             var dbQuery = _context.Notifications
                 .Include(n => n.Branch)
-                .Where(n => branchIds.Contains(n.BranchId));
+                .Where(n => branchIds.Contains(n.BranchId) && !n.IsRead && n.CreatedAt >= startOfTodayUtc);
 
             dbQuery = ApplyRoleFilter(dbQuery, userRole);
             if (accountId > 0)
@@ -65,19 +68,18 @@ namespace MenuGoBE.Repositories
                 dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
             }
 
-            var list = await dbQuery.ToListAsync();
-
-            return list
-                .OrderBy(n => n.IsRead ? 1 : 0)
-                .ThenByDescending(n => n.IsImportant)
-                .ThenByDescending(n => n.CreatedAt)
+            return await dbQuery
+                .OrderByDescending(n => n.CreatedAt)
                 .Take(limit)
-                .ToList();
+                .ToListAsync();
         }
 
         public async Task<int> GetUnreadCountAsync(long[] branchIds, string? userRole = null, long accountId = 0)
         {
-            var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId) && !n.IsRead);
+            var todayLocal = DateTime.UtcNow.AddHours(7).Date;
+            var startOfTodayUtc = DateTime.SpecifyKind(todayLocal.AddHours(-7), DateTimeKind.Utc);
+
+            var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId) && !n.IsRead && n.CreatedAt >= startOfTodayUtc);
             dbQuery = ApplyRoleFilter(dbQuery, userRole);
             if (accountId > 0)
             {
@@ -105,6 +107,30 @@ namespace MenuGoBE.Repositories
             await Task.CompletedTask;
         }
 
+        public async Task MarkAllAsReadAsync(long[] branchIds, string? userRole = null, long accountId = 0)
+        {
+            var dbQuery = _context.Notifications.Where(n => !n.IsRead);
+            if (branchIds != null && branchIds.Length > 0)
+            {
+                dbQuery = dbQuery.Where(n => branchIds.Contains(n.BranchId));
+            }
+            dbQuery = ApplyRoleFilter(dbQuery, userRole);
+            if (accountId > 0)
+            {
+                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
+            }
+
+            var unreadList = await dbQuery.ToListAsync();
+            if (unreadList.Any())
+            {
+                foreach (var n in unreadList)
+                {
+                    n.IsRead = true;
+                }
+                await _context.SaveChangesAsync();
+            }
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();
@@ -129,7 +155,16 @@ namespace MenuGoBE.Repositories
 
             if (!string.IsNullOrEmpty(query.Type))
             {
-                dbQuery = dbQuery.Where(n => n.Type.Equals(query.Type, StringComparison.OrdinalIgnoreCase));
+                var type = query.Type.Trim().ToLower();
+                if (type == "attendance")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "attendance" ||
+                        (n.Type.ToLower() == "operational" && n.ReferenceType != null && n.ReferenceType.StartsWith("WorkSchedule")));
+                }
+                else
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == type);
+                }
             }
 
             if (query.IsRead.HasValue)
@@ -167,10 +202,10 @@ namespace MenuGoBE.Repositories
                 return dbQuery.Where(n => n.Type == "Inventory" || n.Type == "Quality" || n.Type == "ShelfLife");
             }
 
-            // Cashier, Waiter see Operational
+            // Cashier, Waiter see Operational, Attendance, Order
             if (role == "cashier" || role == "waiter" || role == "thu ngân" || role == "phục vụ")
             {
-                return dbQuery.Where(n => n.Type == "Operational");
+                return dbQuery.Where(n => n.Type == "Operational" || n.Type == "Attendance" || n.Type == "Order");
             }
 
             // Default fallback
