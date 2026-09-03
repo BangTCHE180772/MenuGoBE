@@ -320,12 +320,14 @@ namespace MenuGoBE.Mapper
 
             // Chat Mappings
             CreateMap<Conversation, ConversationViewDto>()
-                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : ""))
+                .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
+                .ForMember(dest => dest.GuestName, opt => opt.MapFrom(src => src.GuestChatSession != null ? src.GuestChatSession.GuestName : null))
                 .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Branch != null ? src.Branch.Name : ""))
                 .ForMember(dest => dest.AssignedEmployeeName, opt => opt.MapFrom(src => src.AssignedEmployee != null ? src.AssignedEmployee.Name : null));
 
             CreateMap<Message, MessageViewDto>()
                 .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
+                .ForMember(dest => dest.GuestName, opt => opt.MapFrom(src => src.GuestChatSession != null ? src.GuestChatSession.GuestName : null))
                 .ForMember(dest => dest.EmployeeName, opt => opt.MapFrom(src => src.Employee != null ? src.Employee.Name : null));
 
             CreateMap<ConversationAssignmentHistory, ConversationAssignmentHistoryViewDto>()
