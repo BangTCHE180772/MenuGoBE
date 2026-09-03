@@ -11,10 +11,15 @@ public class Conversation
     [Key]
     public long Id { get; set; }
 
-    public long CustomerId { get; set; }
+    public long? CustomerId { get; set; }
 
     [ForeignKey("CustomerId")]
     public Customer? Customer { get; set; }
+
+    public long? GuestChatSessionId { get; set; }
+
+    [ForeignKey("GuestChatSessionId")]
+    public GuestChatSession? GuestChatSession { get; set; }
 
     public long BranchId { get; set; }
 

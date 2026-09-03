@@ -302,6 +302,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("AddressId")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("AnonymousChatRetentionMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<long>("ChainId")
                         .HasColumnType("bigint");
 
@@ -558,7 +561,10 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("CustomerId")
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("GuestChatSessionId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("PreferredContactMethod")
@@ -589,6 +595,8 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("BranchId");
 
                     b.HasIndex("CustomerId");
+
+                    b.HasIndex("GuestChatSessionId");
 
                     b.ToTable("Conversations");
                 });
@@ -990,6 +998,50 @@ namespace MenuGoBE.Migrations
                     b.ToTable("Groups");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.GuestChatSession", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GuestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GuestName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("LastActiveTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("GuestId")
+                        .IsUnique();
+
+                    b.HasIndex("LastActiveTime");
+
+                    b.HasIndex("Token");
+
+                    b.ToTable("GuestChatSessions");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.HolidayConfig", b =>
                 {
                     b.Property<long>("Id")
@@ -1266,6 +1318,17 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("EmployeeId")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("GuestChatSessionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("MetadataJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1284,6 +1347,8 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("EmployeeId");
+
+                    b.HasIndex("GuestChatSessionId");
 
                     b.ToTable("Messages");
                 });
@@ -2878,14 +2943,20 @@ namespace MenuGoBE.Migrations
                     b.HasOne("MenuGoBE.Models.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.GuestChatSession", "GuestChatSession")
+                        .WithMany("Conversations")
+                        .HasForeignKey("GuestChatSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("AssignedEmployee");
 
                     b.Navigation("Branch");
 
                     b.Navigation("Customer");
+
+                    b.Navigation("GuestChatSession");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.ConversationAssignmentHistory", b =>
@@ -3026,6 +3097,16 @@ namespace MenuGoBE.Migrations
                     b.Navigation("UnitConversion");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.GuestChatSession", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Branch");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.HolidayConfig", b =>
                 {
                     b.HasOne("MenuGoBE.Models.Branch", "Branch")
@@ -3138,11 +3219,18 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.GuestChatSession", "GuestChatSession")
+                        .WithMany("Messages")
+                        .HasForeignKey("GuestChatSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Conversation");
 
                     b.Navigation("Customer");
 
                     b.Navigation("Employee");
+
+                    b.Navigation("GuestChatSession");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.NewWard", b =>
@@ -3803,6 +3891,13 @@ namespace MenuGoBE.Migrations
             modelBuilder.Entity("MenuGoBE.Models.Group", b =>
                 {
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.GuestChatSession", b =>
+                {
+                    b.Navigation("Conversations");
+
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Image", b =>
