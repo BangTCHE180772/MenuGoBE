@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Services.Document;
+using Microsoft.Extensions.Options;
 
 namespace MenuGoBE.Service
 {
@@ -28,6 +29,7 @@ namespace MenuGoBE.Service
         private readonly IDocumentService _documentService;
         private readonly IPartnerRepository _partnerRepo;
         private readonly AppDbContext _context;
+        private readonly PointSystemConfig _pointConfig;
 
         public OrderService(
             IOrderRepository repo, 
@@ -43,7 +45,8 @@ namespace MenuGoBE.Service
             IDocumentRepository documentRepo,
             IPartnerRepository partnerRepo,
             AppDbContext context,
-            IDocumentService documentService)
+            IDocumentService documentService,
+            IOptions<PointSystemConfig> pointConfig)
         {
             _repo = repo;
             _mapper = mapper;
@@ -59,6 +62,7 @@ namespace MenuGoBE.Service
             _documentService = documentService;
             _partnerRepo = partnerRepo;
             _context = context;
+            _pointConfig = pointConfig.Value;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -422,9 +426,14 @@ namespace MenuGoBE.Service
             if (dto != null && dto.PointsUsed > 0 && order.CustomerId.HasValue)
             {
                 var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
-                if (customer != null && customer.Point >= dto.PointsUsed)
+                if (customer != null && customer.Point >= _pointConfig.MinPointsToUse)
                 {
-                    pointsUsed = dto.PointsUsed;
+                    int requestedPoints = Math.Min(dto.PointsUsed, customer.Point);
+                    
+                    decimal remainingAfterVoucher = grandTotal - discountAmount;
+                    decimal maxPointsAllowed = remainingAfterVoucher * (_pointConfig.MaxDiscountPercentage / 100m);
+                    
+                    pointsUsed = (int)Math.Min(requestedPoints, maxPointsAllowed);
                 }
             }
 
@@ -484,7 +493,11 @@ namespace MenuGoBE.Service
                 }
 
                 var finalAmount = order.TotalAmount;
-                int pointsEarned = (int)(finalAmount / 100000) * 100;
+                int pointsEarned = 0;
+                if (_pointConfig.EarnRate_SpendAmount > 0)
+                {
+                    pointsEarned = (int)(finalAmount / _pointConfig.EarnRate_SpendAmount) * _pointConfig.EarnRate_PointReward;
+                }
 
                 if (order.CustomerId.HasValue)
                 {

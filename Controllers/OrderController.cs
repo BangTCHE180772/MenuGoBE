@@ -214,7 +214,7 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Không thể thanh toán. Hoá đơn không tồn tại hoặc không ở trạng thái Active." });
 
             // Clear assignment khi thanh toán
-            await _assignmentService.ClearAssignmentAsync(id);
+            await _assignmentService.DeactivateAssignmentAsync(id, "Paid");
 
             foreach (var tableId in paidTableIds)
             {
@@ -340,12 +340,32 @@ namespace MenuGoBE.Controllers
                             timestamp = System.DateTime.UtcNow
                         };
 
-                        // Auto-assign + Touch nếu waiter tạo
+                        // Mới: thử assign cho user hiện tại (nếu là Waiter)
                         var currentUserId = GetCurrentUserId();
+                        bool isAssignedToUser = false;
                         if (currentUserId.HasValue)
                         {
-                            await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
-                            await _assignmentService.TouchAsync(orderId);
+                            isAssignedToUser = await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
+                            if (isAssignedToUser)
+                            {
+                                await _assignmentService.TouchAsync(orderId);
+                            }
+                            else
+                            {
+                                // Có thể bàn đã được assign rồi, kiểm tra xem có phải gán cho chính mình không để Touch
+                                var existingAccountId = await _assignmentService.GetAssignedAccountIdAsync(orderId);
+                                if (existingAccountId == currentUserId.Value)
+                                {
+                                    await _assignmentService.TouchAsync(orderId);
+                                    isAssignedToUser = true; // Coi như đã được gán cho user hiện tại
+                                }
+                            }
+                        }
+                        
+                        if (!isAssignedToUser)
+                        {
+                            // Nếu không thể gán cho người hiện tại (vd: Manager) hoặc khách tự order
+                            await _assignmentService.AutoAssignWaiterAsync(orderId, table.Id, table.BranchId);
                         }
 
                         await SendOrderNotificationAsync(orderId, table.BranchId, payload);
@@ -401,12 +421,32 @@ namespace MenuGoBE.Controllers
                             timestamp = System.DateTime.UtcNow
                         };
 
-                        // Auto-assign + Touch nếu waiter tạo
+                        // Mới: thử assign cho user hiện tại (nếu là Waiter)
                         var currentUserId = GetCurrentUserId();
+                        bool isAssignedToUser = false;
                         if (currentUserId.HasValue)
                         {
-                            await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
-                            await _assignmentService.TouchAsync(orderId);
+                            isAssignedToUser = await _assignmentService.TryAssignAsync(orderId, currentUserId.Value, table.BranchId);
+                            if (isAssignedToUser)
+                            {
+                                await _assignmentService.TouchAsync(orderId);
+                            }
+                            else
+                            {
+                                // Có thể bàn đã được assign rồi, kiểm tra xem có phải gán cho chính mình không để Touch
+                                var existingAccountId = await _assignmentService.GetAssignedAccountIdAsync(orderId);
+                                if (existingAccountId == currentUserId.Value)
+                                {
+                                    await _assignmentService.TouchAsync(orderId);
+                                    isAssignedToUser = true;
+                                }
+                            }
+                        }
+                        
+                        if (!isAssignedToUser)
+                        {
+                            // Nếu không thể gán cho người hiện tại (vd: Manager) hoặc khách tự order
+                            await _assignmentService.AutoAssignWaiterAsync(orderId, table.Id, table.BranchId);
                         }
 
                         await SendOrderNotificationAsync(orderId, table.BranchId, payload);
@@ -489,12 +529,30 @@ namespace MenuGoBE.Controllers
                                 timestamp = System.DateTime.UtcNow
                             };
 
-                            // Auto-assign waiter confirm + Touch
+                            // Thử assign cho user hiện tại (nếu là Waiter)
                             var currentUserId = GetCurrentUserId();
+                            bool isAssignedToUser = false;
                             if (currentUserId.HasValue)
                             {
-                                await _assignmentService.TryAssignAsync(order.Id, currentUserId.Value, table.BranchId);
-                                await _assignmentService.TouchAsync(order.Id);
+                                isAssignedToUser = await _assignmentService.TryAssignAsync(order.Id, currentUserId.Value, table.BranchId);
+                                if (isAssignedToUser)
+                                {
+                                    await _assignmentService.TouchAsync(order.Id);
+                                }
+                                else
+                                {
+                                    var existingAccountId = await _assignmentService.GetAssignedAccountIdAsync(order.Id);
+                                    if (existingAccountId == currentUserId.Value)
+                                    {
+                                        await _assignmentService.TouchAsync(order.Id);
+                                        isAssignedToUser = true;
+                                    }
+                                }
+                            }
+
+                            if (!isAssignedToUser)
+                            {
+                                await _assignmentService.AutoAssignWaiterAsync(order.Id, table.Id, table.BranchId);
                             }
 
                             await SendOrderNotificationAsync(order.Id, table.BranchId, payload);
@@ -676,7 +734,7 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = "Không thể hủy đơn. Có món đang được chuẩn bị hoặc đã phục vụ." });
 
             // Clear assignment khi huỷ đơn
-            await _assignmentService.ClearAssignmentAsync(orderId);
+            await _assignmentService.DeactivateAssignmentAsync(orderId, "Cancelled");
 
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
             {
@@ -827,7 +885,7 @@ namespace MenuGoBE.Controllers
             if (!currentUserId.HasValue)
                 return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
 
-            await _assignmentService.ClearAssignmentAsync(orderId);
+            await _assignmentService.DeactivateAssignmentAsync(orderId, "ManualUnassign");
             return Ok(new { message = "Đã bỏ phụ trách bàn." });
         }
 

@@ -18,9 +18,19 @@ public class ReservationController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] long? branchId)
+    public async Task<IActionResult> GetAll([FromQuery] long? branchId, [FromQuery] DateTime? date)
     {
-        var result = await _service.GetAllAsync();
+        DateTime? fromDate = null;
+        DateTime? toDate = null;
+        
+        if (date.HasValue)
+        {
+            // Set to start and end of the specified date in local time or UTC as needed
+            fromDate = date.Value.Date;
+            toDate = date.Value.Date.AddDays(1).AddTicks(-1);
+        }
+
+        List<long> targetBranchIds = new List<long>();
 
         if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
         {
@@ -31,21 +41,27 @@ public class ReservationController : ControllerBase
             if (!isAdminOrOwner)
             {
                 var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
-                var branchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                targetBranchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
                 
-                if (branchIds.Any())
+                // If Manager but has no branch claims, they shouldn't see anything. Return empty.
+                if (!targetBranchIds.Any())
                 {
-                    var filteredResult = result.Where(x => x.BranchId.HasValue && branchIds.Contains(x.BranchId.Value)).ToList();
-                    return Ok(filteredResult);
+                    return Ok(new List<ReservationViewDto>());
                 }
             }
             else if (branchId.HasValue && branchId.Value > 0)
             {
                 // If Admin/Owner explicitly requests a specific branch
-                var filteredResult = result.Where(x => x.BranchId == branchId.Value).ToList();
-                return Ok(filteredResult);
+                targetBranchIds.Add(branchId.Value);
             }
         }
+
+        // Use the new filtered method with database-level querying
+        var result = await _service.GetAllFilteredAsync(
+            targetBranchIds.Any() ? targetBranchIds : null, 
+            fromDate, 
+            toDate
+        );
 
         return Ok(result);
     }

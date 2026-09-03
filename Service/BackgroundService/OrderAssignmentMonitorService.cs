@@ -213,19 +213,26 @@ namespace MenuGoBE.Service
         {
             using var scope = _scopeFactory.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IOrderAssignmentRepository>();
+            var service = scope.ServiceProvider.GetRequiredService<IOrderAssignmentService>();
 
             var orphaned = await repo.GetOrphanedAssignmentsAsync();
 
             foreach (var assignment in orphaned)
             {
                 var branchId = assignment.BranchId;
-                var tableName = assignment.Order?.Table?.Name ?? $"Bàn #{assignment.Order?.TableId}";
+                var tableId = assignment.Order?.TableId ?? 0;
+                var tableName = assignment.Order?.Table?.Name ?? $"Bàn #{tableId}";
 
-                await repo.DeleteByOrderIdAsync(assignment.OrderId);
-                await repo.SaveChangesAsync();
+                await service.DeactivateAssignmentAsync(assignment.OrderId, "ShiftEnded");
+
+                // Thử auto-assign lại cho người khác
+                if (tableId > 0)
+                {
+                    await service.AutoAssignWaiterAsync(assignment.OrderId, tableId, branchId);
+                }
 
                 _logger.LogInformation(
-                    "Orphaned assignment removed: OrderId={OrderId}, AccountId={AccountId} (no longer on duty)",
+                    "Orphaned assignment removed and re-assigned: OrderId={OrderId}, OldAccountId={AccountId} (no longer on duty)",
                     assignment.OrderId, assignment.AccountId);
 
                 var payload = new

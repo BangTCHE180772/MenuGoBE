@@ -29,6 +29,39 @@ public class ReservationRepository : IReservationRepository
             .ToListAsync();
     }
 
+    public async Task<List<Reservation>> GetFilteredWithDetailsAsync(List<long>? branchIds, DateTime? fromDate, DateTime? toDate)
+    {
+        var query = _context.Reservations.AsNoTracking();
+
+        // 1. Filter by date OR pending status
+        if (fromDate.HasValue && toDate.HasValue)
+        {
+            query = query.Where(r => (r.ReservationTime >= fromDate.Value && r.ReservationTime <= toDate.Value) || r.Status == "Pending");
+        }
+
+        // 2. Filter by branches if provided
+        if (branchIds != null && branchIds.Any())
+        {
+            // The reservation itself belongs to the branch OR its table belongs to the branch
+            query = query.Where(r => 
+                (r.BranchId.HasValue && branchIds.Contains(r.BranchId.Value)) || 
+                (r.Order != null && r.Order.Table != null && r.Order.Table.Area != null && branchIds.Contains(r.Order.Table.Area.BranchId))
+            );
+        }
+
+        return await query
+            .Include(r => r.Customer)
+            .Include(r => r.Branch)
+            .Include(r => r.Order)
+                .ThenInclude(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                        .ThenInclude(a => a.Branch)
+            .Include(r => r.Order)
+                .ThenInclude(o => o.OrderDetails)
+            .OrderByDescending(r => r.ReservationTime)
+            .ToListAsync();
+    }
+
     public async Task<Reservation?> GetByIdAsync(long id)
     {
         return await _context.Reservations
