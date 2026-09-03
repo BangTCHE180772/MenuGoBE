@@ -70,6 +70,9 @@ builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 builder.Services.AddMemoryCache();
 
+builder.Services.Configure<PointSystemConfig>(builder.Configuration.GetSection("PointSystem"));
+
+
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

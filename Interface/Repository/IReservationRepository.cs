@@ -5,6 +5,7 @@ namespace MenuGoBE.Interface.Repository;
 public interface IReservationRepository
 {
     Task<List<Reservation>> GetAllWithDetailsAsync();
+    Task<List<Reservation>> GetFilteredWithDetailsAsync(List<long>? branchIds, DateTime? fromDate, DateTime? toDate);
     Task<Reservation?> GetByIdAsync(long id);
     Task CreateAsync(Reservation entity);
     Task UpdateAsync(Reservation entity);

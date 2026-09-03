@@ -69,67 +69,20 @@ namespace MenuGoBE.Hubs
 
         /// <summary>
         /// Khi nhân viên mất kết nối (tắt app, mất mạng, phone hết pin)
-        /// → auto-unassign tất cả bàn của họ.
+        /// KHÔNG unassign bàn. Waiter có thể bị disconnect tạm thời.
+        /// Monitor service sẽ xử lý nếu không có LastActionAt quá lâu.
+        /// Chỉ dọn dẹp connection map.
         /// </summary>
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            long accountId = 0;
             lock (_lock)
             {
-                if (_connectionMap.TryGetValue(Context.ConnectionId, out var id))
-                {
-                    accountId = id;
-                    _connectionMap.Remove(Context.ConnectionId);
-                }
-            }
-
-            if (accountId > 0)
-            {
-                try
-                {
-                    using var scope = _scopeFactory.CreateScope();
-                    var assignmentService = scope.ServiceProvider
-                        .GetRequiredService<IOrderAssignmentService>();
-                    var assignmentRepo = scope.ServiceProvider
-                        .GetRequiredService<IOrderAssignmentRepository>();
-
-                    var assignments = await assignmentRepo.GetByAccountIdAsync(accountId);
-
-                    if (assignments.Any())
-                    {
-                        await assignmentService.ClearAllByAccountAsync(accountId);
-
-                        foreach (var a in assignments)
-                        {
-                            var tableName = a.Order?.Table?.Name ?? $"Order #{a.OrderId}";
-                            var payload = new
-                            {
-                                type = "assignment-orphaned",
-                                tableId = a.Order?.TableId,
-                                tableName,
-                                orderId = a.OrderId,
-                                message = $"📋 {tableName}: Nhân viên mất kết nối. Cần người nhận bàn!",
-                                priority = "Warning",
-                                timestamp = DateTime.UtcNow
-                            };
-                            await Clients.Group($"on_duty_{a.BranchId}").SendAsync("ReceiveNotification", payload);
-                            await Clients.Group($"branch_{a.BranchId}").SendAsync("ReceiveNotification", payload);
-                        }
-
-                        _logger.LogInformation(
-                            "Waiter disconnected: AccountId={AccountId}, unassigned {Count} orders",
-                            accountId, assignments.Count);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error handling disconnect for AccountId={AccountId}", accountId);
-                }
+                _connectionMap.Remove(Context.ConnectionId);
             }
 
             await base.OnDisconnectedAsync(exception);
-          
-       }    
+        }  
+        
         public async Task JoinCustomerGroup(long customerId)
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, $"customer_{customerId}");
