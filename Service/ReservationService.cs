@@ -258,7 +258,12 @@ public class ReservationService : IReservationService
     public async Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime)
     {
         var allTables = await _tableRepo.GetByBranchIdsAsync(new List<long> { branchId });
-        var validTables = allTables.Where(t => t.Status != "Maintenance" && t.Status != "Inactive").ToList();
+        var validTables = allTables.Where(t => 
+            t.Status != "Maintenance" && 
+            t.Status != "Inactive" && 
+            t.Area?.IsActive == true && 
+            (t.Area?.Name == null || (!t.Area.Name.ToLower().Contains("internal") && !t.Area.Name.ToLower().Contains("nội bộ")))
+        ).ToList();
 
         var startTime = reservationTime.AddMinutes(-14);
         var endTime = reservationTime.AddMinutes(14);
@@ -488,7 +493,7 @@ public class ReservationService : IReservationService
 
         if (dto.TableIds != null && dto.TableIds.Any())
         {
-            await AssignTablesToReservationAsync(reservation.Id, dto.TableIds);
+            await AssignTablesToReservationAsync(reservation.Id, dto.TableIds, dto.IgnoreWarning);
         }
 
         // Notify Background Task to recalculate the sleep timer
@@ -525,7 +530,7 @@ public class ReservationService : IReservationService
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
 
-    public async Task AssignTablesToReservationAsync(long reservationId, List<long> tableIds)
+    public async Task AssignTablesToReservationAsync(long reservationId, List<long> tableIds, bool ignoreWarning = false)
     {
         var reservation = await _reservationRepo.GetByIdAsync(reservationId);
         if (reservation == null)
@@ -607,13 +612,9 @@ public class ReservationService : IReservationService
         // In the requirement: Báo cảnh báo ±60m đích danh Tên bàn.
         // If they can't ignore it in the modal, they would be stuck.
         // Let's just return InvalidOperationException for now, or just throw it.
-        if (overlap60Tables.Any())
+        if (overlap60Tables.Any() && !ignoreWarning)
         {
-            // If they can't ignore, maybe we shouldn't throw exception, just let it pass? 
-            // I'll just throw InvalidOperationException since the instruction is "Báo cảnh báo ±60m đích danh Tên bàn".
-            // To properly do warning, they need a popup.
-            // I will throw an exception to prevent it. They can uncheck the table.
-            throw new InvalidOperationException($"Chú ý: Bàn [{string.Join(", ", overlap60Tables.Distinct())}] đang có khách hoặc có lịch đặt trong vòng 1 tiếng tới. Vui lòng chọn bàn khác.");
+            throw new MenuGoBE.Exceptions.ReservationWarningException($"Chú ý: Bàn [{string.Join(", ", overlap60Tables.Distinct())}] đang có khách hoặc có lịch đặt trong vòng 1 tiếng tới. Bạn có chắc chắn muốn chọn?");
         }
 
         var fatherTableId = tableIds.First();
