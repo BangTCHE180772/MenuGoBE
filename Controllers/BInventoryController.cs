@@ -241,10 +241,10 @@ namespace MenuGoBE.Controllers
             return type switch
             {
                 DocumentType.Import => "Nhập hàng",
-                DocumentType.Export => "Xuất hủy",
-                DocumentType.ExportDelete => "Xuất hủy",
-                DocumentType.Transfer => "Xuất chuyển kho",
-                DocumentType.Return => "Trả hàng nhập",
+                DocumentType.Export => "Xuất Hủy",
+                DocumentType.ExportDelete => "Xuất Hủy",
+                DocumentType.Transfer => "Chuyển Hàng",
+                DocumentType.Return => "Trả Hàng",
                 DocumentType.Check => "Kiểm kho",
                 DocumentType.Production => "Sản xuất",
                 DocumentType.CostAdjustment => "Điều chỉnh giá vốn",
@@ -713,12 +713,12 @@ namespace MenuGoBE.Controllers
             return type switch
             {
                 DocumentType.Import => "Nhập kho",
-                DocumentType.Return => "Trả hàng",
-                DocumentType.Sale => "Xuất kho",
+                DocumentType.Return => "Trả Hàng",
+                DocumentType.Sale => "Bán hàng",
                 DocumentType.CustomerReturn => "Khách trả hàng",
-                DocumentType.Transfer => "Chuyển kho",
-                DocumentType.Export => "Xuất hủy",
-                DocumentType.ExportDelete => "Xuất hủy",
+                DocumentType.Transfer => "Chuyển Hàng",
+                DocumentType.Export => "Xuất Hủy",
+                DocumentType.ExportDelete => "Xuất Hủy",
                 DocumentType.Production => "Sản xuất",
                 DocumentType.Check => "Kiểm kho",
                 DocumentType.CostAdjustment => "Điều chỉnh",
@@ -1054,11 +1054,12 @@ namespace MenuGoBE.Controllers
                         BatchId = a.BatchId,
                         BatchCode = a.Batch != null ? a.Batch.BatchCode : string.Empty,
                         AllocationType = a.AllocationType,
-                        AllocationTypeName = GetAllocationTypeLabel(a.AllocationType),
+                        AllocationTypeName = string.Empty,
                         QuantityAllocated = a.QuantityAllocated,
                         UnitCost = a.UnitCost,
                         CreatedAt = a.CreatedAt,
                         DocumentId = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Id : (long?)null,
+                        OrderId = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.OrderId : null,
                         DocumentCode = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Code : null,
                         DocumentType = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type : null,
                         DocumentTypeName = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type.ToString() : null,
@@ -1070,6 +1071,11 @@ namespace MenuGoBE.Controllers
                         Note = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Note : null
                     })
                     .ToListAsync();
+
+                foreach (var item in items)
+                {
+                    item.AllocationTypeName = GetAllocationTypeLabel(item.AllocationType, item.OrderId, item.DocumentCode);
+                }
 
                 return Ok(new
                 {
@@ -1183,7 +1189,7 @@ namespace MenuGoBE.Controllers
                                 .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
                                 .FirstOrDefault() ?? "Đơn vị",
                             BranchId = b.BInventory.BranchId,
-                            BranchName = b.BInventory.Branch.Name
+                        BranchName = b.BInventory.Branch.Name
                         })
                         .FirstOrDefaultAsync();
                 }
@@ -1206,11 +1212,12 @@ namespace MenuGoBE.Controllers
                         BatchId = a.BatchId,
                         BatchCode = a.Batch != null ? a.Batch.BatchCode : string.Empty,
                         AllocationType = a.AllocationType,
-                        AllocationTypeName = GetAllocationTypeLabel(a.AllocationType),
+                        AllocationTypeName = string.Empty,
                         QuantityAllocated = a.QuantityAllocated,
                         UnitCost = a.UnitCost,
                         CreatedAt = a.CreatedAt,
                         DocumentId = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Id : (long?)null,
+                        OrderId = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.OrderId : null,
                         DocumentCode = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Code : null,
                         DocumentType = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type : null,
                         DocumentTypeName = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Type.ToString() : null,
@@ -1222,6 +1229,11 @@ namespace MenuGoBE.Controllers
                         Note = a.DocumentDetail != null && a.DocumentDetail.Document != null ? a.DocumentDetail.Document.Note : null
                     })
                     .ToListAsync();
+
+                foreach (var alloc in allocations)
+                {
+                    alloc.AllocationTypeName = GetAllocationTypeLabel(alloc.AllocationType, alloc.OrderId, alloc.DocumentCode);
+                }
 
                 return Ok(new BatchTraceabilityDto
                 {
@@ -1284,17 +1296,25 @@ namespace MenuGoBE.Controllers
         #endregion
 
         #region Helper: Chuyển đổi tên loại phân bổ tiếng Việt
-        private static string GetAllocationTypeLabel(BatchAllocationType type)
+        private static string GetAllocationTypeLabel(BatchAllocationType type, long? orderId = null, string? docCode = null)
         {
+            if (type == BatchAllocationType.Sale)
+            {
+                if ((orderId.HasValue && orderId.Value > 0) || (!string.IsNullOrEmpty(docCode) && (docCode.StartsWith("PXBH") || docCode.StartsWith("HD"))))
+                {
+                    return "Bán hàng";
+                }
+                return "Xuất hàng";
+            }
+
             return type switch
             {
-                BatchAllocationType.Sale => "Xuất bán món / hàng hóa",
-                BatchAllocationType.Disposal => "Xuất hủy / Hao hụt",
-                BatchAllocationType.TransferOut => "Chuyển kho (Gửi đi)",
+                BatchAllocationType.Disposal => "Xuất Hủy",
+                BatchAllocationType.TransferOut => "Chuyển Hàng",
                 BatchAllocationType.TransferReturn => "Hoàn trả chuyển kho (Từ chối)",
                 BatchAllocationType.ProductionConsumption => "Tiêu hao sản xuất",
-                BatchAllocationType.ReturnToSupplier => "Trả hàng nhà cung cấp",
-                BatchAllocationType.CustomerReturn => "Khách trả hàng hoàn kho",
+                BatchAllocationType.ReturnToSupplier => "Trả Hàng",
+                BatchAllocationType.CustomerReturn => "Khách trả hàng",
                 BatchAllocationType.StockCheck => "Cân đối kiểm kho",
                 _ => type.ToString()
             };
