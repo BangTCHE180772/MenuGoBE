@@ -28,5 +28,6 @@ namespace MenuGoBE.Dtos.Branch
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public int? CheckinRadiusMeters { get; set; }
+        public int? PayrollPayday { get; set; }
     }
 }

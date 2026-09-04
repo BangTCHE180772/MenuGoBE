@@ -39,6 +39,16 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        // GET /api/LeftoverRecord/branch/{branchId}/reusable?productId=123
+        // Món thừa (khách trả, bếp đã làm xong) trong 30p gần nhất, chưa được dùng lại —
+        // dùng làm gợi ý khi có đơn khác cần đúng món đó.
+        [HttpGet("branch/{branchId}/reusable")]
+        public async Task<IActionResult> GetReusable(long branchId, [FromQuery] long? productId)
+        {
+            var result = await _service.GetReusableAsync(branchId, productId);
+            return Ok(result);
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] LeftoverRecordCreateDto dto)
         {

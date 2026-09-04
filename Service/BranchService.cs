@@ -106,6 +106,7 @@ namespace MenuGoBE.Service
             entity.Address.OldWardId = null;
             entity.Type = "Main";
             entity.Status = string.IsNullOrWhiteSpace(dto.Status) ? "Hoạt động" : dto.Status;
+            entity.PayrollPayday = dto.PayrollPayday > 0 && dto.PayrollPayday <= 31 ? dto.PayrollPayday : 15;
             entity.IsDeleted = false;
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();

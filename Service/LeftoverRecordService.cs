@@ -32,8 +32,9 @@ namespace MenuGoBE.Service
                 OrderDetailId = l.OrderDetailId,
                 TableName = l.OrderDetail?.Order?.Table?.Name,
                 HandlingAction = l.HandlingAction,
-                RefundAmount = l.RefundAmount,
                 DiscountAmount = l.DiscountAmount,
+                UsedAt = l.UsedAt,
+                UsedByOrderDetailId = l.UsedByOrderDetailId,
                 ShiftId = l.ShiftId,
                 ShiftName = l.Shift?.Name,
                 RecordDate = l.RecordDate,
@@ -41,6 +42,54 @@ namespace MenuGoBE.Service
                 CreatedByName = l.Creator?.Name,
                 CreatedAt = l.CreatedAt,
             }).ToList();
+        }
+
+        // Cửa sổ gợi ý dùng lại: 30 phút kể từ lúc món bị trả.
+        private static readonly TimeSpan ReuseWindow = TimeSpan.FromMinutes(30);
+
+        public async Task<List<LeftoverReusableDto>> GetReusableAsync(long branchId, long? productId)
+        {
+            var sinceUtc = DateTime.UtcNow - ReuseWindow;
+            var data = await _repo.GetReusableAsync(branchId, sinceUtc, productId);
+
+            return data.Select(l => new LeftoverReusableDto
+            {
+                Id = l.Id,
+                ProductId = l.ProductId,
+                ProductName = l.Product?.Name ?? string.Empty,
+                Quantity = l.Quantity,
+                TableName = l.OrderDetail?.Order?.Table?.Name,
+                CreatedAt = l.CreatedAt,
+                ExpiresAt = l.CreatedAt + ReuseWindow,
+            }).ToList();
+        }
+
+        public async Task MarkUsedAsync(long id, long productId, int quantity, long orderDetailId)
+        {
+            var entity = await _repo.GetByIdAsync(id);
+            if (entity == null)
+            {
+                throw new MenuGoException(new ErrorResult(404, "Món thừa không tồn tại hoặc đã bị xoá.", 404));
+            }
+
+            if (entity.Type != LeftoverType.Return || entity.UsedAt.HasValue)
+            {
+                throw new MenuGoException(new ErrorResult(400, "Món thừa này đã được dùng lại hoặc không thể dùng lại.", 400));
+            }
+
+            if (entity.ProductId != productId || entity.Quantity != quantity)
+            {
+                throw new MenuGoException(new ErrorResult(400, "Món hoặc số lượng không khớp với món thừa đã chọn.", 400));
+            }
+
+            if (entity.CreatedAt < DateTime.UtcNow - ReuseWindow)
+            {
+                throw new MenuGoException(new ErrorResult(400, "Món thừa đã quá 30 phút, không thể dùng lại.", 400));
+            }
+
+            entity.UsedAt = DateTime.UtcNow;
+            entity.UsedByOrderDetailId = orderDetailId;
+            await _repo.SaveChangesAsync();
         }
 
         public async Task<LeftoverRecordViewDto> CreateAsync(LeftoverRecordCreateDto dto, long? createdBy)
@@ -80,9 +129,9 @@ namespace MenuGoBE.Service
                 {
                     throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không được gắn với đơn hàng của khách.", 400));
                 }
-                if (dto.RefundAmount.HasValue || dto.DiscountAmount.HasValue)
+                if (dto.DiscountAmount.HasValue)
                 {
-                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không có hoàn tiền/giảm giá.", 400));
+                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không có giảm giá.", 400));
                 }
             }
 
@@ -95,7 +144,6 @@ namespace MenuGoBE.Service
                 Reason = dto.Reason.Trim(),
                 OrderDetailId = dto.OrderDetailId,
                 HandlingAction = dto.HandlingAction,
-                RefundAmount = dto.RefundAmount,
                 DiscountAmount = dto.DiscountAmount,
                 ShiftId = dto.ShiftId,
                 RecordDate = dto.RecordDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
@@ -122,7 +170,6 @@ namespace MenuGoBE.Service
                 OrderDetailId = entity.OrderDetailId,
                 TableName = orderDetail?.Order?.Table?.Name,
                 HandlingAction = entity.HandlingAction,
-                RefundAmount = entity.RefundAmount,
                 DiscountAmount = entity.DiscountAmount,
                 ShiftId = entity.ShiftId,
                 RecordDate = entity.RecordDate,
