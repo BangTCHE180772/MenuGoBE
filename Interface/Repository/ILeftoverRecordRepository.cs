@@ -7,6 +7,7 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<List<LeftoverRecord>> GetByBranchAsync(long branchId, LeftoverType? type, DateOnly? fromDate, DateOnly? toDate);
         Task<LeftoverRecord?> GetByIdAsync(long id);
+        Task<List<LeftoverRecord>> GetReusableAsync(long branchId, DateTime sinceUtc, long? productId);
         Task<OrderDetail?> GetOrderDetailWithTableAsync(long orderDetailId);
 
         Task CreateAsync(LeftoverRecord entity);

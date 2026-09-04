@@ -15,5 +15,9 @@ namespace MenuGoBE.Dtos.Order
         public string Status { get; set; } = string.Empty;
 
         public string CookingStatus { get; set; } = string.Empty;
+
+        // Gợi ý dùng lại món thừa: Id của LeftoverRecord (Return, Processed, còn trong
+        // 30p) mà món này thay thế thay vì bắt bếp làm mới.
+        public long? ReuseLeftoverId { get; set; }
     }
 }

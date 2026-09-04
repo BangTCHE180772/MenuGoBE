@@ -12,6 +12,11 @@ namespace MenuGoBE.Models;
 [Table("LeftoverRecords")]
 public class LeftoverRecord
 {
+    // Lý do cố định gán tự động khi bếp làm chậm khiến khách không nhận món đã
+    // hoàn thành (xem OrderDetailService.CancelOrderDetailAsync). Dùng chung hằng
+    // số này để OrderService có thể nhận diện và cộng tích điểm bù cho khách.
+    public const string KitchenDelayReason = "Bếp làm chậm, khách không nhận món đã hoàn thành";
+
     [Key]
     public long Id { get; set; }
 
@@ -31,10 +36,12 @@ public class LeftoverRecord
     public LeftoverHandlingAction? HandlingAction { get; set; }
 
     [Column(TypeName = "decimal(18,4)")]
-    public decimal? RefundAmount { get; set; }
-
-    [Column(TypeName = "decimal(18,4)")]
     public decimal? DiscountAmount { get; set; }
+
+    // Reuse: trong 30p kể từ CreatedAt, nếu có đơn khác cần đúng món này thì
+    // gợi ý dùng lại thay vì bắt bếp làm mới. Set khi được dùng lại.
+    public DateTime? UsedAt { get; set; }
+    public long? UsedByOrderDetailId { get; set; }
 
     // Extra-only (nhưng để chung cho cả 2 loại nếu cần tra cứu theo ca/ngày)
     public long? ShiftId { get; set; }
@@ -52,6 +59,9 @@ public class LeftoverRecord
 
     [ForeignKey("OrderDetailId")]
     public OrderDetail? OrderDetail { get; set; }
+
+    [ForeignKey("UsedByOrderDetailId")]
+    public OrderDetail? UsedByOrderDetail { get; set; }
 
     [ForeignKey("ShiftId")]
     public Shift? Shift { get; set; }
