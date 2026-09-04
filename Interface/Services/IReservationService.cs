@@ -14,6 +14,6 @@ public interface IReservationService
     Task<bool> ExtendAsync(long id, int minutes);
     Task<bool> ChangeTableAsync(long reservationId, long newTableId);
     Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime);
-    Task AssignTablesToReservationAsync(long reservationId, List<long> tableIds);
+    Task AssignTablesToReservationAsync(long reservationId, List<long> tableIds, bool ignoreWarning = false);
     Task<object> CheckInReservationAsync(long id);
 }
