@@ -24,11 +24,23 @@ namespace MenuGoBE.Service
         {
             try
             {
-                var smtpServer = _configuration["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
-                var portStr = _configuration["EmailSettings:Port"] ?? "587";
-                var senderEmail = _configuration["EmailSettings:SenderEmail"];
-                var senderPassword = _configuration["EmailSettings:SenderPassword"];
-                var senderName = _configuration["EmailSettings:SenderName"] ?? "MenuGo Support";
+                var smtpServer = _configuration["EmailSettings:SmtpServer"]
+                              ?? _configuration["MailSettings:Host"]
+                              ?? "smtp.gmail.com";
+
+                var portStr = _configuration["EmailSettings:Port"]
+                           ?? _configuration["MailSettings:Port"]
+                           ?? "587";
+
+                var senderEmail = _configuration["EmailSettings:SenderEmail"]
+                               ?? _configuration["MailSettings:Mail"];
+
+                var senderPassword = _configuration["EmailSettings:SenderPassword"]
+                                  ?? _configuration["MailSettings:Password"];
+
+                var senderName = _configuration["EmailSettings:SenderName"]
+                              ?? _configuration["MailSettings:DisplayName"]
+                              ?? "MenuGo System";
 
                 if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(senderPassword))
                 {
@@ -43,6 +55,8 @@ namespace MenuGoBE.Service
 
                 int port = int.TryParse(portStr, out var p) ? p : 587;
 
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
+
                 using var message = new MailMessage();
                 message.From = new MailAddress(senderEmail, senderName);
                 message.To.Add(new MailAddress(toEmail));
@@ -51,18 +65,18 @@ namespace MenuGoBE.Service
                 message.IsBodyHtml = true;
 
                 using var client = new SmtpClient(smtpServer, port);
-                client.EnableSsl = true;
+                client.DeliveryMethod = SmtpDeliveryMethod.Network;
                 client.UseDefaultCredentials = false;
                 client.Credentials = new NetworkCredential(senderEmail, senderPassword);
+                client.EnableSsl = true;
 
                 await client.SendMailAsync(message);
-                _logger.LogInformation($"Đã gửi email thành công tới {toEmail}");
+                _logger.LogInformation($"[SMTP SUCCESS] Đã gửi email thành công tới {toEmail}");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Gặp lỗi khi gửi email tới {toEmail}: {ex.Message}");
-                // Fallback log for dev safety
-                _logger.LogInformation($"[FALLBACK EMAIL] To: {toEmail} | Subject: {subject} | Content: {body}");
+                _logger.LogError(ex, $"[SMTP ERROR] Gặp lỗi khi gửi email tới {toEmail}: {ex.Message}");
+                throw;
             }
         }
         #endregion

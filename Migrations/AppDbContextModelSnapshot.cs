@@ -333,6 +333,9 @@ namespace MenuGoBE.Migrations
                     b.Property<TimeOnly>("OpenTime")
                         .HasColumnType("time without time zone");
 
+                    b.Property<int>("PayrollPayday")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("PostingLockDate")
                         .HasColumnType("timestamp with time zone");
 

@@ -41,6 +41,9 @@ public class Branch
     /// <summary>Thời gian lưu trữ tin nhắn của khách ẩn danh (phút, mặc định 43200 phút = 30 ngày)</summary>
     public int AnonymousChatRetentionMinutes { get; set; } = 43200;
 
+    /// <summary>Ngày trả lương hàng tháng của chi nhánh (mặc định ngày 10 hàng tháng)</summary>
+    public int PayrollPayday { get; set; } = 10;
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;
