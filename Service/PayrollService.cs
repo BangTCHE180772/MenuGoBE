@@ -19,12 +19,16 @@ namespace MenuGoBE.Service
         private readonly IPayrollRepository _payrollRepo;
         private readonly AppDbContext _context;
         private readonly IMapper _mapper;
+        private readonly IEmailService _emailService;
+        private readonly Microsoft.Extensions.Logging.ILogger<PayrollService> _logger;
 
-        public PayrollService(IPayrollRepository payrollRepo, AppDbContext context, IMapper mapper)
+        public PayrollService(IPayrollRepository payrollRepo, AppDbContext context, IMapper mapper, IEmailService emailService, Microsoft.Extensions.Logging.ILogger<PayrollService> logger)
         {
             _payrollRepo = payrollRepo;
             _context = context;
             _mapper = mapper;
+            _emailService = emailService;
+            _logger = logger;
         }
 
         public async Task<List<PayrollViewDto>> GetAllAsync(long? branchId = null, int? month = null, int? year = null, long? accountId = null, List<long>? roleIds = null)
@@ -89,6 +93,7 @@ namespace MenuGoBE.Service
             RecalculateTotals(entity);
 
             await _payrollRepo.CreateAsync(entity);
+            await SendPayrollStatusEmailAsync(entity, entity.Status);
 
             var created = await _payrollRepo.GetByIdAsync(entity.Id);
             return _mapper.Map<PayrollViewDto>(created!);
@@ -171,6 +176,11 @@ namespace MenuGoBE.Service
 
             await _payrollRepo.UpdateAsync(entity);
 
+            if (oldStatus != entity.Status)
+            {
+                await SendPayrollStatusEmailAsync(entity, entity.Status);
+            }
+
             if (oldStatus != PayrollStatus.Paid && entity.Status == PayrollStatus.Paid)
             {
                 await CreateCashFlowForPayrollAsync(entity);
@@ -223,6 +233,11 @@ namespace MenuGoBE.Service
             }
 
             await _payrollRepo.UpdateAsync(entity);
+
+            if (oldStatus != status)
+            {
+                await SendPayrollStatusEmailAsync(entity, status);
+            }
 
             if (oldStatus != PayrollStatus.Paid && status == PayrollStatus.Paid)
             {
@@ -278,6 +293,7 @@ namespace MenuGoBE.Service
             entity.LockedAt = DateTime.UtcNow;
 
             await _payrollRepo.UpdateAsync(entity);
+            await SendPayrollStatusEmailAsync(entity, PayrollStatus.Locked);
             return true;
         }
 
@@ -296,13 +312,14 @@ namespace MenuGoBE.Service
                 throw new InvalidOperationException("Bảng lương phải ở trạng thái Đã chốt hoặc Đã duyệt mới có thể mở khóa.");
             }
 
-            entity.Status = PayrollStatus.Rejected;
+            entity.Status = PayrollStatus.Draft;
             entity.LockedBy = null;
             entity.LockedAt = null;
             entity.ApprovedBy = null;
             entity.ApprovedAt = null;
 
             await _payrollRepo.UpdateAsync(entity);
+            await SendPayrollStatusEmailAsync(entity, PayrollStatus.Draft);
             return true;
         }
 
@@ -321,6 +338,7 @@ namespace MenuGoBE.Service
             entity.ApprovedAt = DateTime.UtcNow;
 
             await _payrollRepo.UpdateAsync(entity);
+            await SendPayrollStatusEmailAsync(entity, PayrollStatus.Approved);
             return true;
         }
 
@@ -760,5 +778,109 @@ namespace MenuGoBE.Service
 
             return Math.Round(totalOverlapMinutes / 60.0m, 2);
         }
+
+        #region EMAIL NOTIFICATIONS FOR PAYROLL STATUS
+        private async Task SendPayrollStatusEmailAsync(Payroll payroll, PayrollStatus newStatus)
+        {
+            try
+            {
+                var account = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == payroll.AccountId);
+                if (account == null)
+                {
+                    _logger.LogWarning($"[PAYROLL EMAIL] Account ID {payroll.AccountId} not found for Payroll ID {payroll.Id}");
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(account.Email))
+                {
+                    _logger.LogWarning($"[PAYROLL EMAIL] Account '{account.Name}' (ID {account.Id}) has no email address configured in database!");
+                    return;
+                }
+
+                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == payroll.BranchId);
+                string branchName = branch?.Name ?? "Chi nhánh MenuGo";
+
+                string subject = "";
+                string statusName = "";
+                string messageDetail = "";
+                string statusBadgeColor = "#2563eb";
+
+                switch (newStatus)
+                {
+                    case PayrollStatus.Draft:
+                    case PayrollStatus.Pending:
+                        statusName = "Chờ chốt";
+                        subject = $"[MenuGo] Thông báo bảng lương Tháng {payroll.Month}/{payroll.Year} - {statusName}";
+                        statusBadgeColor = "#d97706";
+                        messageDetail = $"Bảng lương Tháng {payroll.Month}/{payroll.Year} của bạn tại {branchName} đã được khởi tạo và đang trong trạng thái <b>Chờ chốt</b> để Quản lý rà soát.";
+                        break;
+
+                    case PayrollStatus.Locked:
+                        statusName = "Đã chốt";
+                        subject = $"[MenuGo] Thông báo bảng lương Tháng {payroll.Month}/{payroll.Year} - {statusName}";
+                        statusBadgeColor = "#7c3aed";
+                        messageDetail = $"Quản lý đã hoàn tất <b>Chốt bảng lương</b> Tháng {payroll.Month}/{payroll.Year} của bạn tại {branchName}. Bảng lương đang chờ Chủ cửa hàng (Owner) phê duyệt và thực hiện chuyển khoản thanh toán.";
+                        break;
+
+                    case PayrollStatus.Paid:
+                        statusName = "Đã thanh toán";
+                        subject = $"[MenuGo] Xác nhận thanh toán lương Tháng {payroll.Month}/{payroll.Year}";
+                        statusBadgeColor = "#16a34a";
+                        messageDetail = $"Bảng lương Tháng {payroll.Month}/{payroll.Year} của bạn tại {branchName} đã được <b>Thanh toán hoàn tất</b>.";
+                        break;
+
+                    default:
+                        _logger.LogInformation($"[PAYROLL EMAIL] Status '{newStatus}' does not require email dispatch.");
+                        return;
+                }
+
+                string body = $@"
+                <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);"">
+                    <div style=""background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #ffffff; padding: 20px 24px;"">
+                        <h2 style=""margin: 0; font-size: 20px;"">MenuGo - Thông Báo Bảng Lương</h2>
+                        <p style=""margin: 6px 0 0 0; opacity: 0.85; font-size: 14px;"">{branchName}</p>
+                    </div>
+                    <div style=""padding: 24px; background-color: #ffffff; color: #334155;"">
+                        <p style=""font-size: 16px; margin-top: 0;"">Xin chào <b>{account.Name}</b>,</p>
+                        <p style=""font-size: 15px; line-height: 1.6;"">{messageDetail}</p>
+                        
+                        <div style=""background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 20px 0;"">
+                            <table style=""width: 100%; border-collapse: collapse; font-size: 14px;"">
+                                <tr>
+                                    <td style=""padding: 6px 0; color: #64748b;"">Kỳ lương:</td>
+                                    <td style=""padding: 6px 0; font-weight: bold; text-align: right;"">Tháng {payroll.Month}/{payroll.Year}</td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding: 6px 0; color: #64748b;"">Trạng thái:</td>
+                                    <td style=""padding: 6px 0; text-align: right;""><span style=""background-color: {statusBadgeColor}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;"">{statusName}</span></td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding: 6px 0; color: #64748b;"">Tổng thực nhận:</td>
+                                    <td style=""padding: 6px 0; font-weight: bold; color: #16a34a; font-size: 16px; text-align: right;"">{payroll.NetSalary:N0} VNĐ</td>
+                                </tr>
+                                {(payroll.PaymentDate.HasValue ? $@"
+                                <tr>
+                                    <td style=""padding: 6px 0; color: #64748b;"">Ngày thanh toán:</td>
+                                    <td style=""padding: 6px 0; font-weight: bold; text-align: right;"">{payroll.PaymentDate.Value.ToString("dd/MM/yyyy")}</td>
+                                </tr>" : "")}
+                            </table>
+                        </div>
+
+                        <p style=""font-size: 13px; color: #64748b; margin-bottom: 0;"">Bạn có thể đăng nhập ứng dụng MenuGo để xem chi tiết phiếu lương cá nhân.</p>
+                    </div>
+                    <div style=""background-color: #f1f5f9; padding: 12px 24px; text-align: center; font-size: 12px; color: #94a3b8;"">
+                        Trân trọng,<br/><b>Ban quản lý MenuGo</b>
+                    </div>
+                </div>";
+
+                _logger.LogInformation($"[PAYROLL EMAIL] Sending email to '{account.Name}' <{account.Email}> for Payroll ID {payroll.Id}...");
+                await _emailService.SendEmailAsync(account.Email, subject, body);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"[PAYROLL EMAIL ERROR] Exception occurred while sending email for Payroll ID {payroll.Id}: {ex.Message}");
+            }
+        }
+        #endregion
     }
 }
