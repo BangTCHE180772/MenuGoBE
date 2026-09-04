@@ -22,7 +22,6 @@ namespace MenuGoBE.Dtos.Leftover
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public LeftoverHandlingAction? HandlingAction { get; set; }
 
-        public decimal? RefundAmount { get; set; }
         public decimal? DiscountAmount { get; set; }
 
         // Extra-only (optional for Return)

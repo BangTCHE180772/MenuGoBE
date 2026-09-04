@@ -119,7 +119,6 @@ public class LeftoverRecordServiceTests
             Reason = "Khách gọi nhầm",
             OrderDetailId = 100,
             HandlingAction = LeftoverHandlingAction.Reuse,
-            RefundAmount = 20000,
         };
 
         var result = await _service.CreateAsync(dto, 42);
@@ -127,7 +126,6 @@ public class LeftoverRecordServiceTests
         Assert.Equal(LeftoverType.Return, result.Type);
         Assert.Equal("Bàn 5", result.TableName);
         Assert.Equal(LeftoverHandlingAction.Reuse, result.HandlingAction);
-        Assert.Equal(20000, result.RefundAmount);
         _repoMock.Verify(r => r.CreateAsync(It.Is<LeftoverRecord>(l =>
             l.Type == LeftoverType.Return &&
             l.OrderDetailId == 100 &&
@@ -149,22 +147,6 @@ public class LeftoverRecordServiceTests
             Quantity = 1,
             Reason = "Làm dư",
             OrderDetailId = 100,
-        };
-
-        await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateAsync(dto, 1));
-    }
-
-    [Fact]
-    public async Task CreateAsync_Extra_Throws_WhenRefundAmountProvided()
-    {
-        var dto = new LeftoverRecordCreateDto
-        {
-            BranchId = 1,
-            Type = LeftoverType.Extra,
-            ProductId = 1,
-            Quantity = 1,
-            Reason = "Làm dư",
-            RefundAmount = 10000,
         };
 
         await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateAsync(dto, 1));
@@ -203,7 +185,6 @@ public class LeftoverRecordServiceTests
 
         Assert.Equal(LeftoverType.Extra, result.Type);
         Assert.Null(result.OrderDetailId);
-        Assert.Null(result.RefundAmount);
         Assert.Null(result.DiscountAmount);
         // The repo mock has no order/inventory repositories at all — if the service
         // tried to touch Order.TotalAmount or BInventory it would have nothing to call.
