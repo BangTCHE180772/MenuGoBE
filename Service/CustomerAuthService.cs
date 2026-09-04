@@ -14,6 +14,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 using Microsoft.Extensions.Caching.Memory;
+using MenuGoBE.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MenuGoBE.Service
 {
@@ -24,19 +26,22 @@ namespace MenuGoBE.Service
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
         private readonly IMemoryCache _cache;
+        private readonly IHubContext<NotificationHub>? _hubContext;
 
         public CustomerAuthService(
             ICustomerRepository customerRepo,
             IConfiguration configuration,
             IMapper mapper,
             IEmailService emailService,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            IHubContext<NotificationHub>? hubContext = null)
         {
             _customerRepo = customerRepo;
             _configuration = configuration;
             _mapper = mapper;
             _emailService = emailService;
             _cache = cache;
+            _hubContext = hubContext;
         }
 
         #region CREATE Đăng ký tài khoản khách hàng mới hoặc cập nhật thông tin
@@ -76,6 +81,15 @@ namespace MenuGoBE.Service
                 };
 
                 await _customerRepo.CreateAsync(customer);
+            }
+
+            if (_hubContext != null)
+            {
+                try
+                {
+                    await _hubContext.Clients.All.SendAsync("ReceiveCustomerUpdate", new { action = "register", customerId = customer.Id });
+                }
+                catch { }
             }
 
             return true;

@@ -300,7 +300,7 @@ namespace MenuGoBE.Service
                 return new CustomerPurchaseHistoryDto
                 {
                     OrderId = o.Id,
-                    InvoiceCode = $"HD{o.Id:D6}",
+                    InvoiceCode = $"HD{o.Id}",
                     CreatedAt = o.CreatedAt,
                     TotalAmount = o.TotalAmount,
                     FinalAmount = finalAmt,
@@ -328,7 +328,7 @@ namespace MenuGoBE.Service
             int runningPoint = 0;
             foreach (var order in orders)
             {
-                string code = $"HD{order.Id:D6}";
+                string code = $"HD{order.Id}";
                 decimal finalAmt = Math.Max(0m, order.TotalAmount - order.DiscountAmount);
 
                 if (order.PointsUsed > 0)

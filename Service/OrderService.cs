@@ -10,6 +10,8 @@ using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Services.Document;
 using Microsoft.Extensions.Options;
+using MenuGoBE.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MenuGoBE.Service
 {
@@ -30,6 +32,7 @@ namespace MenuGoBE.Service
         private readonly IPartnerRepository _partnerRepo;
         private readonly AppDbContext _context;
         private readonly PointSystemConfig _pointConfig;
+        private readonly IHubContext<NotificationHub>? _hubContext;
 
         public OrderService(
             IOrderRepository repo, 
@@ -46,7 +49,8 @@ namespace MenuGoBE.Service
             IPartnerRepository partnerRepo,
             AppDbContext context,
             IDocumentService documentService,
-            IOptions<PointSystemConfig> pointConfig)
+            IOptions<PointSystemConfig> pointConfig,
+            IHubContext<NotificationHub>? hubContext = null)
         {
             _repo = repo;
             _mapper = mapper;
@@ -63,6 +67,7 @@ namespace MenuGoBE.Service
             _partnerRepo = partnerRepo;
             _context = context;
             _pointConfig = pointConfig.Value;
+            _hubContext = hubContext;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -505,7 +510,7 @@ namespace MenuGoBE.Service
                     if (customer != null)
                     {
                         int currentPoint = customer.Point;
-                        string orderCode = $"HD{order.Id:D6}";
+                        string orderCode = $"HD{order.Id}";
 
                         // 1. Trừ điểm nếu khách có sử dụng điểm
                         if (order.PointsUsed > 0)
@@ -552,6 +557,15 @@ namespace MenuGoBE.Service
                         customer.Point = currentPoint;
                         await _customerRepo.UpdateAsync(customer);
                         await _context.SaveChangesAsync();
+
+                        if (_hubContext != null)
+                        {
+                            try
+                            {
+                                await _hubContext.Clients.All.SendAsync("ReceiveCustomerUpdate", new { action = "point_change", customerId = customer.Id });
+                            }
+                            catch { }
+                        }
                     }
                 }
 
@@ -617,6 +631,11 @@ namespace MenuGoBE.Service
                 {
                     var area = await _areaRepo.GetByIdAsync(tableForInventory.AreaId);
                     if (area != null) branchId = area.BranchId;
+                }
+                if (!branchId.HasValue)
+                {
+                    var firstBranch = await _context.Branches.Select(b => b.Id).FirstOrDefaultAsync();
+                    if (firstBranch > 0) branchId = firstBranch;
                 }
 
                 if (branchId.HasValue)

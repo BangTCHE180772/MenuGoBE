@@ -2080,40 +2080,246 @@ namespace MenuGoBE.Service.Document
             await _repo.SaveChangesAsync();
         }
 
+        #region Chốt chứng từ của Order khi thanh toán hóa đơn
         public async Task FinalizeOrderDocumentsAsync(long orderId, decimal finalAmount, MenuGoBE.Models.Enums.PaymentMethod paymentMethod, long? partnerId, long? userId)
         {
-            var saleDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, DocumentType.Sale);
-            if (saleDoc != null)
+            var saleDoc = await _repo.GetDocumentByOrderIdAsync(orderId, DocumentType.Sale);
+            var order = await _repo.GetOrderWithDetailsAsync(orderId);
+
+            long branchId = order?.Table?.Area?.BranchId ?? 1;
+
+            if (saleDoc == null)
+            {
+                saleDoc = new Models.Document
+                {
+                    BranchId = branchId,
+                    OrderId = orderId,
+                    Code = $"PXBH-{orderId}",
+                    Type = DocumentType.Sale,
+                    Status = DocumentStatus.Completed,
+                    PartnerId = partnerId,
+                    TotalAmount = finalAmount,
+                    AmountPaid = finalAmount,
+                    CreatedBy = userId ?? order?.CreatedBy ?? 1,
+                    PostedBy = userId ?? order?.CreatedBy ?? 1,
+                    CreatedAt = DateTime.UtcNow,
+                    PostedAt = DateTime.UtcNow,
+                    Note = $"Phiếu xuất bán trừ nguyên liệu theo hóa đơn HD{orderId}"
+                };
+                await _repo.AddAsync(saleDoc);
+                await _repo.SaveChangesAsync();
+                await GenerateOrValidateSaleCodeAsync(saleDoc);
+            }
+            else
             {
                 saleDoc.Status = DocumentStatus.Completed;
                 saleDoc.TotalAmount = finalAmount;
+                saleDoc.AmountPaid = finalAmount;
                 if (partnerId.HasValue) saleDoc.PartnerId = partnerId.Value;
-                saleDoc.PostedBy = userId;
+                saleDoc.PostedBy = userId ?? saleDoc.CreatedBy;
                 saleDoc.PostedAt = DateTime.UtcNow;
+            }
 
-                await FreezeDocumentSnapshotsAsync(saleDoc, userId, isSoftDelete: false);
-
-                if (finalAmount > 0)
+            // Bóc tách và trừ nguyên liệu theo hóa đơn đã thanh toán
+            if (order != null)
+            {
+                var activeOrderDetails = new List<OrderDetail>();
+                activeOrderDetails.AddRange(order.OrderDetails.Where(od => od.Status != "Cancelled"));
+                if (order.ChildOrders != null)
                 {
-                    var cashFlow = new CashFlow
+                    foreach (var child in order.ChildOrders)
                     {
-                        BranchId = saleDoc.BranchId,
+                        activeOrderDetails.AddRange(child.OrderDetails.Where(od => od.Status != "Cancelled"));
+                    }
+                }
+
+                var rawDeductions = new List<SaleDeductionItem>();
+                foreach (var od in activeOrderDetails)
+                {
+                    if (od.Quantity <= 0) continue;
+                    var prod = od.Product ?? await _repo.GetProductByIdAsync(od.ProductId);
+                    if (prod == null) continue;
+
+                    if (prod.Type == ProductType.Regular || prod.Type == ProductType.Manufactured || prod.Type == ProductType.Ingredient)
+                    {
+                        rawDeductions.Add(new SaleDeductionItem
+                        {
+                            ProductId = prod.Id,
+                            Product = prod,
+                            RequiredBaseQuantity = od.Quantity,
+                            ParentDetailId = od.Id
+                        });
+                    }
+                    else if (prod.Type == ProductType.Processed)
+                    {
+                        try
+                        {
+                            await ValidateCircularDependencyAsync(prod.Id, new HashSet<long>());
+                            await UnrollProcessedProductRecipeAsync(prod.Id, od.Quantity, od.Id, rawDeductions);
+                        }
+                        catch
+                        {
+                            // Bỏ qua lỗi định lượng để đảm bảo chốt thanh toán không bị gián đoạn
+                        }
+                    }
+                }
+
+                var consolidatedDeductions = rawDeductions
+                    .GroupBy(d => d.ProductId)
+                    .Select(g => new
+                    {
+                        ProductId = g.Key,
+                        Product = g.First().Product,
+                        TotalRequiredQuantity = g.Sum(x => x.RequiredBaseQuantity)
+                    })
+                    .ToList();
+
+                var account = userId.HasValue ? await _repo.GetAccountByIdAsync(userId.Value) : null;
+                string snapshotPostedByName = account?.Name ?? "Thu ngân";
+
+                foreach (var item in consolidatedDeductions)
+                {
+                    var binventory = await _repo.GetBInventoryByBranchAndProductAsync(saleDoc.BranchId, item.ProductId);
+                    if (binventory == null) continue;
+
+                    // Kiểm tra xem nguyên liệu này đã được trừ trong chứng từ chưa
+                    bool alreadyDeducted = saleDoc.DocumentDetails.Any(d => d.BInventoryId == binventory.Id);
+                    if (alreadyDeducted) continue;
+
+                    // Cập nhật tồn kho
+                    binventory.Quantity -= item.TotalRequiredQuantity;
+                    decimal leftover_old = binventory.LeftOver;
+                    decimal val_delta = 0m;
+                    if (binventory.Quantity == 0)
+                    {
+                        val_delta = -((item.TotalRequiredQuantity * binventory.Avg) + leftover_old);
+                        binventory.LeftOver = 0;
+                    }
+                    else
+                    {
+                        val_delta = -(item.TotalRequiredQuantity * binventory.Avg);
+                    }
+
+                    // Ghi thẻ kho InventoryLedger
+                    var ledger = new InventoryLedger
+                    {
+                        BInventoryId = binventory.Id,
                         DocumentId = saleDoc.Id,
-                        PartnerId = saleDoc.PartnerId,
-                        Code = "PTBH-" + orderId,
-                        BusinessDate = DateTime.UtcNow,
-                        Direction = MenuGoBE.Models.Enums.CashFlowDirection.Inflow,
-                        Status = MenuGoBE.Models.Enums.CashFlowStatus.Completed,
-                        Type = MenuGoBE.Models.Enums.CashFlowDetailType.Payment,
-                        PaymentMethod = paymentMethod,
-                        TotalAmount = finalAmount,
-                        Note = $"Thanh toán đơn {orderId} từ Hóa đơn {saleDoc.Code}",
+                        PostedAt = DateTime.UtcNow,
+                        PostedBy = userId ?? 1,
+                        DocumentType = DocumentType.Sale,
+                        SnapshotPostedByName = snapshotPostedByName,
+                        SnapshotBranchName = saleDoc.SnapshotBranchName ?? "",
+                        SnapshotProductName = item.Product.Name,
+                        SnapshotUnitName = item.Product.Name,
+                        ConversionRateSnapshot = 1m,
+                        QuantityDelta = -item.TotalRequiredQuantity,
+                        InventoryValueDelta = val_delta,
+                        RunningQuantity = binventory.Quantity,
+                        RunningInventoryValue = binventory.Quantity == 0 ? 0m : (binventory.Quantity * binventory.Avg + binventory.LeftOver),
+                        RunningAverageCost = binventory.Avg,
+                        UnitCost = binventory.Avg,
                         CreatedAt = DateTime.UtcNow
                     };
-                    saleDoc.CashFlows.Add(cashFlow);
+                    await _repo.AddInventoryLedgerAsync(ledger);
+
+                    // Thêm chi tiết chứng từ xuất bán
+                    var childDetail = new DocumentDetail
+                    {
+                        DocumentId = saleDoc.Id,
+                        FatherId = null,
+                        BInventoryId = binventory.Id,
+                        Quantity = item.TotalRequiredQuantity,
+                        ConversionRate = 1,
+                        BaseQuantity = item.TotalRequiredQuantity,
+                        UnitPrice = binventory.Avg,
+                        SnapshotProductName = item.Product.Name,
+                        SnapshotAvgCost = binventory.Avg
+                    };
+                    saleDoc.DocumentDetails.Add(childDetail);
+
+                    // Phân bổ Lô hàng theo chuẩn FEFO
+                    IReadOnlyList<FefoAllocationResult> fefoAllocations = new List<FefoAllocationResult>();
+                    if (_fefoService != null)
+                    {
+                        try
+                        {
+                            fefoAllocations = await _fefoService.AllocateAsync(binventory.Id, item.TotalRequiredQuantity);
+                        }
+                        catch
+                        {
+                            var batches = await _repo.GetBatchesByInventoryIdAsync(binventory.Id);
+                            var activeBatches = batches.Where(b => b.Status == BatchStatus.Active && b.QuantityRemaining > 0)
+                                                       .OrderBy(b => b.ExpiryDate == null ? 1 : 0)
+                                                       .ThenBy(b => b.ExpiryDate)
+                                                       .ThenBy(b => b.ReceivedDate)
+                                                       .ToList();
+                            decimal rem = item.TotalRequiredQuantity;
+                            var fallbackList = new List<FefoAllocationResult>();
+                            foreach (var b in activeBatches)
+                            {
+                                if (rem <= 0) break;
+                                decimal alloc = Math.Min(b.QuantityRemaining, rem);
+                                b.QuantityRemaining -= alloc;
+                                if (b.QuantityRemaining == 0) b.Status = BatchStatus.Depleted;
+                                b.UpdatedAt = DateTime.UtcNow;
+                                fallbackList.Add(new FefoAllocationResult
+                                {
+                                    BatchId = b.Id,
+                                    BatchCode = b.BatchCode,
+                                    QuantityAllocated = alloc,
+                                    UnitCost = b.UnitCost,
+                                    ExpiryDate = b.ExpiryDate,
+                                    ReceivedDate = b.ReceivedDate
+                                });
+                                rem -= alloc;
+                            }
+                            fefoAllocations = fallbackList;
+                        }
+                    }
+
+                    if (fefoAllocations.Any())
+                    {
+                        foreach (var alloc in fefoAllocations)
+                        {
+                            var batchAlloc = new BatchAllocation
+                            {
+                                DocumentDetail = childDetail,
+                                BatchId = alloc.BatchId,
+                                AllocationType = BatchAllocationType.Sale,
+                                QuantityAllocated = alloc.QuantityAllocated,
+                                UnitCost = alloc.UnitCost,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _repo.AddBatchAllocationAsync(batchAlloc);
+                        }
+                    }
                 }
-                _repo.Update(saleDoc);
             }
+
+            // Ghi nhận dòng tiền thanh toán CashFlow
+            if (finalAmount > 0 && !saleDoc.CashFlows.Any(cf => cf.Type == MenuGoBE.Models.Enums.CashFlowDetailType.Payment))
+            {
+                var cashFlow = new CashFlow
+                {
+                    BranchId = saleDoc.BranchId,
+                    DocumentId = saleDoc.Id,
+                    PartnerId = saleDoc.PartnerId,
+                    Code = "PTBH-" + orderId,
+                    BusinessDate = DateTime.UtcNow,
+                    Direction = MenuGoBE.Models.Enums.CashFlowDirection.Inflow,
+                    Status = MenuGoBE.Models.Enums.CashFlowStatus.Completed,
+                    Type = MenuGoBE.Models.Enums.CashFlowDetailType.Payment,
+                    PaymentMethod = paymentMethod,
+                    TotalAmount = finalAmount,
+                    Note = $"Thanh toán đơn {orderId} từ Hóa đơn {saleDoc.Code}",
+                    CreatedAt = DateTime.UtcNow
+                };
+                saleDoc.CashFlows.Add(cashFlow);
+            }
+
+            await FreezeDocumentSnapshotsAsync(saleDoc, userId, isSoftDelete: false);
+            _repo.Update(saleDoc);
 
             var returnDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, DocumentType.CustomerReturn);
             if (returnDoc != null)
@@ -2129,6 +2335,7 @@ namespace MenuGoBE.Service.Document
 
             await _repo.SaveChangesAsync();
         }
+        #endregion
         #endregion
 
         #region 4. Nghiệp vụ Chứng từ Khách trả hàng (CustomerReturn)

@@ -208,6 +208,9 @@ namespace MenuGoBE.Controllers
                         documentType = l.DocumentType.ToString(),
                         methodName = GetMethodName(l.DocumentType),
                         businessDate = l.PostedAt,
+                        createdDate = l.PostedAt,
+                        createdAt = l.CreatedAt,
+                        date = l.PostedAt,
                         unitCost = l.RunningAverageCost,
                         runningAverageCost = l.RunningAverageCost,
                         inventoryValueDelta = l.InventoryValueDelta,
@@ -239,10 +242,13 @@ namespace MenuGoBE.Controllers
             {
                 DocumentType.Import => "Nhập hàng",
                 DocumentType.Export => "Xuất hủy",
+                DocumentType.ExportDelete => "Xuất hủy",
                 DocumentType.Transfer => "Xuất chuyển kho",
                 DocumentType.Return => "Trả hàng nhập",
                 DocumentType.Check => "Kiểm kho",
                 DocumentType.Production => "Sản xuất",
+                DocumentType.CostAdjustment => "Điều chỉnh giá vốn",
+                DocumentType.CustomerReturn => "Khách trả hàng",
                 _ => "Bán hàng"
             };
         }
