@@ -486,12 +486,37 @@ namespace MenuGoBE.Service
                 var finalAmount = order.TotalAmount;
                 int pointsEarned = (int)(finalAmount / 100000) * 100;
 
+                // Bù tích điểm cho khách khi bếp làm chậm: món đã nấu xong nhưng khách
+                // không nhận nữa (bị huỷ khi đã Ready) bị ghi nhận là LeftoverRecord với
+                // lý do cố định KitchenDelayReason — cộng thêm điểm theo đúng tỉ lệ tích
+                // điểm thường (100 điểm / 100,000đ) trên giá trị món đó, thay cho hoàn tiền.
+                var orderDetailIdsForBonus = order.OrderDetails.Select(od => od.Id).ToList();
+                var childOrdersForBonus = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
+                foreach (var child in childOrdersForBonus)
+                {
+                    orderDetailIdsForBonus.AddRange(child.OrderDetails.Select(od => od.Id));
+                }
+
+                int kitchenDelayBonusPoints = 0;
+                if (orderDetailIdsForBonus.Count > 0)
+                {
+                    var delayedRecords = await _context.LeftoverRecords
+                        .Include(l => l.OrderDetail)
+                        .Where(l => l.Type == LeftoverType.Return
+                                 && l.Reason == LeftoverRecord.KitchenDelayReason
+                                 && l.OrderDetailId.HasValue
+                                 && orderDetailIdsForBonus.Contains(l.OrderDetailId.Value))
+                        .ToListAsync();
+
+                    kitchenDelayBonusPoints = delayedRecords.Sum(l => (int)((l.OrderDetail?.Price ?? 0) * l.Quantity / 100000) * 100);
+                }
+
                 if (order.CustomerId.HasValue)
                 {
                     var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
                     if (customer != null)
                     {
-                        customer.Point = customer.Point - order.PointsUsed + pointsEarned;
+                        customer.Point = customer.Point - order.PointsUsed + pointsEarned + kitchenDelayBonusPoints;
                         await _customerRepo.UpdateAsync(customer);
                     }
                 }
