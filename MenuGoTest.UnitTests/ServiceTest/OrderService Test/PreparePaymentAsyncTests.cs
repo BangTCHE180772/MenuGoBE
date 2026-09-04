@@ -136,7 +136,8 @@ public class PreparePaymentAsyncTests : OrderServiceTestBase
     {
         var order = CreateOrderWithDetails(100000, 2);
         order.CustomerId = 1;
-        var customer = new Customer { Id = 1, Name = "Test", Phone = "0987654321", Point = 500 };
+        // Point >= PointSystemConfig.MinPointsToUse (50000 mặc định) để đủ điều kiện dùng điểm
+        var customer = new Customer { Id = 1, Name = "Test", Phone = "0987654321", Point = 50200 };
 
         _orderRepoMock.Setup(r => r.GetActiveOrderByIdWithDetailsAsync(1)).ReturnsAsync(order);
         _orderRepoMock.Setup(r => r.GetChildOrdersWithDetailsAsync(1)).ReturnsAsync(new List<Order>());

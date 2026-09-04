@@ -62,6 +62,9 @@ namespace MenuGoBE.Controllers
                         quantity = b.Quantity,
                         avg = b.Avg,
                         stockQuantity = b.Quantity,
+                        imageLink = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
+                        imageUrl = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
+                        imageId = b.Product.ImageId,
                         unitConversions = b.Product.UnitConversions
                             .Select(uc => new
                             {
@@ -152,6 +155,8 @@ namespace MenuGoBE.Controllers
                     avg = b.Avg,
                     stockQuantity = b.Quantity,
                     imageLink = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
+                    imageUrl = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
+                    imageId = b.Product.ImageId,
                     createdAt = b.Product.CreatedAt,
                     unitConversions = b.Product.UnitConversions
                         .Select(uc => new

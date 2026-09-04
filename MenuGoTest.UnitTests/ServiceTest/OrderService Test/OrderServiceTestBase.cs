@@ -8,6 +8,7 @@ using MenuGoBE.Service;
 using MenuGoBE.Data;
 using Moq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace MenuGoTest.UnitTests.ServiceTest.OrderServiceTest;
 
@@ -63,7 +64,8 @@ public abstract class OrderServiceTestBase
             _productRepoMock.Object, _areaRepoMock.Object,
             _bInventoryRepoMock.Object,
             _documentRepoMock.Object, _partnerRepoMock.Object,
-            dbContext, _documentServiceMock.Object);
+            dbContext, _documentServiceMock.Object,
+            Options.Create(new PointSystemConfig()));
 
         var transactionMock = new Mock<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction>();
         _orderRepoMock.Setup(r => r.BeginTransactionAsync()).ReturnsAsync(transactionMock.Object);

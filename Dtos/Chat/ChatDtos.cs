@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MenuGoBE.Dtos.Chat;
 
@@ -95,10 +96,19 @@ public class GuestSessionResponseDto
 
 public class ProductReferenceItemDto
 {
+    [JsonPropertyName("productId")]
     public long ProductId { get; set; }
+
+    [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("price")]
     public decimal Price { get; set; }
+
+    [JsonPropertyName("imageLink")]
     public string ImageLink { get; set; } = string.Empty;
+
+    [JsonPropertyName("groupName")]
     public string GroupName { get; set; } = string.Empty;
 }
 
