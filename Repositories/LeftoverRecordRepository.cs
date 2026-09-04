@@ -45,6 +45,24 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync(l => l.Id == id);
         }
 
+        public async Task<List<LeftoverRecord>> GetReusableAsync(long branchId, DateTime sinceUtc, long? productId)
+        {
+            var query = _context.LeftoverRecords
+                .Include(l => l.Product)
+                .Include(l => l.OrderDetail)
+                    .ThenInclude(od => od!.Order)
+                        .ThenInclude(o => o.Table)
+                .Where(l => l.BranchId == branchId
+                         && l.Type == LeftoverType.Return
+                         && l.UsedAt == null
+                         && l.CreatedAt >= sinceUtc);
+
+            if (productId.HasValue)
+                query = query.Where(l => l.ProductId == productId.Value);
+
+            return await query.OrderByDescending(l => l.CreatedAt).ToListAsync();
+        }
+
         public async Task<OrderDetail?> GetOrderDetailWithTableAsync(long orderDetailId)
         {
             return await _context.OrderDetails
