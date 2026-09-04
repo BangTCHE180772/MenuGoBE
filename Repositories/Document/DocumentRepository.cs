@@ -75,6 +75,31 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.DocumentDetails)
                 .FirstOrDefaultAsync(d => d.OrderId == orderId && d.Type == type && d.Status == DocumentStatus.Pending);
         }
+
+        public async Task<Models.Document?> GetDocumentByOrderIdAsync(long orderId, DocumentType type)
+        {
+            return await _context.Documents
+                .Include(d => d.DocumentDetails)
+                .Include(d => d.CashFlows)
+                .FirstOrDefaultAsync(d => d.OrderId == orderId && d.Type == type);
+        }
+
+        public async Task<Order?> GetOrderWithDetailsAsync(long orderId)
+        {
+            return await _context.Orders
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
+                        .ThenInclude(p => p.RecipeItems)
+                            .ThenInclude(ri => ri.IngredientProduct)
+                .Include(o => o.ChildOrders)
+                    .ThenInclude(co => co.OrderDetails)
+                        .ThenInclude(od => od.Product)
+                            .ThenInclude(p => p.RecipeItems)
+                                .ThenInclude(ri => ri.IngredientProduct)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+        }
         #endregion
 
         #region Kiểm tra chứng từ gốc (Parent Document)
