@@ -224,6 +224,26 @@ namespace MenuGoBE.Controllers
         }
         #endregion
 
+        #region Thanh toán tiền cho Nhà cung cấp theo phiếu nhập kho
+        [HttpPost("{partnerId}/import-documents/{documentId}/pay")]
+        public async Task<IActionResult> PayImportDocument(long partnerId, long documentId, [FromBody] PartnerPayDocumentDto dto)
+        {
+            if (!ValidateUserToken(out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.PayPartnerImportDocumentAsync(partnerId, documentId, dto, userId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
         #region Lấy lịch sử dòng tiền giao dịch tài chính với đối tác
         [HttpGet("{id}/cash-flows")]
         public async Task<IActionResult> GetCashFlows(long id)

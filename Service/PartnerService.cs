@@ -192,11 +192,12 @@ namespace MenuGoBE.Service
             decimal totalImportAmount = importDocs.Sum(d => d.TotalAmount);
             decimal totalPaidFromDocs = importDocs.Sum(d => d.AmountPaid);
 
-            var cashFlowExpenses = await _context.CashFlows
-                .Where(cf => cf.PartnerId == partnerId && !cf.IsDeleted && (int)cf.Direction == 2)
-                .SumAsync(cf => cf.TotalAmount);
+            // Chỉ cộng thêm các phiếu chi không gắn với DocumentId để tránh tính trùng 2 lần
+            var unlinkedCashFlowExpenses = await _context.CashFlows
+                .Where(cf => cf.PartnerId == partnerId && !cf.IsDeleted && (int)cf.Direction == 2 && cf.DocumentId == null)
+                .SumAsync(cf => (decimal?)cf.TotalAmount) ?? 0m;
 
-            decimal totalPaidAmount = totalPaidFromDocs + cashFlowExpenses;
+            decimal totalPaidAmount = totalPaidFromDocs + unlinkedCashFlowExpenses;
             decimal remainingDebt = Math.Max(0m, totalImportAmount - totalPaidAmount);
 
             return new PartnerFinancialSummaryDto
@@ -217,20 +218,145 @@ namespace MenuGoBE.Service
         public async Task<List<PartnerImportDocumentDto>> GetPartnerImportDocumentsAsync(long partnerId)
         {
             var docs = await _context.Documents
+                .Include(d => d.CashFlows.Where(cf => !cf.IsDeleted))
                 .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Import && d.Status != DocumentStatus.Cancelled)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
 
-            return docs.Select(d => new PartnerImportDocumentDto
+            return docs.Select(d =>
             {
-                Id = d.Id,
-                Code = d.Code,
-                ImportDate = d.CreatedAt,
-                TotalAmount = d.TotalAmount,
-                AmountPaid = d.AmountPaid,
-                DebtAmount = Math.Max(0m, d.TotalAmount - d.AmountPaid),
-                Status = d.Status.ToString()
+                var txList = d.CashFlows.Where(cf => !cf.IsDeleted).Select(cf => new PartnerTransactionHistoryDto
+                {
+                    Id = $"CF-{cf.Id}",
+                    TransactionDate = cf.BusinessDate,
+                    TransactionType = (int)cf.Direction == 2 ? "Thanh toán NCC" : "Thu lại NCC",
+                    Code = cf.Code ?? $"CF-{cf.Id}",
+                    ImportCode = d.Code,
+                    Amount = (int)cf.Direction == 2 ? -cf.TotalAmount : cf.TotalAmount,
+                    Note = cf.Note ?? "Thanh toán cho nhà cung cấp",
+                    PaymentMethod = cf.PaymentMethod.ToString()
+                }).OrderByDescending(t => t.TransactionDate).ToList();
+
+                // Fallback nếu có AmountPaid từ lúc tạo phiếu nhưng chưa có CashFlow riêng
+                if (txList.Count == 0 && d.AmountPaid > 0)
+                {
+                    txList.Add(new PartnerTransactionHistoryDto
+                    {
+                        Id = $"DOC-PAID-{d.Id}",
+                        TransactionDate = d.CreatedAt,
+                        TransactionType = "Thanh toán NCC",
+                        Code = $"TT-{d.Code}",
+                        ImportCode = d.Code,
+                        Amount = -d.AmountPaid,
+                        Note = $"Thanh toán khi lập phiếu nhập {d.Code}",
+                        PaymentMethod = "Tiền mặt"
+                    });
+                }
+
+                return new PartnerImportDocumentDto
+                {
+                    Id = d.Id,
+                    Code = d.Code,
+                    ImportDate = d.CreatedAt,
+                    TotalAmount = d.TotalAmount,
+                    AmountPaid = d.AmountPaid,
+                    DebtAmount = Math.Max(0m, d.TotalAmount - d.AmountPaid),
+                    Status = d.Status.ToString(),
+                    Transactions = txList
+                };
             }).ToList();
+        }
+        #endregion
+
+        #region Thanh toán tiền cho Nhà cung cấp theo phiếu nhập kho
+        /// <summary>
+        /// Thanh toán tiền cho nhà cung cấp gắn với phiếu nhập kho, cập nhật công nợ và sinh phiếu chi CashFlow.
+        /// </summary>
+        public async Task<PartnerImportDocumentDto> PayPartnerImportDocumentAsync(long partnerId, long documentId, PartnerPayDocumentDto dto, long? userId = null)
+        {
+            var doc = await _context.Documents
+                .Include(d => d.CashFlows.Where(cf => !cf.IsDeleted))
+                .FirstOrDefaultAsync(d => d.Id == documentId && d.PartnerId == partnerId && d.Type == DocumentType.Import);
+
+            if (doc == null)
+            {
+                throw new Exception("Không tìm thấy phiếu nhập kho của đối tác.");
+            }
+
+            if (doc.Status == DocumentStatus.Cancelled)
+            {
+                throw new Exception("Không thể thanh toán cho phiếu nhập kho đã bị hủy.");
+            }
+
+            decimal remainingDebt = Math.Max(0m, doc.TotalAmount - doc.AmountPaid);
+            if (dto.Amount <= 0)
+            {
+                throw new Exception("Số tiền thanh toán phải lớn hơn 0.");
+            }
+
+            if (dto.Amount > remainingDebt)
+            {
+                throw new Exception($"Số tiền thanh toán ({dto.Amount:N0} VNĐ) không được vượt quá số nợ còn lại ({remainingDebt:N0} VNĐ).");
+            }
+
+            // Cập nhật số tiền đã trả trên chứng từ
+            doc.AmountPaid += dto.Amount;
+            doc.AmountDue = Math.Max(0m, doc.TotalAmount - doc.AmountPaid);
+
+            // Sinh phiếu chi CashFlow thanh toán cho NCC
+            var prefix = "PC";
+            var tempCode = $"{prefix}{DateTime.UtcNow.Ticks % 1_000_000:D6}";
+            var cashFlow = new CashFlow
+            {
+                BranchId = doc.BranchId,
+                DocumentId = doc.Id,
+                PartnerId = doc.PartnerId ?? partnerId,
+                Code = tempCode,
+                BusinessDate = dto.PaymentDate == default ? DateTime.UtcNow : dto.PaymentDate,
+                Direction = CashFlowDirection.Outflow,
+                Type = CashFlowDetailType.Payment,
+                PaymentMethod = (PaymentMethod)(dto.PaymentMethod > 0 ? dto.PaymentMethod : 1),
+                Status = CashFlowStatus.Completed,
+                TotalAmount = dto.Amount,
+                Note = !string.IsNullOrWhiteSpace(dto.Note) ? dto.Note : $"Thanh toán cho NCC phiếu nhập {doc.Code}",
+                CreatedAt = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            _context.CashFlows.Add(cashFlow);
+            await _context.SaveChangesAsync();
+
+            // Cập nhật mã phiếu chính thức sau khi có Id tự tăng
+            cashFlow.Code = $"{prefix}{cashFlow.Id:D6}";
+            await _context.SaveChangesAsync();
+
+            // Nạp lại danh sách giao dịch của phiếu
+            var txList = await _context.CashFlows
+                .Where(cf => cf.DocumentId == doc.Id && !cf.IsDeleted)
+                .OrderByDescending(cf => cf.BusinessDate)
+                .Select(cf => new PartnerTransactionHistoryDto
+                {
+                    Id = $"CF-{cf.Id}",
+                    TransactionDate = cf.BusinessDate,
+                    TransactionType = (int)cf.Direction == 2 ? "Thanh toán NCC" : "Thu lại NCC",
+                    Code = cf.Code ?? $"CF-{cf.Id}",
+                    ImportCode = doc.Code,
+                    Amount = (int)cf.Direction == 2 ? -cf.TotalAmount : cf.TotalAmount,
+                    Note = cf.Note ?? "Thanh toán cho nhà cung cấp",
+                    PaymentMethod = cf.PaymentMethod.ToString()
+                }).ToListAsync();
+
+            return new PartnerImportDocumentDto
+            {
+                Id = doc.Id,
+                Code = doc.Code,
+                ImportDate = doc.CreatedAt,
+                TotalAmount = doc.TotalAmount,
+                AmountPaid = doc.AmountPaid,
+                DebtAmount = Math.Max(0m, doc.TotalAmount - doc.AmountPaid),
+                Status = doc.Status.ToString(),
+                Transactions = txList
+            };
         }
         #endregion
 
@@ -242,9 +368,23 @@ namespace MenuGoBE.Service
         {
             var result = new List<PartnerTransactionHistoryDto>();
 
+            // Lấy danh sách chứng từ nhập kho của đối tác
             var importDocs = await _context.Documents
                 .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Import && d.Status != DocumentStatus.Cancelled)
                 .ToListAsync();
+
+            var importDocIds = importDocs.Select(d => d.Id).ToHashSet();
+
+            // Lấy các dòng tiền chi/thu liên kết trực tiếp bằng PartnerId hoặc thông qua DocumentId của đối tác
+            var cashFlows = await _context.CashFlows
+                .Include(cf => cf.Document)
+                .Where(cf => !cf.IsDeleted && (cf.PartnerId == partnerId || (cf.DocumentId != null && importDocIds.Contains(cf.DocumentId.Value))))
+                .ToListAsync();
+
+            var recordedDocIdsWithPayment = cashFlows
+                .Where(cf => cf.DocumentId != null && (int)cf.Direction == 2)
+                .Select(cf => cf.DocumentId!.Value)
+                .ToHashSet();
 
             foreach (var doc in importDocs)
             {
@@ -253,16 +393,29 @@ namespace MenuGoBE.Service
                     Id = $"DOC-{doc.Id}",
                     TransactionDate = doc.CreatedAt,
                     TransactionType = "Nhập hàng",
-                    Code = doc.Code,
+                    Code = string.Empty,
+                    ImportCode = doc.Code,
                     Amount = doc.TotalAmount,
                     Note = "Ghi nhận công nợ nhập kho",
                     PaymentMethod = "Ghi nợ NCC"
                 });
-            }
 
-            var cashFlows = await _context.CashFlows
-                .Where(cf => cf.PartnerId == partnerId && !cf.IsDeleted)
-                .ToListAsync();
+                // Fallback nếu phiếu nhập có thanh toán ngay lúc tạo nhưng chưa có phiếu chi CashFlow riêng
+                if (doc.AmountPaid > 0 && !recordedDocIdsWithPayment.Contains(doc.Id))
+                {
+                    result.Add(new PartnerTransactionHistoryDto
+                    {
+                        Id = $"DOC-PAID-{doc.Id}",
+                        TransactionDate = doc.CreatedAt,
+                        TransactionType = "Thanh toán NCC",
+                        Code = $"TT-{doc.Code}",
+                        ImportCode = doc.Code,
+                        Amount = -doc.AmountPaid,
+                        Note = $"Thanh toán khi lập phiếu nhập {doc.Code}",
+                        PaymentMethod = "Tiền mặt"
+                    });
+                }
+            }
 
             foreach (var cf in cashFlows)
             {
@@ -273,6 +426,7 @@ namespace MenuGoBE.Service
                     TransactionDate = cf.BusinessDate,
                     TransactionType = isExpense ? "Thanh toán NCC" : "Thu lại NCC",
                     Code = cf.Code ?? $"CF-{cf.Id}",
+                    ImportCode = cf.Document != null ? cf.Document.Code : (importDocs.FirstOrDefault(d => d.Id == cf.DocumentId)?.Code),
                     Amount = isExpense ? -cf.TotalAmount : cf.TotalAmount,
                     Note = cf.Note ?? "Thanh toán cho nhà cung cấp",
                     PaymentMethod = cf.PaymentMethod.ToString()
