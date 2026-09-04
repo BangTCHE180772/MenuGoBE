@@ -23,6 +23,7 @@ namespace MenuGoBE.Service
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly IMapper _mapper;
         private readonly AppDbContext _context;
+        private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
         public ChatService(
             IChatRepository chatRepo,
@@ -152,7 +153,7 @@ namespace MenuGoBE.Service
                 CustomerId = m.CustomerId,
                 CustomerName = isCustomer 
                     ? (m.CustomerId.HasValue ? (m.Customer?.Name ?? "Khách hàng") : null)
-                    : m.Customer?.Name,
+                    : (m.Customer?.Name ?? m.GuestChatSession?.GuestName),
                 GuestChatSessionId = m.GuestChatSessionId,
                 GuestName = m.GuestChatSession?.GuestName,
                 EmployeeId = isCustomer ? null : m.EmployeeId,
@@ -701,6 +702,7 @@ namespace MenuGoBE.Service
                 {
                     Id = c.Id,
                     GuestChatSessionId = session.Id,
+                    CustomerName = session.GuestName,
                     GuestName = session.GuestName,
                     BranchId = c.BranchId,
                     BranchName = c.Branch?.Name ?? "",
@@ -843,7 +845,7 @@ namespace MenuGoBE.Service
                     GroupName = p.Group?.Name ?? ""
                 }).ToList();
 
-                metadataJson = JsonSerializer.Serialize(new { products = productItems });
+                metadataJson = JsonSerializer.Serialize(new { products = productItems }, _jsonOptions);
                 if (string.IsNullOrEmpty(messageContent))
                 {
                     messageContent = $"Yêu cầu tư vấn {productItems.Count} món ăn";
@@ -873,6 +875,7 @@ namespace MenuGoBE.Service
                 Id = message.Id,
                 ConversationId = conversation.Id,
                 GuestChatSessionId = session.Id,
+                CustomerName = session.GuestName,
                 GuestName = session.GuestName,
                 MessageType = message.MessageType,
                 Content = message.Content,
@@ -884,6 +887,7 @@ namespace MenuGoBE.Service
             if (isNew)
             {
                 var convView = _mapper.Map<ConversationViewDto>(conversation);
+                convView.CustomerName = session.GuestName;
                 convView.GuestName = session.GuestName;
                 convView.BranchName = branchName;
 
@@ -933,7 +937,7 @@ namespace MenuGoBE.Service
             {
                 products = productItems,
                 note = dto.Note?.Trim()
-            });
+            }, _jsonOptions);
 
             var content = dto.ProductIds.Count == 1
                 ? $"Tư vấn món: {productItems[0].Name}"

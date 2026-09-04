@@ -15,6 +15,7 @@ namespace MenuGoBE.Interface.Repository
         Task<Notification?> GetByIdAsync(long id);
         Task CreateAsync(Notification notification);
         Task UpdateAsync(Notification notification);
+        Task MarkAllAsReadAsync(long[] branchIds, string? userRole = null, long accountId = 0);
         Task SaveChangesAsync();
     }
 }

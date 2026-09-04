@@ -151,6 +151,37 @@ namespace MenuGoBE.Controllers
             return Ok(new { success = true, message = "Đã đánh dấu đã đọc thông báo." });
         }
 
+        [HttpPut("read-all")]
+        public async Task<IActionResult> MarkAllAsRead([FromQuery] long? branchId)
+        {
+            if (!TryGetUserId(out var userId))
+            {
+                return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+            }
+
+            var allowedBranchIds = GetAllowedBranchIdsFromToken();
+            if (!allowedBranchIds.Any() && !IsAdmin())
+            {
+                return Forbid("Tài khoản của bạn chưa được liên kết với bất kỳ chi nhánh nào.");
+            }
+
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                if (!IsAdmin() && !allowedBranchIds.Contains(branchId.Value))
+                {
+                    return StatusCode(403, new { message = $"Truy cập bị từ chối: Bạn không có quyền truy cập thông báo của chi nhánh này. Mã:{branchId.Value}." });
+                }
+            }
+
+            long[] targetBranchIds = branchId.HasValue && branchId.Value > 0
+                ? new[] { branchId.Value }
+                : allowedBranchIds;
+
+            var userRole = User.FindFirstValue(ClaimTypes.Role);
+            await _service.MarkAllAsReadAsync(targetBranchIds, userRole, userId);
+            return Ok(new { success = true, message = "Đã đánh dấu tất cả thông báo là đã đọc." });
+        }
+
         #region Helper Methods
         private long[] GetAllowedBranchIdsFromToken()
         {

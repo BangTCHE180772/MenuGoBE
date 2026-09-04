@@ -163,6 +163,7 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region Xóa đối tác
         // 5. Delete By Id
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(long id)
@@ -181,5 +182,106 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+        #endregion
+
+        #region Lấy tổng quan tài chính công nợ đối tác
+        [HttpGet("{id}/financial-summary")]
+        public async Task<IActionResult> GetFinancialSummary(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetPartnerFinancialSummaryAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Lấy danh sách phiếu nhập hàng của đối tác
+        [HttpGet("{id}/import-documents")]
+        public async Task<IActionResult> GetImportDocuments(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetPartnerImportDocumentsAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Lấy lịch sử dòng tiền giao dịch tài chính với đối tác
+        [HttpGet("{id}/cash-flows")]
+        public async Task<IActionResult> GetCashFlows(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetPartnerCashFlowHistoryAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Lấy lịch sử mua hàng của khách hàng
+        [HttpGet("customer/{id}/purchases")]
+        public async Task<IActionResult> GetCustomerPurchases(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetCustomerPurchaseHistoryAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Lấy lịch sử điểm tích lũy của khách hàng
+        [HttpGet("customer/{id}/points")]
+        public async Task<IActionResult> GetCustomerPoints(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetCustomerPointHistoryAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
     }
 }

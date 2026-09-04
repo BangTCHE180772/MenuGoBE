@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
 using MenuGoBE.Interface.Services.Document;
+using Microsoft.Extensions.Options;
 
 namespace MenuGoBE.Service
 {
@@ -28,6 +29,7 @@ namespace MenuGoBE.Service
         private readonly IDocumentService _documentService;
         private readonly IPartnerRepository _partnerRepo;
         private readonly AppDbContext _context;
+        private readonly PointSystemConfig _pointConfig;
 
         public OrderService(
             IOrderRepository repo, 
@@ -43,7 +45,8 @@ namespace MenuGoBE.Service
             IDocumentRepository documentRepo,
             IPartnerRepository partnerRepo,
             AppDbContext context,
-            IDocumentService documentService)
+            IDocumentService documentService,
+            IOptions<PointSystemConfig> pointConfig)
         {
             _repo = repo;
             _mapper = mapper;
@@ -59,6 +62,7 @@ namespace MenuGoBE.Service
             _documentService = documentService;
             _partnerRepo = partnerRepo;
             _context = context;
+            _pointConfig = pointConfig.Value;
         }
 
         public async Task<List<OrderViewDto>> GetAllAsync()
@@ -422,9 +426,14 @@ namespace MenuGoBE.Service
             if (dto != null && dto.PointsUsed > 0 && order.CustomerId.HasValue)
             {
                 var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
-                if (customer != null && customer.Point >= dto.PointsUsed)
+                if (customer != null && customer.Point >= _pointConfig.MinPointsToUse)
                 {
-                    pointsUsed = dto.PointsUsed;
+                    int requestedPoints = Math.Min(dto.PointsUsed, customer.Point);
+                    
+                    decimal remainingAfterVoucher = grandTotal - discountAmount;
+                    decimal maxPointsAllowed = remainingAfterVoucher * (_pointConfig.MaxDiscountPercentage / 100m);
+                    
+                    pointsUsed = (int)Math.Min(requestedPoints, maxPointsAllowed);
                 }
             }
 
@@ -484,7 +493,11 @@ namespace MenuGoBE.Service
                 }
 
                 var finalAmount = order.TotalAmount;
-                int pointsEarned = (int)(finalAmount / 100000) * 100;
+                int pointsEarned = 0;
+                if (_pointConfig.EarnRate_SpendAmount > 0)
+                {
+                    pointsEarned = (int)(finalAmount / _pointConfig.EarnRate_SpendAmount) * _pointConfig.EarnRate_PointReward;
+                }
 
                 // Bù tích điểm cho khách khi bếp làm chậm: món đã nấu xong nhưng khách
                 // không nhận nữa (bị huỷ khi đã Ready) bị ghi nhận là LeftoverRecord với
@@ -498,7 +511,7 @@ namespace MenuGoBE.Service
                 }
 
                 int kitchenDelayBonusPoints = 0;
-                if (orderDetailIdsForBonus.Count > 0)
+                if (orderDetailIdsForBonus.Count > 0 && _pointConfig.EarnRate_SpendAmount > 0)
                 {
                     var delayedRecords = await _context.LeftoverRecords
                         .Include(l => l.OrderDetail)
@@ -508,7 +521,8 @@ namespace MenuGoBE.Service
                                  && orderDetailIdsForBonus.Contains(l.OrderDetailId.Value))
                         .ToListAsync();
 
-                    kitchenDelayBonusPoints = delayedRecords.Sum(l => (int)((l.OrderDetail?.Price ?? 0) * l.Quantity / 100000) * 100);
+                    kitchenDelayBonusPoints = delayedRecords.Sum(l =>
+                        (int)(((l.OrderDetail?.Price ?? 0) * l.Quantity) / _pointConfig.EarnRate_SpendAmount) * _pointConfig.EarnRate_PointReward);
                 }
 
                 if (order.CustomerId.HasValue)
@@ -516,8 +530,76 @@ namespace MenuGoBE.Service
                     var customer = await _customerRepo.GetByIdAsync(order.CustomerId.Value);
                     if (customer != null)
                     {
-                        customer.Point = customer.Point - order.PointsUsed + pointsEarned + kitchenDelayBonusPoints;
+                        int currentPoint = customer.Point;
+                        string orderCode = $"HD{order.Id:D6}";
+
+                        // 1. Trừ điểm nếu khách có sử dụng điểm
+                        if (order.PointsUsed > 0)
+                        {
+                            int before = currentPoint;
+                            currentPoint = Math.Max(0, currentPoint - order.PointsUsed);
+                            var redeemTrans = new CustomerPointTransaction
+                            {
+                                CustomerId = customer.Id,
+                                OrderId = order.Id,
+                                RelatedCode = orderCode,
+                                Type = MenuGoBE.Models.Enums.PointTransactionType.Redeem,
+                                PointChange = -order.PointsUsed,
+                                PointBefore = before,
+                                PointAfter = currentPoint,
+                                Reason = $"Sử dụng điểm thanh toán hóa đơn {orderCode}",
+                                IsManual = false,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _context.CustomerPointTransactions.AddAsync(redeemTrans);
+                        }
+
+                        // 2. Tích điểm theo số tiền thanh toán
+                        if (pointsEarned > 0)
+                        {
+                            int before = currentPoint;
+                            currentPoint += pointsEarned;
+                            var earnTrans = new CustomerPointTransaction
+                            {
+                                CustomerId = customer.Id,
+                                OrderId = order.Id,
+                                RelatedCode = orderCode,
+                                Type = MenuGoBE.Models.Enums.PointTransactionType.Earn,
+                                PointChange = pointsEarned,
+                                PointBefore = before,
+                                PointAfter = currentPoint,
+                                Reason = $"Tích điểm đơn hàng {orderCode}",
+                                IsManual = false,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _context.CustomerPointTransactions.AddAsync(earnTrans);
+                        }
+
+                        // 3. Bù điểm khi bếp làm chậm khiến món đã hoàn thành bị huỷ
+                        // (LeftoverRecord Return với lý do KitchenDelayReason) — thay cho hoàn tiền.
+                        if (kitchenDelayBonusPoints > 0)
+                        {
+                            int before = currentPoint;
+                            currentPoint += kitchenDelayBonusPoints;
+                            var bonusTrans = new CustomerPointTransaction
+                            {
+                                CustomerId = customer.Id,
+                                OrderId = order.Id,
+                                RelatedCode = orderCode,
+                                Type = MenuGoBE.Models.Enums.PointTransactionType.Earn,
+                                PointChange = kitchenDelayBonusPoints,
+                                PointBefore = before,
+                                PointAfter = currentPoint,
+                                Reason = $"Bù điểm do bếp làm chậm, món đã hoàn thành bị huỷ - {orderCode}",
+                                IsManual = false,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _context.CustomerPointTransactions.AddAsync(bonusTrans);
+                        }
+
+                        customer.Point = currentPoint;
                         await _customerRepo.UpdateAsync(customer);
+                        await _context.SaveChangesAsync();
                     }
                 }
 

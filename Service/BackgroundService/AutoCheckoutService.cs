@@ -122,7 +122,7 @@ namespace MenuGoBE.Service
 
                             // Auto-unassign tất cả bàn của nhân viên khi chuyển ca
                             var assignmentService = scope.ServiceProvider.GetRequiredService<IOrderAssignmentService>();
-                            await assignmentService.ClearAllByAccountAsync(ws.AccountId);
+                            await assignmentService.DeactivateAllByAccountAsync(ws.AccountId, "ShiftEnded");
                             _logger.LogInformation($"Auto-unassigned all tables for AccountId: {ws.AccountId} (auto-transition)");
 
                             var nextShiftStartLocal = nextSchedule.WorkDate.ToDateTime(nextSchedule.Shift.StartTime);
@@ -155,7 +155,7 @@ namespace MenuGoBE.Service
 
                             // Auto-unassign tất cả bàn của nhân viên khi ép checkout
                             var assignmentService2 = scope.ServiceProvider.GetRequiredService<IOrderAssignmentService>();
-                            await assignmentService2.ClearAllByAccountAsync(ws.AccountId);
+                            await assignmentService2.DeactivateAllByAccountAsync(ws.AccountId, "ShiftEnded");
                             _logger.LogInformation($"Auto-unassigned all tables for AccountId: {ws.AccountId} (auto-forced-checkout)");
                             hasChanges = true;
                         }
