@@ -145,7 +145,9 @@ namespace MenuGoBE.Service
                 if (area != null) branchId = area.BranchId;
             }
 
-            if (branchId > 0)
+            bool isReuse = dto.ReuseLeftoverId.HasValue;
+
+            if (!isReuse && branchId > 0)
             {
                 int availableQty = await GetAvailableQuantityAsync(dto.ProductId, branchId);
                 if (dto.Quantity > availableQty)
@@ -156,8 +158,14 @@ namespace MenuGoBE.Service
 
             var entity = _mapper.Map<OrderDetail>(dto);
             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-            
-            if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "Waiting" || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
+
+            if (isReuse)
+            {
+                // Dùng lại món thừa đã nấu xong từ đơn khác — bỏ qua kiểm tra tồn kho
+                // và không trừ nguyên liệu (đã trừ ở lần nấu gốc), lên thẳng Ready.
+                entity.CookingStatus = "Ready";
+            }
+            else if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "Waiting" || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
             {
                 if (productType == "Regular" || productType == "Manufactured")
                 {
@@ -169,7 +177,7 @@ namespace MenuGoBE.Service
                 }
             }
 
-            if (entity.Status == "Confirmed")
+            if (!isReuse && entity.Status == "Confirmed")
             {
                 if (productType == "Regular" || productType == "Manufactured")
                 {
@@ -202,6 +210,20 @@ namespace MenuGoBE.Service
             await _detailRepo.CreateAsync(entity);
             await _detailRepo.SaveChangesAsync();
 
+            if (isReuse)
+            {
+                try
+                {
+                    await _leftoverRecordService.MarkUsedAsync(dto.ReuseLeftoverId!.Value, dto.ProductId, dto.Quantity, entity.Id);
+                }
+                catch
+                {
+                    await _detailRepo.DeleteAsync(entity.Id);
+                    await _detailRepo.SaveChangesAsync();
+                    throw;
+                }
+            }
+
             await RecalculateTotalAmountAsync(order);
 
             return _mapper.Map<OrderDetailViewDto>(entity);
@@ -226,7 +248,8 @@ namespace MenuGoBE.Service
 
             if (branchId > 0)
             {
-                var groupedProducts = dtos.GroupBy(d => d.ProductId)
+                var groupedProducts = dtos.Where(d => !d.ReuseLeftoverId.HasValue)
+                                          .GroupBy(d => d.ProductId)
                                           .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(d => d.Quantity) })
                                           .ToList();
 
@@ -262,12 +285,19 @@ namespace MenuGoBE.Service
                 try
                 {
                     var createdEntities = new List<OrderDetail>();
+                    var reuseLinks = new List<(OrderDetailCreateDto Dto, OrderDetail Entity)>();
                     foreach (var dto in dtos)
                     {
+                        bool isReuse = dto.ReuseLeftoverId.HasValue;
                         var entity = _mapper.Map<OrderDetail>(dto);
                         var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-                        
-                        if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "Waiting" || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
+
+                        if (isReuse)
+                        {
+                            // Dùng lại món thừa đã nấu xong — không trừ nguyên liệu lần nữa, lên thẳng Ready.
+                            entity.CookingStatus = "Ready";
+                        }
+                        else if (entity.Status == "Confirmed" && (string.IsNullOrEmpty(entity.CookingStatus) || entity.CookingStatus == "Waiting" || entity.CookingStatus == "CustomerPending" || entity.CookingStatus == "PreOrder"))
                         {
                             if (productType == "Regular" || productType == "Manufactured")
                                 entity.CookingStatus = "Ready";
@@ -278,8 +308,9 @@ namespace MenuGoBE.Service
                         entity.CreatedAt = DateTime.UtcNow;
                         await _detailRepo.CreateAsync(entity);
                         createdEntities.Add(entity);
+                        if (isReuse) reuseLinks.Add((dto, entity));
 
-                        if (entity.Status == "Confirmed")
+                        if (!isReuse && entity.Status == "Confirmed")
                         {
                             if (productType == "Regular" || productType == "Manufactured")
                             {
@@ -307,8 +338,14 @@ namespace MenuGoBE.Service
                             }
                         }
                     }
-                    
+
                     await _detailRepo.SaveChangesAsync();
+
+                    foreach (var (reuseDto, reuseEntity) in reuseLinks)
+                    {
+                        await _leftoverRecordService.MarkUsedAsync(reuseDto.ReuseLeftoverId!.Value, reuseDto.ProductId, reuseDto.Quantity, reuseEntity.Id);
+                    }
+
                     await RecalculateTotalAmountAsync(order);
                     await transaction.CommitAsync();
 
@@ -748,7 +785,7 @@ namespace MenuGoBE.Service
                                             Type = LeftoverType.Return,
                                             ProductId = entity.ProductId,
                                             Quantity = entity.Quantity,
-                                            Reason = "Bếp làm chậm, khách không nhận món đã hoàn thành",
+                                            Reason = LeftoverRecord.KitchenDelayReason,
                                             OrderDetailId = entity.Id,
                                             HandlingAction = LeftoverHandlingAction.Discard,
                                         }, cancelledBy);
