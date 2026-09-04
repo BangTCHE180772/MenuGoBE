@@ -1299,14 +1299,17 @@ namespace MenuGoBE.Migrations
                     b.Property<DateOnly>("RecordDate")
                         .HasColumnType("date");
 
-                    b.Property<decimal?>("RefundAmount")
-                        .HasColumnType("decimal(18,4)");
-
                     b.Property<long?>("ShiftId")
                         .HasColumnType("bigint");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("UsedByOrderDetailId")
+                        .HasColumnType("bigint");
 
                     b.HasKey("Id");
 
@@ -1319,6 +1322,8 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("ProductId");
 
                     b.HasIndex("ShiftId");
+
+                    b.HasIndex("UsedByOrderDetailId");
 
                     b.ToTable("LeftoverRecords");
                 });
@@ -3263,6 +3268,11 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("ShiftId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.OrderDetail", "UsedByOrderDetail")
+                        .WithMany()
+                        .HasForeignKey("UsedByOrderDetailId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Branch");
 
                     b.Navigation("Creator");
@@ -3272,6 +3282,8 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Product");
 
                     b.Navigation("Shift");
+
+                    b.Navigation("UsedByOrderDetail");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.MenuProduct", b =>
