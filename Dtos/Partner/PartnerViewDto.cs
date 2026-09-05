@@ -13,5 +13,6 @@ namespace MenuGoBE.Dtos.Partner
         public string? Email { get; set; }
         public long? CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; }
+        public decimal RemainingDebt { get; set; } = 0;
     }
 }

@@ -399,14 +399,18 @@ namespace MenuGoBE.Service.Document
 
             var (roundedTotal, roundingValue) = CalculateDocumentRounding(calculatedTotalAmount);
 
-            // 2. Validate AmountPaid đối với giá trị phải trả đã làm tròn
+            // Trích xuất số tiền trừ nợ NCC từ Note nếu có
+            decimal debtDeduction = ExtractDebtDeduction(document.Note);
+            decimal effectivePayable = Math.Max(0, roundedTotal - debtDeduction);
+
+            // 2. Validate AmountPaid đối với giá trị phải trả đã làm tròn (sau khi trừ nợ NCC nếu có)
             if (document.AmountPaid < 0 || document.AmountPaid > roundedTotal)
             {
                 throw new MenuGoException(ErrorCodes.DocumentAmountPaidInvalid, $"Số tiền đã trả (AmountPaid: {document.AmountPaid:N0} VNĐ) không hợp lệ. Phải nằm trong khoảng từ 0 đến Tổng tiền chứng từ sau làm tròn ({roundedTotal:N0} VNĐ).");
             }
 
-            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = RoundedTotal - AmountPaid
-            document.AmountDue = Math.Max(0, roundedTotal - document.AmountPaid);
+            // 3. Tự động tính toán số tiền còn nợ/phải trả tại backend/DB: AmountDue = effectivePayable - AmountPaid
+            document.AmountDue = Math.Max(0, effectivePayable - document.AmountPaid);
 
             // 4. Quy tắc: Nếu phát sinh tiền đã trả (AmountPaid > 0) -> Ngay cả phiếu Pending cũng BẮT BUỘC chỉ định Nhà cung cấp (PartnerId)
             if (document.AmountPaid > 0 && (!document.PartnerId.HasValue || document.PartnerId.Value <= 0))
@@ -618,6 +622,26 @@ namespace MenuGoBE.Service.Document
             decimal roundingValue = rawTotal - roundedTotal;
             return (roundedTotal, roundingValue);
         }
+
+        #region Helper trích xuất số tiền trừ nợ NCC từ Note
+        /// <summary>
+        /// Trích xuất số tiền đã trừ nợ NCC từ ghi chú phiếu nhập kho (ví dụ: 'Trừ tiền NCC nợ: 25.000 đ').
+        /// </summary>
+        public static decimal ExtractDebtDeduction(string? note)
+        {
+            if (string.IsNullOrWhiteSpace(note)) return 0m;
+            var match = System.Text.RegularExpressions.Regex.Match(note, @"Trừ tiền NCC nợ:\s*([0-9.,]+)");
+            if (match.Success)
+            {
+                var rawNum = match.Groups[1].Value.Replace(".", "").Replace(",", ".");
+                if (decimal.TryParse(rawNum, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal val))
+                {
+                    return val;
+                }
+            }
+            return 0m;
+        }
+        #endregion
 
         /// <summary>
         /// Tạo phiếu chi CashFlow thanh toán cho Nhà cung cấp nếu AmountPaid > 0 khi chốt phiếu,
@@ -1319,6 +1343,8 @@ namespace MenuGoBE.Service.Document
                 PartnerId = importDoc.PartnerId,
                 // Tên NCC: dùng Snapshot nếu có
                 PartnerName = importDoc.SnapshotPartnerName ?? string.Empty,
+                TotalAmount = importDoc.TotalAmount,
+                AmountPaid = importDoc.AmountPaid,
                 Details = new List<Dtos.Document.ImportReturnDetailItemDto>()
             };
 

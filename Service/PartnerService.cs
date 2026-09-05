@@ -30,13 +30,13 @@ namespace MenuGoBE.Service
 
         #region Lấy danh sách đối tác phân trang
         /// <summary>
-        /// Lấy danh sách đối tác có phân trang và lọc theo mode.
+        /// Lấy danh sách đối tác có phân trang và lọc theo mode, kèm tính toán dư nợ.
         /// </summary>
         public async Task<PagedResult<PartnerViewDto>> GetPagedPartnersAsync(PartnerQueryDto query)
         {
             var (partners, totalCount) = await _partnerRepo.GetPagedPartnersAsync(query);
 
-            var items = partners.Select(MapToViewDto).ToList();
+            var items = await PopulatePartnersRemainingDebtAsync(partners);
 
             return new PagedResult<PartnerViewDto>
             {
@@ -82,7 +82,7 @@ namespace MenuGoBE.Service
 
         #region Lấy danh sách đối tác theo chi nhánh
         /// <summary>
-        /// Lấy toàn bộ danh sách đối tác thuộc chi nhánh.
+        /// Lấy toàn bộ danh sách đối tác thuộc chi nhánh, kèm tính toán dư nợ.
         /// </summary>
         public async Task<List<PartnerViewDto>> GetPartnersByBranchAsync(long branchId, string? search = null, int? mode = null)
         {
@@ -96,7 +96,7 @@ namespace MenuGoBE.Service
             };
 
             var (partners, _) = await _partnerRepo.GetPagedPartnersAsync(query);
-            return partners.Select(MapToViewDto).ToList();
+            return await PopulatePartnersRemainingDebtAsync(partners);
         }
         #endregion
 
@@ -175,7 +175,9 @@ namespace MenuGoBE.Service
 
         #region Lấy tổng quan tài chính công nợ của Nhà cung cấp / Đối tác
         /// <summary>
-        /// Tính tổng tiền nhập hàng, tổng tiền đã thanh toán và nợ tồn của nhà cung cấp.
+        /// Tính tổng quan tài chính công nợ đối tác theo công thức bù trừ âm/dương:
+        /// Dư Nợ = (Tổng tiền hàng Nhập - Tổng tiền hàng Trả) - (Tổng tiền mình Đã Chi - Tổng tiền mình Đã Thu).
+        /// Cho phép giá trị âm biểu thị NCC đang nợ lại cửa hàng.
         /// </summary>
         public async Task<PartnerFinancialSummaryDto> GetPartnerFinancialSummaryAsync(long partnerId)
         {
@@ -185,27 +187,51 @@ namespace MenuGoBE.Service
                 throw new Exception("Đối tác không tồn tại.");
             }
 
+            // Lấy danh sách phiếu nhập kho hợp lệ
             var importDocs = await _context.Documents
                 .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Import && d.Status != DocumentStatus.Cancelled)
                 .ToListAsync();
 
+            // Lấy danh sách phiếu trả hàng hợp lệ
+            var returnDocs = await _context.Documents
+                .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Return && d.Status != DocumentStatus.Cancelled)
+                .ToListAsync();
+
+            // Tổng tiền hàng Nhập và tiền đã thanh toán trực tiếp qua phiếu nhập
             decimal totalImportAmount = importDocs.Sum(d => d.TotalAmount);
             decimal totalPaidFromDocs = importDocs.Sum(d => d.AmountPaid);
 
-            // Chỉ cộng thêm các phiếu chi không gắn với DocumentId để tránh tính trùng 2 lần
-            var unlinkedCashFlowExpenses = await _context.CashFlows
+            // Tổng tiền hàng Trả và tiền NCC hoàn trả trực tiếp qua phiếu trả
+            decimal totalReturnAmount = returnDocs.Sum(d => d.TotalAmount);
+            decimal totalRefundFromDocs = returnDocs.Sum(d => d.AmountPaid);
+
+            // Phiếu chi độc lập không gắn DocumentId (tránh tính trùng)
+            var unlinkedExpenses = await _context.CashFlows
                 .Where(cf => cf.PartnerId == partnerId && !cf.IsDeleted && (int)cf.Direction == 2 && cf.DocumentId == null)
                 .SumAsync(cf => (decimal?)cf.TotalAmount) ?? 0m;
 
-            decimal totalPaidAmount = totalPaidFromDocs + unlinkedCashFlowExpenses;
-            decimal remainingDebt = Math.Max(0m, totalImportAmount - totalPaidAmount);
+            // Phiếu thu độc lập không gắn DocumentId (tránh tính trùng)
+            var unlinkedInflows = await _context.CashFlows
+                .Where(cf => cf.PartnerId == partnerId && !cf.IsDeleted && (int)cf.Direction == 1 && cf.DocumentId == null)
+                .SumAsync(cf => (decimal?)cf.TotalAmount) ?? 0m;
+
+            // Tổng tiền mình Đã Chi = Đã trả qua phiếu nhập + Phiếu chi rời
+            decimal totalPaidAmount = totalPaidFromDocs + unlinkedExpenses;
+
+            // Tổng tiền mình Đã Thu = NCC hoàn trả qua phiếu trả + Phiếu thu rời
+            decimal totalReceivedAmount = totalRefundFromDocs + unlinkedInflows;
+
+            // Dư Nợ = (Tổng tiền hàng Nhập - Tổng tiền hàng Trả) - (Tổng tiền mình Đã Chi - Tổng tiền mình Đã Thu)
+            decimal remainingDebt = (totalImportAmount - totalReturnAmount) - (totalPaidAmount - totalReceivedAmount);
 
             return new PartnerFinancialSummaryDto
             {
                 PartnerId = partnerId,
                 PartnerName = partner.Name,
                 TotalImportAmount = totalImportAmount,
+                TotalReturnAmount = totalReturnAmount,
                 TotalPaidAmount = totalPaidAmount,
+                TotalReceivedAmount = totalReceivedAmount,
                 RemainingDebt = remainingDebt
             };
         }
@@ -213,7 +239,7 @@ namespace MenuGoBE.Service
 
         #region Lấy danh sách phiếu nhập hàng của Nhà cung cấp
         /// <summary>
-        /// Lấy danh sách chứng từ nhập kho gắn với nhà cung cấp.
+        /// Lấy danh sách chứng từ nhập kho gắn với nhà cung cấp, hỗ trợ hiển thị cấn trừ công nợ.
         /// </summary>
         public async Task<List<PartnerImportDocumentDto>> GetPartnerImportDocumentsAsync(long partnerId)
         {
@@ -225,6 +251,8 @@ namespace MenuGoBE.Service
 
             return docs.Select(d =>
             {
+                decimal debtDeduction = ExtractDebtDeduction(d.Note);
+
                 var txList = d.CashFlows.Where(cf => !cf.IsDeleted).Select(cf => new PartnerTransactionHistoryDto
                 {
                     Id = $"CF-{cf.Id}",
@@ -237,8 +265,24 @@ namespace MenuGoBE.Service
                     PaymentMethod = cf.PaymentMethod.ToString()
                 }).OrderByDescending(t => t.TransactionDate).ToList();
 
+                // Ghi nhận giao dịch cấn trừ công nợ nếu có
+                if (debtDeduction > 0)
+                {
+                    txList.Add(new PartnerTransactionHistoryDto
+                    {
+                        Id = $"DOC-DED-{d.Id}",
+                        TransactionDate = d.CreatedAt,
+                        TransactionType = "Trừ tiền NCC nợ",
+                        Code = $"DED-{d.Code}",
+                        ImportCode = d.Code,
+                        Amount = -debtDeduction,
+                        Note = $"Cấn trừ công nợ NCC khi lập phiếu nhập {d.Code}",
+                        PaymentMethod = "Cấn trừ nợ NCC"
+                    });
+                }
+
                 // Fallback nếu có AmountPaid từ lúc tạo phiếu nhưng chưa có CashFlow riêng
-                if (txList.Count == 0 && d.AmountPaid > 0)
+                if (txList.Count(t => t.TransactionType == "Thanh toán NCC") == 0 && d.AmountPaid > 0)
                 {
                     txList.Add(new PartnerTransactionHistoryDto
                     {
@@ -253,16 +297,22 @@ namespace MenuGoBE.Service
                     });
                 }
 
+                decimal debtAmount = debtDeduction > 0
+                    ? Math.Max(0m, (d.TotalAmount - debtDeduction) - d.AmountPaid)
+                    : (d.AmountDue ?? Math.Max(0m, d.TotalAmount - d.AmountPaid));
+
+                decimal totalSettled = d.AmountPaid + debtDeduction;
+
                 return new PartnerImportDocumentDto
                 {
                     Id = d.Id,
                     Code = d.Code,
                     ImportDate = d.CreatedAt,
                     TotalAmount = d.TotalAmount,
-                    AmountPaid = d.AmountPaid,
-                    DebtAmount = Math.Max(0m, d.TotalAmount - d.AmountPaid),
+                    AmountPaid = totalSettled,
+                    DebtAmount = debtAmount,
                     Status = d.Status.ToString(),
-                    Transactions = txList
+                    Transactions = txList.OrderByDescending(t => t.TransactionDate).ToList()
                 };
             }).ToList();
         }
@@ -373,12 +423,17 @@ namespace MenuGoBE.Service
                 .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Import && d.Status != DocumentStatus.Cancelled)
                 .ToListAsync();
 
-            var importDocIds = importDocs.Select(d => d.Id).ToHashSet();
+            // Lấy danh sách chứng từ trả hàng của đối tác
+            var returnDocs = await _context.Documents
+                .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Return && d.Status != DocumentStatus.Cancelled)
+                .ToListAsync();
+
+            var allDocIds = importDocs.Select(d => d.Id).Concat(returnDocs.Select(d => d.Id)).ToHashSet();
 
             // Lấy các dòng tiền chi/thu liên kết trực tiếp bằng PartnerId hoặc thông qua DocumentId của đối tác
             var cashFlows = await _context.CashFlows
                 .Include(cf => cf.Document)
-                .Where(cf => !cf.IsDeleted && (cf.PartnerId == partnerId || (cf.DocumentId != null && importDocIds.Contains(cf.DocumentId.Value))))
+                .Where(cf => !cf.IsDeleted && (cf.PartnerId == partnerId || (cf.DocumentId != null && allDocIds.Contains(cf.DocumentId.Value))))
                 .ToListAsync();
 
             var recordedDocIdsWithPayment = cashFlows
@@ -417,6 +472,21 @@ namespace MenuGoBE.Service
                 }
             }
 
+            foreach (var doc in returnDocs)
+            {
+                result.Add(new PartnerTransactionHistoryDto
+                {
+                    Id = $"DOC-RET-{doc.Id}",
+                    TransactionDate = doc.CreatedAt,
+                    TransactionType = "Trả hàng NCC",
+                    Code = doc.Code,
+                    ImportCode = doc.ParentDocumentId.HasValue ? (importDocs.FirstOrDefault(d => d.Id == doc.ParentDocumentId.Value)?.Code ?? string.Empty) : string.Empty,
+                    Amount = -doc.TotalAmount,
+                    Note = !string.IsNullOrWhiteSpace(doc.Note) ? doc.Note : "Xuất trả hàng cho NCC",
+                    PaymentMethod = "Giảm trừ công nợ"
+                });
+            }
+
             foreach (var cf in cashFlows)
             {
                 bool isExpense = (int)cf.Direction == 2;
@@ -426,9 +496,9 @@ namespace MenuGoBE.Service
                     TransactionDate = cf.BusinessDate,
                     TransactionType = isExpense ? "Thanh toán NCC" : "Thu lại NCC",
                     Code = cf.Code ?? $"CF-{cf.Id}",
-                    ImportCode = cf.Document != null ? cf.Document.Code : (importDocs.FirstOrDefault(d => d.Id == cf.DocumentId)?.Code),
+                    ImportCode = cf.Document != null ? cf.Document.Code : (importDocs.FirstOrDefault(d => d.Id == cf.DocumentId)?.Code ?? returnDocs.FirstOrDefault(d => d.Id == cf.DocumentId)?.Code),
                     Amount = isExpense ? -cf.TotalAmount : cf.TotalAmount,
-                    Note = cf.Note ?? "Thanh toán cho nhà cung cấp",
+                    Note = cf.Note ?? (isExpense ? "Thanh toán cho nhà cung cấp" : "Thu lại từ nhà cung cấp"),
                     PaymentMethod = cf.PaymentMethod.ToString()
                 });
             }
@@ -540,6 +610,69 @@ namespace MenuGoBE.Service
                 CreatedBy = partner.CreatedBy,
                 CreatedAt = partner.CreatedAt
             };
+        }
+        #endregion
+
+        #region Helper trích xuất số tiền trừ nợ NCC từ Note
+        /// <summary>
+        /// Trích xuất số tiền đã trừ nợ NCC từ ghi chú phiếu nhập kho.
+        /// </summary>
+        private static decimal ExtractDebtDeduction(string? note)
+        {
+            if (string.IsNullOrWhiteSpace(note)) return 0m;
+            var match = System.Text.RegularExpressions.Regex.Match(note, @"Trừ tiền NCC nợ:\s*([0-9.,]+)");
+            if (match.Success)
+            {
+                var rawNum = match.Groups[1].Value.Replace(".", "").Replace(",", ".");
+                if (decimal.TryParse(rawNum, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal val))
+                {
+                    return val;
+                }
+            }
+            return 0m;
+        }
+        #endregion
+
+        #region Helper tính Dư nợ cho danh sách đối tác
+        /// <summary>
+        /// Tính toán số dư công nợ tổng hợp cho danh sách đối tác.
+        /// </summary>
+        private async Task<List<PartnerViewDto>> PopulatePartnersRemainingDebtAsync(List<Partner> partners)
+        {
+            if (partners.Count == 0) return new List<PartnerViewDto>();
+
+            var partnerIds = partners.Select(p => p.Id).ToList();
+
+            var importDocs = await _context.Documents
+                .Where(d => d.PartnerId.HasValue && partnerIds.Contains(d.PartnerId.Value) && d.Type == DocumentType.Import && d.Status != DocumentStatus.Cancelled)
+                .Select(d => new { PartnerId = d.PartnerId!.Value, d.TotalAmount, d.AmountPaid })
+                .ToListAsync();
+
+            var returnDocs = await _context.Documents
+                .Where(d => d.PartnerId.HasValue && partnerIds.Contains(d.PartnerId.Value) && d.Type == DocumentType.Return && d.Status != DocumentStatus.Cancelled)
+                .Select(d => new { PartnerId = d.PartnerId!.Value, d.TotalAmount, d.AmountPaid })
+                .ToListAsync();
+
+            var unlinkedCashFlows = await _context.CashFlows
+                .Where(cf => cf.PartnerId.HasValue && partnerIds.Contains(cf.PartnerId.Value) && !cf.IsDeleted && cf.DocumentId == null)
+                .Select(cf => new { PartnerId = cf.PartnerId!.Value, cf.Direction, cf.TotalAmount })
+                .ToListAsync();
+
+            return partners.Select(p =>
+            {
+                var dto = MapToViewDto(p);
+                var pImports = importDocs.Where(d => d.PartnerId == p.Id).ToList();
+                var pReturns = returnDocs.Where(d => d.PartnerId == p.Id).ToList();
+                var pCFs = unlinkedCashFlows.Where(cf => cf.PartnerId == p.Id).ToList();
+
+                decimal totalImport = pImports.Sum(d => d.TotalAmount);
+                decimal totalPaid = pImports.Sum(d => d.AmountPaid) + pCFs.Where(cf => (int)cf.Direction == 2).Sum(cf => cf.TotalAmount);
+                decimal totalReturn = pReturns.Sum(d => d.TotalAmount);
+                decimal totalRefund = pReturns.Sum(d => d.AmountPaid) + pCFs.Where(cf => (int)cf.Direction == 1).Sum(cf => cf.TotalAmount);
+
+                dto.RemainingDebt = (totalImport - totalReturn) - (totalPaid - totalRefund);
+                return dto;
+            }).ToList();
         }
         #endregion
     }
