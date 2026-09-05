@@ -802,15 +802,15 @@ namespace MenuGoBE.Controllers
                     var exp = expiryStatus.Trim().ToLower();
                     if (exp == "expired")
                     {
-                        query = query.Where(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date < today);
+                        query = query.Where(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date < today && b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted);
                     }
                     else if (exp == "near_expiry" || exp == "nearexpiry")
                     {
-                        query = query.Where(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= nearExpiryLimit);
+                        query = query.Where(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= nearExpiryLimit && b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted);
                     }
                     else if (exp == "valid")
                     {
-                        query = query.Where(b => !b.ExpiryDate.HasValue || b.ExpiryDate.Value.Date > nearExpiryLimit);
+                        query = query.Where(b => (!b.ExpiryDate.HasValue || b.ExpiryDate.Value.Date > nearExpiryLimit) && b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted);
                     }
                     else if (exp == "no_expiry" || exp == "noexpiry")
                     {
@@ -854,11 +854,13 @@ namespace MenuGoBE.Controllers
                         SourceBranchId = b.SourceBatch != null ? b.SourceBatch.BInventory.BranchId : (long?)null,
                         SourceBranchName = b.SourceBatch != null ? b.SourceBatch.BInventory.Branch.Name : null,
                         DaysUntilExpiry = b.ExpiryDate.HasValue ? (int?)(b.ExpiryDate.Value.Date - today).TotalDays : null,
-                        ExpiryStatus = !b.ExpiryDate.HasValue
-                            ? "NoExpiry"
-                            : (b.ExpiryDate.Value.Date < today
-                                ? "Expired"
-                                : (b.ExpiryDate.Value.Date <= nearExpiryLimit ? "NearExpiry" : "Valid"))
+                        ExpiryStatus = (b.QuantityRemaining <= 0 || b.Status == BatchStatus.Depleted)
+                            ? "Depleted"
+                            : (!b.ExpiryDate.HasValue
+                                ? "NoExpiry"
+                                : (b.ExpiryDate.Value.Date < today
+                                    ? "Expired"
+                                    : (b.ExpiryDate.Value.Date <= nearExpiryLimit ? "NearExpiry" : "Valid")))
                     })
                     .ToListAsync();
 
@@ -1270,12 +1272,12 @@ namespace MenuGoBE.Controllers
                 }
 
                 var totalBatches = await query.CountAsync();
-                var activeBatches = await query.CountAsync(b => b.Status == BatchStatus.Active);
-                var expiredBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date < today);
-                var nearExpiryBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= nearLimit);
-                var criticalBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= criticalLimit);
-                var validBatches = await query.CountAsync(b => b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date > nearLimit);
-                var noExpiryBatches = await query.CountAsync(b => !b.ExpiryDate.HasValue);
+                var activeBatches = await query.CountAsync(b => b.Status == BatchStatus.Active && b.QuantityRemaining > 0);
+                var expiredBatches = await query.CountAsync(b => b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted && b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date < today);
+                var nearExpiryBatches = await query.CountAsync(b => b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted && b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= nearLimit);
+                var criticalBatches = await query.CountAsync(b => b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted && b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date >= today && b.ExpiryDate.Value.Date <= criticalLimit);
+                var validBatches = await query.CountAsync(b => b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted && b.ExpiryDate.HasValue && b.ExpiryDate.Value.Date > nearLimit);
+                var noExpiryBatches = await query.CountAsync(b => b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted && !b.ExpiryDate.HasValue);
 
                 return Ok(new BatchExpirySummaryDto
                 {

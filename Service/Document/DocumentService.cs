@@ -3282,21 +3282,42 @@ namespace MenuGoBE.Service.Document
                         await _repo.AddBatchAllocationAsync(batchAlloc);
                     }
                 }
-                else if (_fefoService != null)
+                else
                 {
-                    var exportAllocations = await _fefoService.AllocateAsync(binventory.Id, q_export);
-                    foreach (var alloc in exportAllocations)
+                    // Tự động phân bổ Lô xuất hủy ưu tiên Lô hết hạn và Lô cũ nhất trước
+                    var batches = (await _repo.GetBatchesByInventoryIdAsync(binventory.Id)) ?? new List<BInventoryBatch>();
+                    var candidateBatches = batches
+                        .Where(b => b.QuantityRemaining > 0 && b.Status != BatchStatus.Depleted)
+                        .OrderBy(b => b.ExpiryDate == null ? 1 : 0)
+                        .ThenBy(b => b.ExpiryDate)
+                        .ThenBy(b => b.ReceivedDate)
+                        .ToList();
+
+                    decimal remainingToAllocate = q_export;
+                    foreach (var b in candidateBatches)
                     {
+                        if (remainingToAllocate <= 0) break;
+                        decimal allocateQty = Math.Min(b.QuantityRemaining, remainingToAllocate);
+
+                        b.QuantityRemaining -= allocateQty;
+                        if (b.QuantityRemaining == 0)
+                        {
+                            b.Status = BatchStatus.Depleted;
+                        }
+                        b.UpdatedAt = DateTime.UtcNow;
+
                         var batchAlloc = new BatchAllocation
                         {
                             DocumentDetailId = detail.Id,
-                            BatchId = alloc.BatchId,
+                            BatchId = b.Id,
                             AllocationType = BatchAllocationType.Disposal,
-                            QuantityAllocated = alloc.QuantityAllocated,
-                            UnitCost = alloc.UnitCost,
+                            QuantityAllocated = allocateQty,
+                            UnitCost = b.UnitCost,
                             CreatedAt = DateTime.UtcNow
                         };
                         await _repo.AddBatchAllocationAsync(batchAlloc);
+
+                        remainingToAllocate -= allocateQty;
                     }
                 }
             }
