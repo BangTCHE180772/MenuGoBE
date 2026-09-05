@@ -1302,6 +1302,21 @@ namespace MenuGoBE.Service.Document
             }
             #endregion
 
+            #region Cập nhật công nợ còn lại (AmountDue) của phiếu Nhập kho gốc
+            if (parentImport != null)
+            {
+                var prevReturns = await _repo.GetDocumentsAsync(parentImport.BranchId, DocumentType.Return, DocumentStatus.Completed);
+                decimal totalReturnsForParent = prevReturns
+                    .Where(r => r.ParentDocumentId == parentImport.Id && r.Id != document.Id)
+                    .Sum(r => r.TotalAmount) + document.TotalAmount;
+
+                decimal parentDebtDeduction = ExtractDebtDeduction(parentImport.Note);
+                decimal parentEffectivePayable = Math.Max(0m, parentImport.TotalAmount - totalReturnsForParent);
+                parentImport.AmountDue = Math.Max(0m, (parentEffectivePayable - parentDebtDeduction) - parentImport.AmountPaid);
+                _repo.Update(parentImport);
+            }
+            #endregion
+
             _repo.Update(document);
             await _repo.SaveChangesAsync();
             return document;

@@ -21,8 +21,11 @@ namespace MenuGoBE.Dtos.Partner
         public DateTime ImportDate { get; set; }
         public decimal TotalAmount { get; set; }
         public decimal AmountPaid { get; set; }
+        public decimal ReturnedAmount { get; set; }
+        public decimal EffectivePayableAmount { get; set; }
         public decimal DebtAmount { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string PaymentStatus { get; set; } = string.Empty;
         public List<PartnerTransactionHistoryDto> Transactions { get; set; } = new List<PartnerTransactionHistoryDto>();
     }
 
