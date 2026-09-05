@@ -713,6 +713,27 @@ namespace MenuGoBE.Service
             return result;
         }
 
+        // Dùng lại món thừa (khách trả, bếp đã làm xong, còn trong 30p) cho một món
+        // đang chờ bếp làm (Waiting/Accepted) — khớp đúng món + số lượng thì dừng chế
+        // biến luôn, khỏi phải nấu trùng. Không đụng nguyên liệu vì đã trừ ở lần nấu gốc.
+        public async Task<bool> ApplyLeftoverReuseAsync(long orderDetailId, long leftoverId)
+        {
+            var detail = await _detailRepo.GetByIdAsync(orderDetailId);
+            if (detail == null) return false;
+
+            if (detail.CookingStatus != "Waiting" && detail.CookingStatus != "Accepted")
+            {
+                throw new InvalidOperationException("Chỉ có thể dùng lại món thừa cho món đang chờ chế biến (chưa bắt đầu nấu).");
+            }
+
+            await _leftoverRecordService.MarkUsedAsync(leftoverId, detail.ProductId, detail.Quantity, detail.Id);
+
+            detail.CookingStatus = "Ready";
+            await _detailRepo.SaveChangesAsync();
+
+            return true;
+        }
+
         public async Task<bool> CancelOrderDetailAsync(long orderDetailId, long? cancelledBy = null)
         {
             var entity = await _detailRepo.GetByIdAsync(orderDetailId);
