@@ -239,7 +239,7 @@ namespace MenuGoBE.Service
 
         #region Lấy danh sách phiếu nhập hàng của Nhà cung cấp
         /// <summary>
-        /// Lấy danh sách chứng từ nhập kho gắn với nhà cung cấp, hỗ trợ hiển thị cấn trừ công nợ.
+        /// Lấy danh sách chứng từ nhập kho gắn với nhà cung cấp, hỗ trợ cấn trừ công nợ và trừ hàng xuất trả.
         /// </summary>
         public async Task<List<PartnerImportDocumentDto>> GetPartnerImportDocumentsAsync(long partnerId)
         {
@@ -249,8 +249,21 @@ namespace MenuGoBE.Service
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
 
+            // Lấy danh sách các phiếu xuất trả hàng liên kết với các phiếu nhập
+            var returnDocs = await _context.Documents
+                .Where(d => d.PartnerId == partnerId && d.Type == DocumentType.Return && d.Status != DocumentStatus.Cancelled && d.ParentDocumentId != null)
+                .ToListAsync();
+
+            var returnDocsByParent = returnDocs
+                .GroupBy(r => r.ParentDocumentId!.Value)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
             return docs.Select(d =>
             {
+                var childReturns = returnDocsByParent.GetValueOrDefault(d.Id, new List<Models.Document>());
+                decimal returnedAmount = childReturns.Sum(r => r.TotalAmount);
+                decimal effectivePayableAmount = Math.Max(0m, d.TotalAmount - returnedAmount);
+
                 decimal debtDeduction = ExtractDebtDeduction(d.Note);
 
                 var txList = d.CashFlows.Where(cf => !cf.IsDeleted).Select(cf => new PartnerTransactionHistoryDto
@@ -264,6 +277,22 @@ namespace MenuGoBE.Service
                     Note = cf.Note ?? "Thanh toán cho nhà cung cấp",
                     PaymentMethod = cf.PaymentMethod.ToString()
                 }).OrderByDescending(t => t.TransactionDate).ToList();
+
+                // Bổ sung các bản ghi xuất trả hàng vào lịch sử giao dịch của phiếu nhập
+                foreach (var ret in childReturns)
+                {
+                    txList.Add(new PartnerTransactionHistoryDto
+                    {
+                        Id = $"DOC-RET-{ret.Id}",
+                        TransactionDate = ret.CreatedAt,
+                        TransactionType = "Xuất trả hàng",
+                        Code = ret.Code,
+                        ImportCode = d.Code,
+                        Amount = -ret.TotalAmount,
+                        Note = !string.IsNullOrWhiteSpace(ret.Note) ? ret.Note : $"Xuất trả hàng cho NCC #{ret.Code}",
+                        PaymentMethod = "Trừ giá trị hàng trả"
+                    });
+                }
 
                 // Ghi nhận giao dịch cấn trừ công nợ nếu có
                 if (debtDeduction > 0)
@@ -297,11 +326,26 @@ namespace MenuGoBE.Service
                     });
                 }
 
-                decimal debtAmount = debtDeduction > 0
-                    ? Math.Max(0m, (d.TotalAmount - debtDeduction) - d.AmountPaid)
-                    : (d.AmountDue ?? Math.Max(0m, d.TotalAmount - d.AmountPaid));
-
+                decimal debtAmount = Math.Max(0m, (effectivePayableAmount - debtDeduction) - d.AmountPaid);
                 decimal totalSettled = d.AmountPaid + debtDeduction;
+
+                string paymentStatus;
+                if (returnedAmount >= d.TotalAmount && d.TotalAmount > 0)
+                {
+                    paymentStatus = "Returned";
+                }
+                else if (debtAmount == 0)
+                {
+                    paymentStatus = "Paid";
+                }
+                else if (totalSettled > 0 || returnedAmount > 0)
+                {
+                    paymentStatus = "Partial";
+                }
+                else
+                {
+                    paymentStatus = "Unpaid";
+                }
 
                 return new PartnerImportDocumentDto
                 {
@@ -310,8 +354,11 @@ namespace MenuGoBE.Service
                     ImportDate = d.CreatedAt,
                     TotalAmount = d.TotalAmount,
                     AmountPaid = totalSettled,
+                    ReturnedAmount = returnedAmount,
+                    EffectivePayableAmount = effectivePayableAmount,
                     DebtAmount = debtAmount,
                     Status = d.Status.ToString(),
+                    PaymentStatus = paymentStatus,
                     Transactions = txList.OrderByDescending(t => t.TransactionDate).ToList()
                 };
             }).ToList();
@@ -338,7 +385,20 @@ namespace MenuGoBE.Service
                 throw new Exception("Không thể thanh toán cho phiếu nhập kho đã bị hủy.");
             }
 
-            decimal remainingDebt = Math.Max(0m, doc.TotalAmount - doc.AmountPaid);
+            // Tính tổng tiền hàng đã xuất trả cho phiếu nhập này
+            var returnedAmount = await _context.Documents
+                .Where(d => d.ParentDocumentId == doc.Id && d.Type == DocumentType.Return && d.Status != DocumentStatus.Cancelled)
+                .SumAsync(d => d.TotalAmount);
+
+            decimal debtDeduction = ExtractDebtDeduction(doc.Note);
+            decimal effectivePayable = Math.Max(0m, doc.TotalAmount - returnedAmount);
+            decimal remainingDebt = Math.Max(0m, (effectivePayable - debtDeduction) - doc.AmountPaid);
+
+            if (remainingDebt <= 0)
+            {
+                throw new Exception("Phiếu nhập này đã hoàn tất thanh toán hoặc đã xuất trả lại hàng, không còn dư nợ để thanh toán.");
+            }
+
             if (dto.Amount <= 0)
             {
                 throw new Exception("Số tiền thanh toán phải lớn hơn 0.");
@@ -351,7 +411,7 @@ namespace MenuGoBE.Service
 
             // Cập nhật số tiền đã trả trên chứng từ
             doc.AmountPaid += dto.Amount;
-            doc.AmountDue = Math.Max(0m, doc.TotalAmount - doc.AmountPaid);
+            doc.AmountDue = Math.Max(0m, (effectivePayable - debtDeduction) - doc.AmountPaid);
 
             // Sinh phiếu chi CashFlow thanh toán cho NCC
             var prefix = "PC";
