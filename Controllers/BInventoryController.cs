@@ -145,6 +145,7 @@ namespace MenuGoBE.Controllers
                     code = b.Product.SKUCode ?? $"SP{b.ProductId}",
                     type = b.Product.Type.ToString(),
                     unitName = b.Product.UnitConversions.Where(uc => uc.BaseId == null).Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty).FirstOrDefault() ?? "Đĩa",
+                    groupId = b.Product.GroupId,
                     groupName = b.Product.Group != null ? b.Product.Group.Name : "---",
                     description = b.Product.Description,
                     minStorage = b.Product.MinStorage,
