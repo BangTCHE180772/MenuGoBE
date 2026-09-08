@@ -23,6 +23,8 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
         {
             _mockRepo = new Mock<IDocumentRepository>();
             _mockRepo.Setup(r => r.SaveChangesAsync()).ReturnsAsync(true);
+            _mockRepo.Setup(r => r.GetBranchByIdAsync(It.IsAny<long>()))
+                .ReturnsAsync((long id) => new Branch { Id = id, Name = $"Chi nhánh {id}", Status = "Hoạt động", IsDeleted = false });
             var config = new MapperConfiguration(cfg => cfg.AddProfile<AutoMapperProfiles>(), Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = config.CreateMapper();
             _service = new DocumentService(_mockRepo.Object, _mapper);
@@ -377,6 +379,46 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
 
             var result = await _service.UpdateTransferPendingAsync(50, doc, 1);
             Assert.NotNull(result);
+        }
+
+        [Fact]
+        public async Task CreateTransferPendingAsync_SenderBranchInactive_ThrowsMenuGoException()
+        {
+            var doc = CreateValidTransferDocument();
+            _mockRepo.Setup(r => r.GetBranchByIdAsync(doc.BranchId))
+                .ReturnsAsync(new Branch { Id = doc.BranchId, Name = "Chi nhánh Đã Đóng", Status = "Ngừng kinh doanh", IsDeleted = false });
+
+            var ex = await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
+                _service.CreateTransferPendingAsync(doc, 1));
+            Assert.Equal(MenuGoBE.Exceptions.ErrorCodes.DocumentBranchInactive.Code, ex.Code);
+        }
+
+        [Fact]
+        public async Task CreateTransferPendingAsync_ReceiverBranchInactive_ThrowsMenuGoException()
+        {
+            var doc = CreateValidTransferDocument();
+            _mockRepo.Setup(r => r.GetBranchByIdAsync(doc.ToBranchId!.Value))
+                .ReturnsAsync(new Branch { Id = doc.ToBranchId.Value, Name = "Chi nhánh Nhận Đã Đóng", Status = "Ngừng kinh doanh", IsDeleted = false });
+
+            var ex = await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
+                _service.CreateTransferPendingAsync(doc, 1));
+            Assert.Equal(MenuGoBE.Exceptions.ErrorCodes.DocumentBranchInactive.Code, ex.Code);
+        }
+
+        [Fact]
+        public async Task ProcessTransferReceiptAsync_ReceiverBranchInactive_ThrowsMenuGoException()
+        {
+            var doc = CreateValidTransferDocument();
+            doc.Status = DocumentStatus.Completed;
+            doc.TransferStatus = DocumentTransferStatus.InTransit;
+
+            _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
+            _mockRepo.Setup(r => r.GetBranchByIdAsync(doc.ToBranchId!.Value))
+                .ReturnsAsync(new Branch { Id = doc.ToBranchId.Value, Name = "Chi nhánh Nhận Đã Đóng", Status = "Ngừng kinh doanh", IsDeleted = false });
+
+            var ex = await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() =>
+                _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Xác nhận nhận hàng", 2));
+            Assert.Equal(MenuGoBE.Exceptions.ErrorCodes.DocumentBranchInactive.Code, ex.Code);
         }
         #endregion
     }
