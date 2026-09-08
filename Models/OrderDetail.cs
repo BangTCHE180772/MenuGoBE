@@ -36,6 +36,20 @@ public class OrderDetail
     [ForeignKey("ProductId")]
     public Product Product { get; set; } = null!;
 
+    /// <summary>
+    /// Promotion đã áp dụng cho OrderDetail này (null = không có KM)
+    /// </summary>
+    public long? PromotionId { get; set; }
+
+    /// <summary>
+    /// Giá gốc trước khi áp dụng khuyến mãi
+    /// </summary>
+    [Column(TypeName = "decimal(18,4)")]
+    public decimal OriginalPrice { get; set; }
+
+    [ForeignKey("PromotionId")]
+    public Promotion? Promotion { get; set; }
+
     public int ReturnedQuantity { get; set; } = 0;
 
     [MaxLength(255)]
