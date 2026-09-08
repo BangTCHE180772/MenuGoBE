@@ -2077,6 +2077,9 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("RecommendedTimeMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SKUCode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2717,6 +2720,9 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsAutoCheckout")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHeadChef")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("ManagerApproved")

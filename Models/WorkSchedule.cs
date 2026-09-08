@@ -43,6 +43,14 @@ public class WorkSchedule
 
     public bool ManagerApproved { get; set; }
 
+    /// <summary>
+    /// Đánh dấu nhân viên này là bếp trưởng phụ trách chính cho ca làm việc này
+    /// (ngày + ca + chi nhánh cụ thể). Mỗi ca chỉ có tối đa 1 người giữ vai trò này —
+    /// đặt cờ mới sẽ tự động bỏ cờ của người trước đó trong cùng ca.
+    /// Thuần hiển thị/theo dõi, chưa gắn thêm quyền hạn nào.
+    /// </summary>
+    public bool IsHeadChef { get; set; } = false;
+
     public long CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
