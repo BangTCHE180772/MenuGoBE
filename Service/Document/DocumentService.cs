@@ -2439,7 +2439,7 @@ namespace MenuGoBE.Service.Document
             }
             #endregion
 
-            #region Quy tắc: Chi nhánh nhận (ToBranchId) phải khác Chi nhánh gửi (BranchId)
+            #region Quy tắc: Chi nhánh nhận (ToBranchId) phải khác Chi nhánh gửi (BranchId) và cả hai phải đang hoạt động
             if (!document.ToBranchId.HasValue || document.ToBranchId.Value <= 0)
             {
                 throw new MenuGoException(ErrorCodes.DocumentTransferBranchRequired, "Phiếu chuyển kho bắt buộc phải chọn Chi nhánh nhận (ToBranchId).");
@@ -2447,6 +2447,20 @@ namespace MenuGoBE.Service.Document
             if (document.ToBranchId.Value == document.BranchId)
             {
                 throw new MenuGoException(ErrorCodes.DocumentTransferBranchSame, "Chi nhánh nhận không được trùng với Chi nhánh gửi.");
+            }
+
+            // Kiểm tra trạng thái hoạt động của Chi nhánh gửi (BranchId)
+            var senderBranch = await _repo.GetBranchByIdAsync(document.BranchId);
+            if (senderBranch == null || senderBranch.IsDeleted || senderBranch.Status == "Ngừng kinh doanh")
+            {
+                throw new MenuGoException(ErrorCodes.DocumentBranchInactive, $"Chi nhánh gửi {(senderBranch != null ? $"'{senderBranch.Name}' " : "")}đã ngừng kinh doanh, không thể thực hiện chuyển hàng.");
+            }
+
+            // Kiểm tra trạng thái hoạt động của Chi nhánh nhận (ToBranchId)
+            var toBranch = await _repo.GetBranchByIdAsync(document.ToBranchId.Value);
+            if (toBranch == null || toBranch.IsDeleted || toBranch.Status == "Ngừng kinh doanh")
+            {
+                throw new MenuGoException(ErrorCodes.DocumentBranchInactive, $"Chi nhánh nhận {(toBranch != null ? $"'{toBranch.Name}' " : "")}đã ngừng kinh doanh, không thể chuyển hàng tới chi nhánh này.");
             }
             #endregion
 
@@ -2696,6 +2710,13 @@ namespace MenuGoBE.Service.Document
             }
 
             long receivingBranchId = document.ToBranchId.Value;
+
+            // Kiểm tra trạng thái hoạt động của Chi nhánh nhận nếu nhận hàng vào kho
+            var receivingBranch = await _repo.GetBranchByIdAsync(receivingBranchId);
+            if (status != DocumentTransferStatus.Rejected && (receivingBranch == null || receivingBranch.IsDeleted || receivingBranch.Status == "Ngừng kinh doanh"))
+            {
+                throw new MenuGoException(ErrorCodes.DocumentBranchInactive, $"Chi nhánh nhận {(receivingBranch != null ? $"'{receivingBranch.Name}' " : "")}đã ngừng kinh doanh, không thể thực hiện nhận hàng vào kho.");
+            }
 
             // Đóng băng thông tin Quản lý / Thủ kho phía Chi nhánh Nhận
             var receiverAccount = await _repo.GetAccountByIdAsync(userId);

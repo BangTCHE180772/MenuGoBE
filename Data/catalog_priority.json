@@ -1,0 +1,56 @@
+{
+  "GroupOrder": [
+    15,
+    4,
+    8,
+    3,
+    9,
+    12,
+    13,
+    7,
+    1,
+    5,
+    16,
+    14,
+    11,
+    2,
+    17,
+    10,
+    6
+  ],
+  "MenuOrder": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "GroupNames": [
+    "D\u1EE5ng c\u1EE5 b\u1EBFp",
+    "L\u1EA9u",
+    "\u0110\u1ED3 \u0103n nhanh",
+    "\u0102n v\u1EB7t \u0026 Khai v\u1ECB",
+    "\u0110\u1ED3 \u0103n tho\u1EA3i m\u00E1i",
+    "\u0110\u1ED3 h\u1ED9p",
+    "\u0110\u1ED3 \u00EDt b\u00E9o",
+    "\u0110\u1ED3 l\u1EA1nh",
+    "\u0110\u1ED3 n\u00F3ng",
+    "\u0110\u1ED3 u\u1ED1ng",
+    "Gia v\u1ECB",
+    "Gi\u1EA3i kh\u00E1t",
+    "Gi\u00E0u \u0111\u1EA1m",
+    "H\u1EA3i s\u1EA3n kh\u00E1c",
+    "N\u01B0\u1EDBc ch\u1EA5m",
+    "Tinh b\u1ED9t",
+    "Tr\u00E1ng mi\u1EC7ng"
+  ],
+  "MenuNames": [
+    "Th\u1EF1c \u0111\u01A1n ch\u00EDnh",
+    "Gi\u1EA3m b\u00E9o",
+    "T\u0103ng c\u00E2n",
+    "T\u1EADp th\u1EC3 h\u00ECnh",
+    "Menu 01",
+    "Menu 02"
+  ]
+}
