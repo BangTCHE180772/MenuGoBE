@@ -117,10 +117,11 @@ builder.Services.AddScoped<IBInventoryRepository, BInventoryRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
 builder.Services.AddScoped<IChatRepository, ChatRepository>();
+builder.Services.AddScoped<IPromotionRepository, PromotionRepository>();
 builder.Services.AddScoped<IShiftFeedbackRepository, ShiftFeedbackRepository>();
 
 // Service
-
+builder.Services.AddScoped<IPromotionService, PromotionService>();
 builder.Services.AddScoped<IChainService, ChainService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
 builder.Services.AddScoped<ILeftoverRecordService, LeftoverRecordService>();
