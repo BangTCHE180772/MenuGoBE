@@ -22,6 +22,11 @@ public class Customer
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Khách hàng có muốn nhận email thông báo khuyến mãi không
+    /// </summary>
+    public bool ReceivePromoEmails { get; set; } = true;
+
     // Navigation
     public ICollection<Order> Orders { get; set; } = new List<Order>();
 }

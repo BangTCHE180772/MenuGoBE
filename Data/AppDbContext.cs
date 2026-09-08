@@ -65,7 +65,13 @@ public class AppDbContext : DbContext
     public DbSet<ReservationDetail> ReservationDetails { get; set; } = null!;
     public DbSet<Payment> Payments { get; set; } = null!;
     public DbSet<Voucher> Vouchers { get; set; } = null!;
+    public DbSet<VoucherUsage> VoucherUsages { get; set; } = null!;
     public DbSet<OrderAssignment> OrderAssignments { get; set; } = null!;
+
+    // 7b. Promotion Module
+    public DbSet<Promotion> Promotions { get; set; } = null!;
+    public DbSet<PromotionProduct> PromotionProducts { get; set; } = null!;
+    public DbSet<PromotionBranch> PromotionBranches { get; set; } = null!;
 
     // 8. Device Module
     public DbSet<Device> Devices { get; set; } = null!;
@@ -157,6 +163,39 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<OrderDetail>()
             .HasIndex(od => new { od.ProductId, od.Status, od.CookingStatus })
             .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
+
+        // ── Promotion Module ────────────────────────────────────────────────
+
+        // PromotionScope enum → string conversion
+        modelBuilder.Entity<Promotion>()
+            .Property(p => p.Scope)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        // Unique index: 1 sản phẩm chỉ nằm trong 1 promotion 1 lần
+        modelBuilder.Entity<PromotionProduct>()
+            .HasIndex(pp => new { pp.PromotionId, pp.ProductId })
+            .IsUnique()
+            .HasDatabaseName("IX_PromotionProduct_Unique");
+
+        // Unique index: 1 chi nhánh chỉ nằm trong 1 promotion 1 lần
+        modelBuilder.Entity<PromotionBranch>()
+            .HasIndex(pb => new { pb.PromotionId, pb.BranchId })
+            .IsUnique()
+            .HasDatabaseName("IX_PromotionBranch_Unique");
+
+
+        // VoucherUsage: index cho query per-customer
+        modelBuilder.Entity<VoucherUsage>()
+            .HasIndex(vu => new { vu.VoucherId, vu.CustomerId })
+            .HasDatabaseName("IX_VoucherUsage_VoucherCustomer");
+
+        // OrderDetail → Promotion (optional FK, no cascade)
+        modelBuilder.Entity<OrderDetail>()
+            .HasOne(od => od.Promotion)
+            .WithMany()
+            .HasForeignKey(od => od.PromotionId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // ── 9. Inventory Module ─────────────────────────────────────────────
 
@@ -433,6 +472,19 @@ public class AppDbContext : DbContext
             .HasOne(srr => srr.Shift)
             .WithMany(s => s.RoleRequirements)
             .HasForeignKey(srr => srr.ShiftId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // ── Promotion Cascade (đặt SAU global Restrict) ──
+        modelBuilder.Entity<PromotionProduct>()
+            .HasOne(pp => pp.Promotion)
+            .WithMany(p => p.PromotionProducts)
+            .HasForeignKey(pp => pp.PromotionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PromotionBranch>()
+            .HasOne(pb => pb.Promotion)
+            .WithMany(p => p.PromotionBranches)
+            .HasForeignKey(pb => pb.PromotionId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 
