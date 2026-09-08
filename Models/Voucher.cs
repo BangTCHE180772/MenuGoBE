@@ -42,7 +42,14 @@ public class Voucher
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Giới hạn số lần sử dụng mỗi khách hàng. null = không giới hạn.
+    /// </summary>
+    public int? MaxUsagePerCustomer { get; set; }
+
     // Navigation
     [ForeignKey("BranchId")]
     public Branch? Branch { get; set; }
+
+    public ICollection<VoucherUsage> Usages { get; set; } = new List<VoucherUsage>();
 }
