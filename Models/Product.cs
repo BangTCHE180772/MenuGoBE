@@ -45,6 +45,12 @@ public class Product
     /// </summary>
     public int? ShelfLifeDays { get; set; }
 
+    /// <summary>
+    /// Thời gian chế biến gợi ý (phút) — chủ yếu dùng cho món Chế biến (Processed)
+    /// để bếp/khách ước lượng thời gian chờ.
+    /// </summary>
+    public int? RecommendedTimeMinutes { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
