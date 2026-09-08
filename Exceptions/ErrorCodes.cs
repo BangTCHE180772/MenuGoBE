@@ -322,6 +322,12 @@ public static class ErrorCodes
         404
     );
 
+    public static readonly ErrorResult DocumentBranchInactive = new(
+        2170,
+        "Chi nhánh đã ngừng kinh doanh, không thể thực hiện giao dịch hoặc chuyển hàng.",
+        400
+    );
+
     public static readonly ErrorResult DocumentNotFound = new(
         2108, 
         "Không tìm thấy chứng từ.", 
