@@ -38,6 +38,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
             _mapper = config.CreateMapper();
 
             var hubContextMock = new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>();
+            var hubClientsMock = new Mock<Microsoft.AspNetCore.SignalR.IHubClients>();
+            var hubClientProxyMock = new Mock<Microsoft.AspNetCore.SignalR.IClientProxy>();
+            hubClientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(hubClientProxyMock.Object);
+            hubClientsMock.Setup(c => c.All).Returns(hubClientProxyMock.Object);
+            hubContextMock.Setup(h => h.Clients).Returns(hubClientsMock.Object);
             var notificationRepoMock = new Mock<INotificationRepository>();
             var options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -461,17 +466,20 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
         #region DeleteAsync
 
         [Fact]
-        public async Task DeleteAsync_WhenScheduleExists_ShouldDeleteAndReturnTrue()
+        public async Task DeleteAsync_WhenScheduleExists_ShouldDeleteAndNotifyEmployee()
         {
             // Arrange
             long scheduleId = 1;
-            var schedule = new WorkSchedule { Id = scheduleId };
+            long cancelledBy = 5;
+            var schedule = new WorkSchedule { Id = scheduleId, AccountId = 10, BranchId = 1, ShiftId = 2, WorkDate = new DateOnly(2026, 9, 8) };
             _repoMock.Setup(r => r.GetByIdAsync(scheduleId)).ReturnsAsync(schedule);
             _repoMock.Setup(r => r.DeleteAsync(scheduleId)).Returns(Task.CompletedTask);
             _repoMock.Setup(r => r.SaveChangesAsync()).Returns(Task.CompletedTask);
+            _shiftRepoMock.Setup(r => r.GetByIdAsync(schedule.ShiftId)).ReturnsAsync(new Shift { Id = 2, Name = "Ca sáng" });
+            _accountRepoMock.Setup(r => r.GetByIdAsync(cancelledBy)).ReturnsAsync(new Account { Id = cancelledBy, Name = "Quản lý A" });
 
             // Act
-            var result = await _service.DeleteAsync(scheduleId);
+            var result = await _service.DeleteAsync(scheduleId, "Nhân viên xin nghỉ đột xuất", cancelledBy);
 
             // Assert
             Assert.True(result);
@@ -487,10 +495,25 @@ namespace MenuGoTest.UnitTests.ServiceTest.WorkScheduleServiceTest
             _repoMock.Setup(r => r.GetByIdAsync(scheduleId)).ReturnsAsync((WorkSchedule?)null);
 
             // Act
-            var result = await _service.DeleteAsync(scheduleId);
+            var result = await _service.DeleteAsync(scheduleId, "Lý do bất kỳ", 5);
 
             // Assert
             Assert.False(result);
+            _repoMock.Verify(r => r.DeleteAsync(It.IsAny<long>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("   ")]
+        [InlineData(null)]
+        public async Task DeleteAsync_WhenReasonMissing_ShouldThrowAndNotDelete(string reason)
+        {
+            // Arrange
+            long scheduleId = 1;
+
+            // Act & Assert
+            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.DeleteAsync(scheduleId, reason, 5));
+            _repoMock.Verify(r => r.GetByIdAsync(It.IsAny<long>()), Times.Never);
             _repoMock.Verify(r => r.DeleteAsync(It.IsAny<long>()), Times.Never);
         }
 

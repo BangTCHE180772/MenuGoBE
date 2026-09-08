@@ -23,6 +23,7 @@ namespace MenuGoBE.Dtos.Product
         public decimal MinStorage { get; set; }
         public decimal MaxStorage { get; set; }
         public decimal SellPrice { get; set; }
+        public int? RecommendedTimeMinutes { get; set; }
         public DateTime CreatedAt { get; set; }
 
         public List<long>? MenuIds { get; set; }
