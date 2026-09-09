@@ -10,4 +10,7 @@ public interface IVoucherRepository
     Task<Voucher> CreateAsync(Voucher voucher);
     Task<bool> UpdateAsync(Voucher voucher);
     Task<bool> DeleteAsync(long id);
+    Task<int> GetUsageCountAsync(long voucherId, long customerId);
+    Task RecordUsageAsync(VoucherUsage usage);
+    Task<List<Voucher>> GetAvailableAsync(long? customerId = null);
 }
