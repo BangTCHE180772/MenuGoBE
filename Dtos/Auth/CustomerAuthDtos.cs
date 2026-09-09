@@ -36,6 +36,7 @@ public class CustomerProfileDto
     public string? Email { get; set; }
     public int Point { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool ReceivePromoEmails { get; set; }
 }
 
 public class CustomerLoginResponseDto
