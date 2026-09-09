@@ -40,5 +40,12 @@ namespace MenuGoBE.Repositories
             _context.Customers.Update(customer);
             await Task.CompletedTask;
         }
+
+        public async Task<List<Customer>> GetPromoEmailSubscribersAsync()
+        {
+            return await _context.Customers
+                .Where(c => c.ReceivePromoEmails && !string.IsNullOrEmpty(c.Email))
+                .ToListAsync();
+        }
     }
 }

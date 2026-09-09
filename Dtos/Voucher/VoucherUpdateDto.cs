@@ -27,4 +27,5 @@ public class VoucherUpdateDto
 
     public int Quantity { get; set; }
     public bool IsActive { get; set; }
+    public int? MaxUsagePerCustomer { get; set; }
 }

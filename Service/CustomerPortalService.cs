@@ -105,6 +105,8 @@ namespace MenuGoBE.Service
                 customer.HashedPassword = HashHelper.HashPassword(dto.NewPassword);
             }
 
+            customer.ReceivePromoEmails = dto.ReceivePromoEmails;
+
             await _customerRepo.UpdateAsync(customer);
             await _context.SaveChangesAsync();
 
