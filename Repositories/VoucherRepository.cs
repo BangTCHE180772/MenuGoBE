@@ -50,4 +50,32 @@ public class VoucherRepository : IVoucherRepository
         _context.Vouchers.Remove(voucher);
         return await _context.SaveChangesAsync() > 0;
     }
+
+    public async Task<int> GetUsageCountAsync(long voucherId, long customerId)
+    {
+        return await _context.VoucherUsages
+            .CountAsync(vu => vu.VoucherId == voucherId && vu.CustomerId == customerId);
+    }
+
+    public async Task RecordUsageAsync(VoucherUsage usage)
+    {
+        _context.VoucherUsages.Add(usage);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<Voucher>> GetAvailableAsync(long? customerId = null)
+    {
+        var now = DateTime.UtcNow;
+        var query = _context.Vouchers
+            .Include(v => v.Branch)
+            .Where(v => v.IsActive && v.StartDate <= now && v.EndDate >= now && v.UsedCount < v.Quantity);
+
+        if (customerId.HasValue)
+        {
+            query = query.Where(v => !v.MaxUsagePerCustomer.HasValue ||
+                                      v.Usages.Count(u => u.CustomerId == customerId.Value) < v.MaxUsagePerCustomer.Value);
+        }
+
+        return await query.ToListAsync();
+    }
 }
