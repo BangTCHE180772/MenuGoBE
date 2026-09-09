@@ -234,9 +234,43 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Nhận đủ hàng", 2);
 
             Assert.Equal(DocumentTransferStatus.Received, result.TransferStatus);
+            Assert.Equal(DocumentStatus.Completed, result.Status);
             Assert.NotNull(result.ResponseDate);
             Assert.Equal(40, bInvReceiver.Quantity); // 30 + 10 = 40
+            Assert.Equal(10, doc.DocumentDetails.First().ReceivedQuantity); // 100%
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()), Times.Once);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.IsAny<CashFlow>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task ProcessTransferReceiptAsync_PreservesCogsUnitCost_SetsNonZeroUnitCostOnReceiverLedger()
+        {
+            var doc = CreateValidTransferDocument();
+            doc.Status = DocumentStatus.Completed;
+            doc.TransferStatus = DocumentTransferStatus.InTransit;
+            doc.DocumentDetails.First().SnapshotAvgCost = 25000m;
+
+            var bInvSender = CreateValidBInventory(10, branchId: 1, qty: 90);
+            var bInvReceiver = CreateValidBInventory(20, branchId: 2, qty: 0);
+
+            _mockRepo.Setup(r => r.GetByIdAsync(50)).ReturnsAsync(doc);
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(10)).ReturnsAsync(bInvSender);
+            _mockRepo.Setup(r => r.GetBInventoryByBranchAndProductAsync(2, 500)).ReturnsAsync(bInvReceiver);
+            _mockRepo.Setup(r => r.GetBInventoryByIdAsync(20)).ReturnsAsync(bInvReceiver);
+
+            InventoryLedger? capturedLedger = null;
+            _mockRepo.Setup(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()))
+                .Callback<InventoryLedger>(l => capturedLedger = l)
+                .Returns(Task.CompletedTask);
+
+            var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Received, null, "Nhận hàng giữ giá vốn", 2);
+
+            Assert.NotNull(capturedLedger);
+            Assert.Equal(25000m, capturedLedger.UnitCost);
+            Assert.True(capturedLedger.UnitCost > 0);
+            Assert.Equal(250000m, capturedLedger.InventoryValueDelta);
+            Assert.Equal(25000m, bInvReceiver.Avg);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.IsAny<CashFlow>()), Times.Never);
         }
 
         [Fact]
@@ -330,9 +364,11 @@ namespace MenuGoTest.UnitTests.ServiceTest.DocumentServiceTest
             var result = await _service.ProcessTransferReceiptAsync(50, DocumentTransferStatus.Rejected, null, "Hàng vỡ hỏng do vận chuyển", 2);
 
             Assert.Equal(DocumentTransferStatus.Rejected, result.TransferStatus);
+            Assert.Equal(DocumentStatus.Cancelled, result.Status);
             Assert.NotNull(result.ResponseDate);
             Assert.Equal(100, bInvSender.Quantity); // 90 + 10 = 100 (Restored to sender)
             _mockRepo.Verify(r => r.AddInventoryLedgerAsync(It.IsAny<InventoryLedger>()), Times.Once);
+            _mockRepo.Verify(r => r.AddCashFlowAsync(It.IsAny<CashFlow>()), Times.Never);
         }
 
         [Fact]

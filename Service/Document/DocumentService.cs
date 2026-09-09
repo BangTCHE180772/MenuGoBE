@@ -2568,12 +2568,14 @@ namespace MenuGoBE.Service.Document
             }
         }
 
+        #region Xử lý chốt phiếu Chuyển kho tại Chi nhánh Gửi (InTransit)
         /// <summary>
         /// Thực thi chốt phiếu Chuyển kho Completed tại Chi nhánh Gửi:
         /// 1. Kiểm tra tồn kho kho gửi (BInventory). Ném lỗi từ chối nếu không đủ hàng xuất.
         /// 2. Trừ tồn kho kho gửi. Nếu kho gửi về 0 -> Triệt tiêu LeftOver kho gửi.
         /// 3. Ghi thẻ Sổ kho InventoryLedger cho chi nhánh gửi (QuantityDelta âm).
         /// 4. Đổi TransferStatus -> InTransit.
+        /// (Quy trình hạch toán tập trung: Không sinh phiếu CashFlow).
         /// </summary>
         private async Task ProcessTransferCompletedAsync(Models.Document document, long userId)
         {
@@ -2581,6 +2583,7 @@ namespace MenuGoBE.Service.Document
 
             foreach (var detail in document.DocumentDetails)
             {
+                // Kiểm tra tồn kho chi nhánh gửi
                 var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                 if (binventorySend == null)
                 {
@@ -2598,6 +2601,7 @@ namespace MenuGoBE.Service.Document
                     throw new MenuGoException(ErrorCodes.DocumentInsufficientInventory, $"Sản phẩm '{productName}' tại chi nhánh gửi không đủ tồn kho để chuyển. Số lượng yêu cầu: {detail.BaseQuantity:N3}, Tồn hiện tại: {binventorySend.Quantity:N3}.");
                 }
 
+                // Trừ tồn kho và tính giá trị xuất kho bên gửi
                 decimal leftover_old = binventorySend.LeftOver;
                 decimal val_delta;
 
@@ -2614,6 +2618,7 @@ namespace MenuGoBE.Service.Document
                     val_delta = -(detail.BaseQuantity * binventorySend.Avg);
                 }
 
+                // Ghi nhận thẻ kho chi nhánh gửi
                 var ledgerSend = new InventoryLedger
                 {
                     BInventoryId = binventorySend.Id,
@@ -2664,35 +2669,22 @@ namespace MenuGoBE.Service.Document
                 }
             }
 
-            // Sinh phiếu CashFlow Thu tiền (Inflow) tự động cho chi nhánh gửi (Bên A)
-            var cashFlowSend = new CashFlow
-            {
-                BranchId = document.BranchId,
-                DocumentId = document.Id,
-                PartnerId = document.PartnerId,
-                Code = $"CF_CK-{document.Code}",
-                BusinessDate = DateTime.UtcNow,
-                Direction = CashFlowDirection.Inflow,
-                Type = CashFlowDetailType.Refund,
-                PaymentMethod = PaymentMethod.Cash,
-                Status = CashFlowStatus.Completed,
-                TotalAmount = document.TotalAmount,
-                Note = $"Thu chuyển kho sang chi nhánh nhận từ phiếu {document.Code}",
-                CreatedAt = DateTime.UtcNow
-            };
-            await _repo.AddCashFlowAsync(cashFlowSend);
-
+            // Chuyển trạng thái sang đang vận chuyển
             document.TransferStatus = DocumentTransferStatus.InTransit;
         }
+        #endregion
 
+        #region Xử lý duyệt nhận hoặc từ chối phiếu chuyển kho tại Chi nhánh Nhận
         /// <summary>
-        /// Xử lý nhận hàng / từ chối hàng tại Chi nhánh Nhận khi phiếu ở trạng thái InTransit:
-        /// - Rejected: Hàng hóa được cộng hoàn trả lại kho chi nhánh gửi. Bắt buộc có note lý do.
-        /// - Received: Nhận đủ 100%. Cộng kho chi nhánh nhận, tính lại Avg & LeftOver cho chi nhánh nhận, ghi Sổ kho nhận.
-        /// - PartialReceived: Nhận một phần. Cộng số lượng thực nhận vào kho chi nhánh nhận, tính lại Avg & LeftOver, ghi Sổ kho nhận.
+        /// Xử lý nhận hàng / từ chối hàng tại Chi nhánh Nhận khi phiếu ở trạng thái InTransit (Hạch toán tập trung):
+        /// - Rejected / Cancelled: Từ chối toàn bộ 100%, hoàn trả hàng về kho chi nhánh gửi.
+        /// - Received / Completed: Chấp nhận toàn bộ 100%, cộng tồn kho B, bảo toàn giá vốn SnapshotAvgCost từ kho A, tính lại Avg cho kho B, ghi thẻ kho Transfer.
+        /// - PartialReceived: Nghiêm cấm nhận một phần.
+        /// - Tuyệt đối không sinh CashFlow.
         /// </summary>
         public async Task<Models.Document> ProcessTransferReceiptAsync(long documentId, DocumentTransferStatus status, List<DocumentDetail>? receivedDetails, string? note, long userId)
         {
+            // Kiểm tra chứng từ chuyển kho hợp lệ
             var document = await _repo.GetByIdAsync(documentId);
             if (document == null || document.Type != DocumentType.Transfer)
             {
@@ -2711,14 +2703,15 @@ namespace MenuGoBE.Service.Document
 
             long receivingBranchId = document.ToBranchId.Value;
 
-            // Kiểm tra trạng thái hoạt động của Chi nhánh nhận nếu nhận hàng vào kho
+            // Kiểm tra trạng thái hoạt động của Chi nhánh nhận
             var receivingBranch = await _repo.GetBranchByIdAsync(receivingBranchId);
-            if (status != DocumentTransferStatus.Rejected && (receivingBranch == null || receivingBranch.IsDeleted || receivingBranch.Status == "Ngừng kinh doanh"))
+            if (status != DocumentTransferStatus.Rejected && status != DocumentTransferStatus.Cancelled &&
+                (receivingBranch == null || receivingBranch.IsDeleted || receivingBranch.Status == "Ngừng kinh doanh"))
             {
                 throw new MenuGoException(ErrorCodes.DocumentBranchInactive, $"Chi nhánh nhận {(receivingBranch != null ? $"'{receivingBranch.Name}' " : "")}đã ngừng kinh doanh, không thể thực hiện nhận hàng vào kho.");
             }
 
-            // Đóng băng thông tin Quản lý / Thủ kho phía Chi nhánh Nhận
+            // Đóng băng thông tin người nhận phía Chi nhánh Nhận
             var receiverAccount = await _repo.GetAccountByIdAsync(userId);
             document.ReceiverAccountId = userId;
             document.SnapshotReceiverName = receiverAccount?.Name ?? string.Empty;
@@ -2731,12 +2724,17 @@ namespace MenuGoBE.Service.Document
                 throw new MenuGoException(ErrorCodes.DocumentTransferReceiptNoteRequired, "Bắt buộc phải nhập Lý do / Ghi chú (Note) khi xác nhận nhận hàng hoặc từ chối nhận hàng.");
             }
 
-            if (status == DocumentTransferStatus.Rejected)
+            if (status == DocumentTransferStatus.PartialReceived)
             {
-                #region Kịch bản 1: Từ Chối Nhận Hàng (Rejected)
+                throw new MenuGoException(ErrorCodes.DocumentTransferPartialNotAllowed, "Không được phép nhận một phần. Vui lòng chọn Chấp nhận toàn bộ hoặc Từ chối nhận.");
+            }
+
+            if (status == DocumentTransferStatus.Rejected || status == DocumentTransferStatus.Cancelled)
+            {
+                // Ghi nhận lý do từ chối
                 document.Note = string.IsNullOrWhiteSpace(document.Note) ? $"[TỪ CHỐI]: {note}" : $"{document.Note} | [TỪ CHỐI]: {note}";
 
-                // Trả hàng về kho chi nhánh gửi
+                // Hoàn trả 100% hàng về kho chi nhánh gửi
                 foreach (var detail in document.DocumentDetails)
                 {
                     var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
@@ -2751,7 +2749,8 @@ namespace MenuGoBE.Service.Document
                     decimal q_old = binventorySend.Quantity;
                     decimal avg_old = binventorySend.Avg;
                     decimal leftover_old = binventorySend.LeftOver;
-                    decimal ret_value = detail.BaseQuantity * detail.SnapshotAvgCost;
+                    decimal ret_cost = detail.SnapshotAvgCost > 0 ? detail.SnapshotAvgCost : (binventorySend.Avg > 0 ? binventorySend.Avg : (detail.UnitPrice > 0 ? detail.UnitPrice : 1m));
+                    decimal ret_value = detail.BaseQuantity * ret_cost;
 
                     decimal b1 = (q_old * avg_old) + leftover_old + ret_value;
                     decimal b2 = q_old + detail.BaseQuantity;
@@ -2780,7 +2779,7 @@ namespace MenuGoBE.Service.Document
                         RunningQuantity = b2,
                         RunningInventoryValue = c1,
                         RunningAverageCost = avg_new,
-                        UnitCost = detail.SnapshotAvgCost,
+                        UnitCost = ret_cost,
                         CreatedAt = DateTime.UtcNow
                     };
 
@@ -2814,22 +2813,21 @@ namespace MenuGoBE.Service.Document
                 }
 
                 document.TransferStatus = DocumentTransferStatus.Rejected;
-                #endregion
+                document.Status = DocumentStatus.Cancelled;
             }
-            else if (status == DocumentTransferStatus.PartialReceived)
+            else if (status == DocumentTransferStatus.Received || status == DocumentTransferStatus.Completed)
             {
-                throw new MenuGoException(ErrorCodes.DocumentTransferPartialNotAllowed, "Không được phép nhận một phần. Vui lòng chọn Nhận đủ hoặc Từ chối nhận.");
-            }
-            else if (status == DocumentTransferStatus.Received)
-            {
-                #region Kịch bản 2: Nhận Đủ (Received) - Tự động tạo phiếu nhập kho & cashflow chi
-                var newImportDetails = new List<Models.DocumentDetail>();
+                // Chấp nhận toàn bộ: Tăng tồn kho và bảo toàn giá vốn COGS cho kho chi nhánh nhận
                 foreach (var detail in document.DocumentDetails)
                 {
-                    // Lấy hoặc tạo BInventory tại chi nhánh nhận
+                    // Lấy thông tin kho gửi để truy xuất ProductId
                     var binventorySend = await _repo.GetBInventoryByIdAsync(detail.BInventoryId);
                     if (binventorySend == null) continue;
 
+                    // Tự động gán ReceivedQuantity = 100% Quantity đã gửi
+                    detail.ReceivedQuantity = detail.Quantity;
+
+                    // Tìm hoặc tạo BInventory tại chi nhánh nhận
                     var binventoryRec = await _repo.GetBInventoryByBranchAndProductAsync(receivingBranchId, binventorySend.ProductId);
                     if (binventoryRec == null)
                     {
@@ -2845,76 +2843,71 @@ namespace MenuGoBE.Service.Document
                         await _repo.SaveChangesAsync();
                     }
 
-                    var newImportDetail = new Models.DocumentDetail
+                    // Đơn giá vốn chuyển kho: Lấy đúng SnapshotAvgCost từ kho gửi (tuyệt đối không 0đ)
+                    decimal cogsUnitCost = detail.SnapshotAvgCost > 0 
+                        ? detail.SnapshotAvgCost 
+                        : (binventorySend.Avg > 0 ? binventorySend.Avg : (detail.UnitPrice > 0 ? detail.UnitPrice : 1m));
+                    decimal importValue = detail.BaseQuantity * cogsUnitCost;
+
+                    // Cập nhật giá vốn bình quân gia quyền tại kho nhận B
+                    decimal q_old = binventoryRec.Quantity;
+                    decimal avg_old = binventoryRec.Avg;
+                    decimal leftover_old = binventoryRec.LeftOver;
+
+                    decimal b1 = (q_old * avg_old) + leftover_old + importValue;
+                    decimal b2 = q_old + detail.BaseQuantity;
+                    decimal avg_new = (b2 > 0) ? Math.Round(b1 / b2, 6) : cogsUnitCost;
+                    decimal c1 = avg_new * b2;
+                    decimal leftover_new = b1 - c1;
+
+                    binventoryRec.Quantity = b2;
+                    binventoryRec.Avg = avg_new;
+                    binventoryRec.LeftOver = leftover_new;
+
+                    // Ghi thẻ Sổ kho InventoryLedger (Transfer In) cho chi nhánh nhận
+                    var ledgerRec = new InventoryLedger
                     {
                         BInventoryId = binventoryRec.Id,
-                        Quantity = detail.Quantity,
-                        UnitPrice = detail.UnitPrice,
-                        BaseQuantity = detail.BaseQuantity,
-                        ConversionRate = detail.ConversionRate,
-                        SnapshotProductName = detail.SnapshotProductName,
-                        SnapshotProductCode = detail.SnapshotProductCode,
-                        SnapshotUnitName = detail.SnapshotUnitName,
-                        SnapshotBaseUnitName = detail.SnapshotBaseUnitName,
-                        BatchCodeSnapshot = detail.BatchCodeSnapshot,
-                        ManufactureDateSnapshot = detail.ManufactureDateSnapshot,
-                        ExpiryDateSnapshot = detail.ExpiryDateSnapshot
+                        DocumentId = document.Id,
+                        PostedAt = DateTime.UtcNow,
+                        PostedBy = userId,
+                        DocumentType = DocumentType.Transfer,
+                        SnapshotPostedByName = document.SnapshotReceiverName ?? receiverAccount?.Name ?? string.Empty,
+                        SnapshotBranchName = receivingBranch?.Name ?? string.Empty,
+                        SnapshotProductName = !string.IsNullOrWhiteSpace(detail.SnapshotProductName) ? detail.SnapshotProductName : (binventorySend.Product?.Name ?? string.Empty),
+                        SnapshotUnitName = !string.IsNullOrWhiteSpace(detail.SnapshotUnitName) ? detail.SnapshotUnitName : string.Empty,
+                        ConversionRateSnapshot = detail.ConversionRate > 0 ? detail.ConversionRate : 1m,
+                        QuantityDelta = +detail.BaseQuantity,
+                        InventoryValueDelta = +importValue,
+                        RunningQuantity = b2,
+                        RunningInventoryValue = c1,
+                        RunningAverageCost = avg_new,
+                        UnitCost = cogsUnitCost,
+                        CreatedAt = DateTime.UtcNow
                     };
-                    newImportDetails.Add(newImportDetail);
+
+                    await _repo.AddInventoryLedgerAsync(ledgerRec);
                 }
 
-                var newImportDoc = new Models.Document
-                {
-                    BranchId = receivingBranchId,
-                    Type = DocumentType.Import,
-                    Status = DocumentStatus.Completed,
-                    CreatedBy = userId,
-                    PostedBy = userId,
-                    CreatedAt = DateTime.UtcNow,
-                    OrderDate = DateTime.UtcNow,
-                    PostedAt = DateTime.UtcNow,
-                    TotalAmount = document.TotalAmount,
-                    AmountPaid = document.TotalAmount,
-                    AmountDue = 0m,
-                    Note = $"Nhập kho tự động từ phiếu chuyển kho #{document.Code} của chi nhánh {document.SnapshotBranchName}",
-                    DocumentDetails = newImportDetails,
-                    ParentDocumentId = document.Id
-                };
-
-                await _repo.AddAsync(newImportDoc);
-                await _repo.SaveChangesAsync();
-
-                await GenerateOrValidateImportCodeAsync(newImportDoc);
-                await FreezeDocumentSnapshotsAsync(newImportDoc, userId, isSoftDelete: false);
-                await ProcessWeightedAvgCostAndLedgerAsync(newImportDoc, userId);
-                await CreateImportCashFlowAsync(newImportDoc);
-
-                _repo.Update(newImportDoc);
-                await _repo.SaveChangesAsync();
-
-                // Cập nhật số lượng thực nhận 100% cho phiếu chuyển kho gốc
-                foreach (var detail in document.DocumentDetails)
-                {
-                    detail.ReceivedQuantity = detail.BaseQuantity;
-                }
-
+                // Cập nhật ghi chú và trạng thái phiếu
                 if (!string.IsNullOrWhiteSpace(note))
                 {
                     document.Note = string.IsNullOrWhiteSpace(document.Note) ? note : $"{document.Note} | {note}";
                 }
 
-                document.TransferStatus = status;
-                #endregion
+                document.TransferStatus = DocumentTransferStatus.Received;
+                document.Status = DocumentStatus.Completed;
             }
             else
             {
-                throw new MenuGoException(ErrorCodes.DocumentTransferReceiptStatusInvalid, "Trạng thái nhận hàng không hợp lệ. Chỉ chấp nhận Received, PartialReceived hoặc Rejected.");
+                throw new MenuGoException(ErrorCodes.DocumentTransferReceiptStatusInvalid, "Trạng thái nhận hàng không hợp lệ. Chỉ chấp nhận Received (Chấp nhận) hoặc Rejected (Từ chối).");
             }
 
             _repo.Update(document);
             await _repo.SaveChangesAsync();
             return document;
         }
+        #endregion
         #endregion
 
         #region API Handlers cho Transfer
