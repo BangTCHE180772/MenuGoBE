@@ -24,4 +24,5 @@ public class VoucherCreateDto
 
     public int Quantity { get; set; }
     public bool IsActive { get; set; } = true;
+    public int? MaxUsagePerCustomer { get; set; }
 }
