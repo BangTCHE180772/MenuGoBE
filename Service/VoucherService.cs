@@ -112,6 +112,19 @@ public class VoucherService : IVoucherService
         if (existing != null && existing.Id != dto.Id)
             throw new Exception("Mã Voucher đã tồn tại ở chương trình khác.");
 
+        if (v.UsedCount > 0)
+        {
+            if (v.Code != dto.Code.ToUpper() ||
+                v.DiscountType != dto.DiscountType ||
+                v.DiscountValue != dto.DiscountValue ||
+                v.MaxDiscount != dto.MaxDiscount ||
+                v.MinOrderValue != dto.MinOrderValue ||
+                v.BranchId != dto.BranchId)
+            {
+                throw new Exception("Voucher đã được khách hàng sử dụng. Không thể thay đổi mã voucher hoặc các thông số tài chính.");
+            }
+        }
+
         bool wasActive = v.IsActive;
 
         v.Code = dto.Code.ToUpper();
@@ -140,6 +153,11 @@ public class VoucherService : IVoucherService
 
     public async Task<bool> DeleteAsync(long id)
     {
+        var v = await _repo.GetByIdAsync(id);
+        if (v != null && v.UsedCount > 0)
+        {
+            throw new Exception("Không thể xóa: Voucher này đã được khách hàng sử dụng. Để ngừng áp dụng, vui lòng chọn Sửa và tắt trạng thái Hoạt động.");
+        }
         return await _repo.DeleteAsync(id);
     }
 

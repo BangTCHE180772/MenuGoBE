@@ -62,9 +62,16 @@ public class VoucherController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(long id)
     {
-        var result = await _service.DeleteAsync(id);
-        if (!result) return NotFound(new { message = "Không tìm thấy Voucher để xóa" });
-        return Ok(new { message = "Xóa thành công" });
+        try
+        {
+            var result = await _service.DeleteAsync(id);
+            if (!result) return NotFound(new { message = "Không tìm thấy Voucher để xóa" });
+            return Ok(new { message = "Xóa thành công" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpGet("check")]

@@ -16,6 +16,7 @@ public class PromotionDto
     public DateTime EndDate { get; set; }
     public bool IsActive { get; set; }
     public string Status { get; set; } = string.Empty; // Upcoming, Active, Expired
+    public bool HasBeenUsed { get; set; }
     
     // Detailed info
     public List<PromotionProductDto> Products { get; set; } = new List<PromotionProductDto>();
