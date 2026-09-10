@@ -10,5 +10,7 @@ public interface IVoucherService
     Task<bool> UpdateAsync(VoucherUpdateDto dto);
     Task<bool> DeleteAsync(long id);
     
-    Task<VoucherCheckResponseDto> CheckVoucherAsync(string code, long branchId, decimal totalOrderAmount);
+    Task<VoucherCheckResponseDto> CheckVoucherAsync(string code, long branchId, decimal totalOrderAmount, long? customerId = null);
+    Task RecordVoucherUsageAsync(long voucherId, long customerId, long? orderId);
+    Task<List<VoucherDto>> GetAvailableAsync(long? customerId = null);
 }

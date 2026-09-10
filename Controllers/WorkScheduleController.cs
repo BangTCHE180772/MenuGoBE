@@ -245,7 +245,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public async Task<IActionResult> Delete(long id, [FromBody] CancelWorkScheduleDto dto)
         {
             var currentUserId = GetCurrentAccountId();
             if (!currentUserId.HasValue)
@@ -273,7 +273,7 @@ namespace MenuGoBE.Controllers
 
             try
             {
-                var result = await _service.DeleteAsync(id);
+                var result = await _service.DeleteAsync(id, dto?.Reason ?? string.Empty, currentUserId.Value);
                 if (!result)
                     return NotFound(new { message = "Không tìm thấy lịch làm việc để xóa" });
 
