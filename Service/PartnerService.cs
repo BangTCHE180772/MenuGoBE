@@ -76,7 +76,9 @@ namespace MenuGoBE.Service
                 }
             }
 
-            return MapToViewDto(partner);
+            // Tính toán số dư công nợ cho đối tác
+            var populated = await PopulatePartnersRemainingDebtAsync(new List<Partner> { partner });
+            return populated.FirstOrDefault() ?? MapToViewDto(partner);
         }
         #endregion
 
@@ -567,10 +569,7 @@ namespace MenuGoBE.Service
         }
         #endregion
 
-        #region Lấy lịch sử mua hàng của Khách hàng
-        /// <summary>
-        /// Lấy danh sách hóa đơn/đơn hàng đã mua của khách hàng.
-        /// </summary>
+        #region Lấy lịch sử mua hàng của khách hàng
         public async Task<List<CustomerPurchaseHistoryDto>> GetCustomerPurchaseHistoryAsync(long customerId)
         {
             var orders = await _context.Orders
@@ -578,9 +577,25 @@ namespace MenuGoBE.Service
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
 
+            var orderIds = orders.Select(o => o.Id).ToList();
+
+            // Lấy các giao dịch tích điểm thực tế tương ứng với từng hóa đơn
+            var earnPointTransactions = await _context.CustomerPointTransactions
+                .Where(t => t.CustomerId == customerId
+                         && t.OrderId.HasValue
+                         && orderIds.Contains(t.OrderId.Value)
+                         && t.Type == PointTransactionType.Earn
+                         && !t.IsReversed)
+                .ToListAsync();
+
             return orders.Select(o =>
             {
                 decimal finalAmt = Math.Max(0m, o.TotalAmount - o.DiscountAmount);
+                var matchedEarnTrans = earnPointTransactions.Where(t => t.OrderId == o.Id).ToList();
+                int actualPointsEarned = matchedEarnTrans.Any()
+                    ? matchedEarnTrans.Sum(t => t.PointChange)
+                    : (int)(finalAmt / 100000m) * 1000;
+
                 return new CustomerPurchaseHistoryDto
                 {
                     OrderId = o.Id,
@@ -588,7 +603,7 @@ namespace MenuGoBE.Service
                     CreatedAt = o.CreatedAt,
                     TotalAmount = o.TotalAmount,
                     FinalAmount = finalAmt,
-                    PointsEarned = (int)Math.Floor(finalAmt / 10000m),
+                    PointsEarned = actualPointsEarned,
                     PointsUsed = o.PointsUsed,
                     Status = o.Status
                 };
