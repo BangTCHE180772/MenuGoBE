@@ -128,6 +128,28 @@ public class PromotionController : ControllerBase
             await _promotionService.DeletePromotionAsync(id);
             return Ok(new { message = "Promotion deleted successfully." });
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("{promoId}/remove-product/{productId}")]
+    public async Task<IActionResult> RemoveProductFromPromotion(long promoId, long productId)
+    {
+        try
+        {
+            await _promotionService.RemoveProductFromPromotionAsync(promoId, productId);
+            return Ok(new { message = "Đã gỡ sản phẩm khỏi chương trình khuyến mãi." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             return StatusCode(500, new { message = ex.Message });
