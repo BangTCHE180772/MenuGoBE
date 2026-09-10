@@ -16,10 +16,12 @@ namespace MenuGoBE.Controllers
     public class BInventoryController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly MenuGoBE.Interface.Services.IPromotionService _promotionService;
 
-        public BInventoryController(AppDbContext context)
+        public BInventoryController(AppDbContext context, MenuGoBE.Interface.Services.IPromotionService promotionService)
         {
             _context = context;
+            _promotionService = promotionService;
         }
 
         [HttpGet("{branchId}")]
@@ -213,7 +215,6 @@ namespace MenuGoBE.Controllers
                                              (b.Product.SKUCode != null && EF.Functions.Like(b.Product.SKUCode, $"%{trimmedSearch}%")));
                 }
 
-                // 4. Select DTO trực tiếp ở SQL (Đã sửa bỏ ép kiểu (int) ở SQL level)
                 var list = await query.Select(b => new
                 {
                     id = b.Id,
@@ -248,6 +249,67 @@ namespace MenuGoBE.Controllers
                             isBaseUnit = uc.BaseId == null
                         }).ToList()
                 }).ToListAsync();
+
+                // Áp dụng khuyến mãi
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    var promos = await _promotionService.GetActivePromotionMapForBranchAsync(branchId.Value);
+                    if (promos.Count > 0)
+                    {
+                        var discountedList = list.Select(item =>
+                        {
+                            decimal finalPrice = item.sellPrice;
+                            decimal? originalPrice = null;
+
+                            if (promos.TryGetValue(item.productId, out var promo) || promos.TryGetValue(0, out promo))
+                            {
+                                if (promo.DiscountType == "Percentage")
+                                {
+                                    decimal discount = (item.sellPrice * promo.DiscountValue) / 100m;
+                                    if (promo.MaxDiscount > 0 && discount > promo.MaxDiscount)
+                                    {
+                                        discount = promo.MaxDiscount;
+                                    }
+                                    finalPrice = Math.Max(0, item.sellPrice - discount);
+                                }
+                                else
+                                {
+                                    finalPrice = Math.Max(0, item.sellPrice - promo.DiscountValue);
+                                }
+                                originalPrice = item.sellPrice;
+                            }
+
+                            return new
+                            {
+                                item.id,
+                                item.bInventoryId,
+                                item.productId,
+                                item.branchId,
+                                item.name,
+                                item.code,
+                                item.type,
+                                item.unitName,
+                                item.groupName,
+                                item.description,
+                                item.minStorage,
+                                item.maxStorage,
+                                sellPrice = finalPrice,
+                                originalPrice, // Thêm originalPrice
+                                item.purchasePrice,
+                                item.quantity,
+                                item.avg,
+                                item.stockQuantity,
+                                item.imageLink,
+                                item.imageUrl,
+                                item.imageId,
+                                item.createdAt,
+                                item.unitConversions
+                            };
+                        }).ToList();
+
+                        return Ok(discountedList);
+                    }
+                }
 
                 return Ok(list);
             }
