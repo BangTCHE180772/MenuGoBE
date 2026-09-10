@@ -91,6 +91,85 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region Lấy thông tin chi tiết một mặt hàng tồn kho theo Id
+        [HttpGet("detail/{id}")]
+        public async Task<IActionResult> GetBInventoryDetailById(long id)
+        {
+            try
+            {
+                var item = await _context.BInventories
+                    .AsNoTracking()
+                    .Include(b => b.Product)
+                        .ThenInclude(p => p.Image)
+                    .Include(b => b.Product)
+                        .ThenInclude(p => p.Group)
+                    .Include(b => b.Product)
+                        .ThenInclude(p => p.UnitConversions)
+                            .ThenInclude(uc => uc.Unit)
+                    .Include(b => b.Product)
+                        .ThenInclude(p => p.RecipeItems)
+                    .FirstOrDefaultAsync(b => b.Id == id || b.ProductId == id);
+
+                if (item == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy mặt hàng tồn kho." });
+                }
+
+                var baseUnit = item.Product.UnitConversions
+                    .Where(uc => uc.BaseId == null)
+                    .Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                    .FirstOrDefault();
+
+                var dto = new
+                {
+                    id = item.Id,
+                    bInventoryId = item.Id,
+                    productId = item.ProductId,
+                    branchId = item.BranchId,
+                    name = item.Product.Name,
+                    code = item.Product.SKUCode ?? $"SP{item.ProductId}",
+                    type = item.Product.Type.ToString(),
+                    unitName = !string.IsNullOrEmpty(baseUnit) ? baseUnit : "Đĩa",
+                    groupName = item.Product.Group != null ? item.Product.Group.Name : "---",
+                    description = item.Product.Description,
+                    minStorage = item.Product.MinStorage,
+                    maxStorage = item.Product.MaxStorage,
+                    sellPrice = item.Product.SellPrice,
+                    purchasePrice = item.Avg > 0 ? item.Avg : item.Product.SellPrice,
+                    quantity = item.Quantity,
+                    avg = item.Avg,
+                    stockQuantity = item.Quantity,
+                    imageLink = item.Product.Image != null ? item.Product.Image.ImageLink : string.Empty,
+                    imageUrl = item.Product.Image != null ? item.Product.Image.ImageLink : string.Empty,
+                    imageId = item.Product.ImageId,
+                    unitConversions = item.Product.UnitConversions
+                        .Select(uc => new
+                        {
+                            id = uc.Id,
+                            unitId = uc.UnitId,
+                            unitName = uc.Unit != null ? uc.Unit.Name : string.Empty,
+                            conversionPoint = uc.ConversionPoint,
+                            isBaseUnit = uc.BaseId == null
+                        }).ToList(),
+                    recipeDetailes = item.Product.RecipeItems
+                        .Select(rd => new
+                        {
+                            id = rd.Id,
+                            productId = rd.Id,
+                            ingredientId = rd.Id,
+                            quantity = rd.Quantity
+                        }).ToList()
+                };
+
+                return Ok(dto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy chi tiết mặt hàng tồn kho.", error = ex.Message });
+            }
+        }
+        #endregion
+
         [HttpGet("branch/{branchId}")]
         public async Task<IActionResult> GetBInventories(
             long? branchId,
