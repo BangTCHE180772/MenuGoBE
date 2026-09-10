@@ -26,6 +26,7 @@ namespace MenuGoBE.Service
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly IDocumentService _documentService;
         private readonly ILeftoverRecordService _leftoverRecordService;
+        private readonly IPromotionService _promotionService;
 
         public OrderDetailService(
             IOrderDetailRepository detailRepo,
@@ -39,7 +40,8 @@ namespace MenuGoBE.Service
             IRecipesDetailedRepository recipesRepo,
             IHubContext<NotificationHub> hubContext,
             IDocumentService documentService,
-            ILeftoverRecordService leftoverRecordService)
+            ILeftoverRecordService leftoverRecordService,
+            IPromotionService promotionService)
         {
             _detailRepo = detailRepo;
             _orderRepo = orderRepo;
@@ -53,8 +55,8 @@ namespace MenuGoBE.Service
             _hubContext = hubContext;
             _documentService = documentService;
             _leftoverRecordService = leftoverRecordService;
+            _promotionService = promotionService;
         }
-
 
         public async Task<List<OrderDetailViewDto>> GetByOrderIdAsync(long orderId)
         {
@@ -158,6 +160,33 @@ namespace MenuGoBE.Service
 
             var entity = _mapper.Map<OrderDetail>(dto);
             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+            var productEntity = await _productRepo.GetByIdAsync(entity.ProductId);
+
+            // Xử lý áp dụng khuyến mãi
+            if (productEntity != null && branchId > 0 && !isReuse)
+            {
+                var activePromotions = await _promotionService.GetActivePromotionMapForBranchAsync(branchId);
+                if (activePromotions.TryGetValue(productEntity.Id, out var promotion))
+                {
+                    entity.OriginalPrice = productEntity.SellPrice;
+                    entity.PromotionId = promotion.Id;
+                    
+                    if (promotion.DiscountType == "Percentage")
+                    {
+                        var discount = productEntity.SellPrice * (promotion.DiscountValue / 100);
+                        if (promotion.MaxDiscount > 0 && discount > promotion.MaxDiscount) discount = promotion.MaxDiscount;
+                        entity.Price = productEntity.SellPrice - discount;
+                    }
+                    else if (promotion.DiscountType == "Fixed")
+                    {
+                        entity.Price = Math.Max(0, productEntity.SellPrice - promotion.DiscountValue);
+                    }
+                }
+                else
+                {
+                    entity.Price = productEntity.SellPrice; // Không có KM thì giá gốc
+                }
+            }
 
             if (isReuse)
             {
@@ -286,11 +315,39 @@ namespace MenuGoBE.Service
                 {
                     var createdEntities = new List<OrderDetail>();
                     var reuseLinks = new List<(OrderDetailCreateDto Dto, OrderDetail Entity)>();
+                    
+                    var activePromotions = branchId > 0 ? await _promotionService.GetActivePromotionMapForBranchAsync(branchId) : new Dictionary<long, Dtos.Promotion.PromotionDto>();
+
                     foreach (var dto in dtos)
                     {
                         bool isReuse = dto.ReuseLeftoverId.HasValue;
                         var entity = _mapper.Map<OrderDetail>(dto);
                         var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
+                        var productEntity = await _productRepo.GetByIdAsync(entity.ProductId);
+
+                        if (productEntity != null && branchId > 0 && !isReuse)
+                        {
+                            if (activePromotions.TryGetValue(productEntity.Id, out var promotion))
+                            {
+                                entity.OriginalPrice = productEntity.SellPrice;
+                                entity.PromotionId = promotion.Id;
+                                
+                                if (promotion.DiscountType == "Percentage")
+                                {
+                                    var discount = productEntity.SellPrice * (promotion.DiscountValue / 100);
+                                    if (promotion.MaxDiscount > 0 && discount > promotion.MaxDiscount) discount = promotion.MaxDiscount;
+                                    entity.Price = productEntity.SellPrice - discount;
+                                }
+                                else if (promotion.DiscountType == "Fixed")
+                                {
+                                    entity.Price = Math.Max(0, productEntity.SellPrice - promotion.DiscountValue);
+                                }
+                            }
+                            else
+                            {
+                                entity.Price = productEntity.SellPrice;
+                            }
+                        }
 
                         if (isReuse)
                         {

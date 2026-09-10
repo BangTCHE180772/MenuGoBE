@@ -9,5 +9,6 @@ public interface IPromotionService
     Task<IEnumerable<PromotionDto>> GetAllPromotionsAsync(long? branchId);
     Task<PromotionDto> UpdatePromotionAsync(PromotionUpdateDto dto, long userId);
     Task DeletePromotionAsync(long id);
+    Task RemoveProductFromPromotionAsync(long promoId, long productId);
     Task<Dictionary<long, PromotionDto>> GetActivePromotionMapForBranchAsync(long branchId);
 }

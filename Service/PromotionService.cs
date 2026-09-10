@@ -29,6 +29,11 @@ public class PromotionService : IPromotionService
             throw new InvalidOperationException("Ngày kết thúc phải lớn hơn ngày bắt đầu.");
         }
 
+        if (dto.StartDate < DateTime.UtcNow.AddMinutes(-5))
+        {
+            throw new InvalidOperationException("Thời gian bắt đầu không được ở trong quá khứ.");
+        }
+
         if (dto.Scope == PromotionScope.SpecificBranches && (dto.BranchIds == null || !dto.BranchIds.Any()))
         {
             throw new InvalidOperationException("Vui lòng chọn ít nhất 1 chi nhánh áp dụng.");
@@ -74,19 +79,24 @@ public class PromotionService : IPromotionService
 
         await _promotionRepo.CreatePromotionAsync(promotion);
 
-        return MapToDto(await _promotionRepo.GetPromotionByIdAsync(promotion.Id));
+        return await MapToDtoAsync(await _promotionRepo.GetPromotionByIdAsync(promotion.Id));
     }
 
     public async Task<PromotionDto?> GetPromotionByIdAsync(long id)
     {
         var promotion = await _promotionRepo.GetPromotionByIdAsync(id);
-        return promotion == null ? null : MapToDto(promotion);
+        return promotion == null ? null : await MapToDtoAsync(promotion);
     }
 
     public async Task<IEnumerable<PromotionDto>> GetAllPromotionsAsync(long? branchId)
     {
         var promotions = await _promotionRepo.GetAllPromotionsAsync(branchId);
-        return promotions.Select(MapToDto);
+        var dtos = new List<PromotionDto>();
+        foreach (var p in promotions)
+        {
+            dtos.Add(await MapToDtoAsync(p));
+        }
+        return dtos;
     }
 
     public async Task<PromotionDto> UpdatePromotionAsync(PromotionUpdateDto dto, long userId)
@@ -106,6 +116,28 @@ public class PromotionService : IPromotionService
             }
         }
 
+        var hasBeenUsed = await _context.OrderDetails.AnyAsync(od => od.PromotionId == dto.Id);
+        if (hasBeenUsed)
+        {
+            if (existing.DiscountType != dto.DiscountType ||
+                existing.DiscountValue != dto.DiscountValue ||
+                existing.MaxDiscount != dto.MaxDiscount ||
+                existing.Scope != dto.Scope)
+            {
+                throw new InvalidOperationException("Khuyến mãi đã được khách hàng sử dụng. Không thể thay đổi các thông số tài chính.");
+            }
+
+            bool productsChanged = existing.PromotionProducts.Count != dto.ProductIds.Count || 
+                                   existing.PromotionProducts.Any(pp => !dto.ProductIds.Contains(pp.ProductId));
+            if (productsChanged) throw new InvalidOperationException("Khuyến mãi đã được sử dụng. Không thể thay đổi danh sách món ăn.");
+            
+            if (dto.Scope == PromotionScope.SpecificBranches) {
+               bool branchesChanged = existing.PromotionBranches.Count != dto.BranchIds.Count ||
+                                      existing.PromotionBranches.Any(pb => !dto.BranchIds.Contains(pb.BranchId));
+               if (branchesChanged) throw new InvalidOperationException("Khuyến mãi đã được sử dụng. Không thể thay đổi chi nhánh áp dụng.");
+            }
+        }
+
         // Cập nhật thông tin cơ bản
         existing.Name = dto.Name;
         existing.Description = dto.Description;
@@ -117,32 +149,59 @@ public class PromotionService : IPromotionService
         existing.EndDate = dto.EndDate;
         existing.IsActive = dto.IsActive;
 
-        // Xóa quan hệ cũ trước, lưu riêng để tránh tracking conflict
+        // Xóa quan hệ cũ trước
         _context.PromotionProducts.RemoveRange(existing.PromotionProducts);
         _context.PromotionBranches.RemoveRange(existing.PromotionBranches);
         await _context.SaveChangesAsync();
 
+        // Xóa khỏi collection trong memory để tránh bị tracking conflict
+        existing.PromotionProducts.Clear();
+        existing.PromotionBranches.Clear();
+
         // Thêm quan hệ mới
-        existing.PromotionProducts = dto.ProductIds
-            .Select(p => new PromotionProduct { ProductId = p, PromotionId = dto.Id }).ToList();
+        foreach(var pId in dto.ProductIds)
+        {
+            existing.PromotionProducts.Add(new PromotionProduct { ProductId = pId, PromotionId = dto.Id });
+        }
 
         if (dto.Scope == PromotionScope.SpecificBranches)
         {
-            existing.PromotionBranches = dto.BranchIds
-                .Select(b => new PromotionBranch { BranchId = b, PromotionId = dto.Id }).ToList();
-        }
-        else
-        {
-            existing.PromotionBranches = new List<PromotionBranch>();
+            foreach(var bId in dto.BranchIds)
+            {
+                existing.PromotionBranches.Add(new PromotionBranch { BranchId = bId, PromotionId = dto.Id });
+            }
         }
 
         await _context.SaveChangesAsync();
-        return MapToDto(await _promotionRepo.GetPromotionByIdAsync(dto.Id));
+        return await MapToDtoAsync(await _promotionRepo.GetPromotionByIdAsync(dto.Id));
     }
 
     public async Task DeletePromotionAsync(long id)
     {
+        var hasBeenUsed = await _context.OrderDetails.AnyAsync(od => od.PromotionId == id);
+        if (hasBeenUsed)
+        {
+            throw new InvalidOperationException("Không thể xóa: Chương trình khuyến mãi này đã được khách hàng sử dụng trong giao dịch. Để ngừng áp dụng, vui lòng chọn Sửa và tắt trạng thái Hoạt động.");
+        }
+
         await _promotionRepo.DeletePromotionAsync(id);
+    }
+
+    public async Task RemoveProductFromPromotionAsync(long promoId, long productId)
+    {
+        var pp = await _context.PromotionProducts
+            .FirstOrDefaultAsync(x => x.PromotionId == promoId && x.ProductId == productId);
+        if (pp == null) throw new InvalidOperationException("Sản phẩm không nằm trong chương trình khuyến mãi này.");
+
+        _context.PromotionProducts.Remove(pp);
+        await _context.SaveChangesAsync();
+
+        // Nếu KM không còn sản phẩm nào → xóa luôn KM
+        var remaining = await _context.PromotionProducts.CountAsync(x => x.PromotionId == promoId);
+        if (remaining == 0)
+        {
+            await _promotionRepo.DeletePromotionAsync(promoId);
+        }
     }
 
     public async Task<Dictionary<long, PromotionDto>> GetActivePromotionMapForBranchAsync(long branchId)
@@ -152,22 +211,33 @@ public class PromotionService : IPromotionService
         var map = new Dictionary<long, PromotionDto>();
         foreach (var p in activePromotions)
         {
-            var dto = MapToDto(p);
-            foreach (var pp in p.PromotionProducts)
+            var dto = await MapToDtoAsync(p);
+            
+            // Nếu không có sản phẩm nào cụ thể, áp dụng cho tất cả (key = 0)
+            if (p.PromotionProducts == null || p.PromotionProducts.Count == 0)
             {
-                map[pp.ProductId] = dto;
+                map[0] = dto;
+            }
+            else
+            {
+                foreach (var pp in p.PromotionProducts)
+                {
+                    map[pp.ProductId] = dto;
+                }
             }
         }
         
         return map;
     }
 
-    private PromotionDto MapToDto(Promotion p)
+    private async Task<PromotionDto> MapToDtoAsync(Promotion p)
     {
         var now = DateTime.UtcNow;
-        string status = p.IsActive == false ? "Disabled" :
-                       p.EndDate < now ? "Expired" :
+        string status = p.EndDate < now ? "Expired" :
+                       p.IsActive == false ? "Disabled" :
                        p.StartDate > now ? "Upcoming" : "Active";
+
+        bool hasBeenUsed = await _context.OrderDetails.AnyAsync(od => od.PromotionId == p.Id);
 
         return new PromotionDto
         {
@@ -182,6 +252,7 @@ public class PromotionService : IPromotionService
             EndDate = p.EndDate,
             IsActive = p.IsActive,
             Status = status,
+            HasBeenUsed = hasBeenUsed,
             Products = p.PromotionProducts?.Select(pp => new PromotionProductDto
             {
                 ProductId = pp.ProductId,
