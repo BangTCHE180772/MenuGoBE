@@ -68,13 +68,27 @@ public class VoucherController : ControllerBase
     }
 
     [HttpGet("check")]
-    public async Task<IActionResult> CheckVoucher([FromQuery] string code, [FromQuery] long branchId, [FromQuery] decimal totalAmount)
+    public async Task<IActionResult> CheckVoucher([FromQuery] string code, [FromQuery] long branchId, [FromQuery] decimal totalAmount, [FromQuery] long? customerId = null)
     {
-        var result = await _service.CheckVoucherAsync(code, branchId, totalAmount);
+        var result = await _service.CheckVoucherAsync(code, branchId, totalAmount, customerId);
         if (!result.IsValid)
         {
             return BadRequest(new { message = result.Message });
         }
+        return Ok(result);
+    }
+
+    [HttpGet("available")]
+    public async Task<IActionResult> GetAvailable()
+    {
+        long? customerId = null;
+        var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ?? User.FindFirst("id");
+        if (idClaim != null && long.TryParse(idClaim.Value, out var id))
+        {
+            customerId = id;
+        }
+
+        var result = await _service.GetAvailableAsync(customerId);
         return Ok(result);
     }
 }

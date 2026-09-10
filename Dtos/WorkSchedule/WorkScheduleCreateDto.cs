@@ -24,6 +24,7 @@ namespace MenuGoBE.Dtos.WorkSchedule
         public decimal? ActualHours { get; set; }
         public string Status { get; set; } = string.Empty;
         public bool ManagerApproved { get; set; }
+        public bool IsHeadChef { get; set; }
 
         [Required]
         public long CreatedBy { get; set; }

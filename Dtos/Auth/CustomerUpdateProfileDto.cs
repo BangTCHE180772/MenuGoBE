@@ -7,5 +7,6 @@ namespace MenuGoBE.Dtos.Auth
         public string? Email { get; set; }
         public string? CurrentPassword { get; set; }
         public string? NewPassword { get; set; }
+        public bool ReceivePromoEmails { get; set; } = true;
     }
 }
