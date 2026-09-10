@@ -6,6 +6,7 @@ using MenuGoBE.Models;
 using MenuGoBE.Dtos.Table;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using MenuGoBE.Repositories;
 
 namespace MenuGoBE.Service;
 
@@ -22,6 +23,8 @@ public class ReservationService : IReservationService
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly INotificationRepository _notificationRepo;
     private readonly IOrderDetailService _orderDetailService;
+    private readonly IPromotionService _promotionService;
+    private readonly IAreaRepository _areaRepo;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -34,7 +37,9 @@ public class ReservationService : IReservationService
         IReservationSignalService signalService,
         IHubContext<NotificationHub> hubContext,
         INotificationRepository notificationRepo,
-        IOrderDetailService orderDetailService)
+        IOrderDetailService orderDetailService,
+        IPromotionService promotionService,
+        IAreaRepository areaRepo)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -47,6 +52,8 @@ public class ReservationService : IReservationService
         _hubContext = hubContext;
         _notificationRepo = notificationRepo;
         _orderDetailService = orderDetailService;
+        _promotionService = promotionService;
+        _areaRepo = areaRepo;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -736,6 +743,23 @@ public class ReservationService : IReservationService
                 }
 
                 var details = await _detailRepo.GetByOrderIdAsync(fatherOrder.Id);
+
+                // Lấy branchId để áp dụng KM tại thời điểm check-in
+                long branchId = 0;
+                var fatherTableForPromo = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
+                if (fatherTableForPromo != null)
+                {
+                    var area = await _areaRepo.GetByIdAsync(fatherTableForPromo.AreaId);
+                    if (area != null) branchId = area.BranchId;
+                }
+
+                // Cập nhật giá KM hiện tại cho pre-order items (giá lock tại thời điểm check-in)
+                Dictionary<long, Dtos.Promotion.PromotionDto> promoMap = null;
+                if (branchId > 0)
+                {
+                    promoMap = await _promotionService.GetActivePromotionMapForBranchAsync(branchId);
+                }
+
                 foreach (var detail in details)
                 {
                     if (detail.Status == "PreOrder" || detail.CookingStatus == "PreOrder")
@@ -743,6 +767,28 @@ public class ReservationService : IReservationService
                         var product = await _productRepo.GetByIdAsync(detail.ProductId);
                         if (product != null)
                         {
+                            // Cập nhật giá theo KM hiện tại (thời điểm khách đến)
+                            detail.OriginalPrice = product.SellPrice;
+                            if (promoMap != null && promoMap.TryGetValue(detail.ProductId, out var promo))
+                            {
+                                detail.PromotionId = promo.Id;
+                                if (promo.DiscountType == "Percentage")
+                                {
+                                    var discount = product.SellPrice * (promo.DiscountValue / 100);
+                                    if (promo.MaxDiscount > 0 && discount > promo.MaxDiscount) discount = promo.MaxDiscount;
+                                    detail.Price = Math.Max(0, product.SellPrice - discount);
+                                }
+                                else
+                                {
+                                    detail.Price = Math.Max(0, product.SellPrice - promo.DiscountValue);
+                                }
+                            }
+                            else
+                            {
+                                detail.Price = product.SellPrice;
+                            }
+                            await _detailRepo.UpdateAsync(detail);
+
                             try
                             {
                                 await _orderDetailService.ConfirmAsync(detail.Id);
