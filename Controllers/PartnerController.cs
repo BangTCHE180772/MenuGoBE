@@ -125,6 +125,27 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region Lấy thông tin chi tiết đối tác theo ID
+        // 3b. GetById
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetById(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetPartnerByIdAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
         // 4. Create (NeedToProvide BranchId)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] PartnerCreateDto dto)

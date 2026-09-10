@@ -293,9 +293,27 @@ namespace MenuGoBE.Controllers
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
 
+            var orderIds = orders.Select(o => o.Id).ToList();
+
+            // Lấy các giao dịch tích điểm thực tế tương ứng với từng hóa đơn
+            var earnPointTransactions = await _context.CustomerPointTransactions
+                .Where(t => t.CustomerId == id
+                         && t.OrderId.HasValue
+                         && orderIds.Contains(t.OrderId.Value)
+                         && t.Type == PointTransactionType.Earn
+                         && !t.IsReversed)
+                .ToListAsync();
+
             var result = orders.Select(o =>
             {
                 decimal finalAmt = Math.Max(0m, o.TotalAmount - o.DiscountAmount);
+
+                // Lấy điểm nhận thực tế từ lịch sử biến động điểm đã ghi nhận cho hóa đơn này
+                var matchedEarnTrans = earnPointTransactions.Where(t => t.OrderId == o.Id).ToList();
+                int actualPointsEarned = matchedEarnTrans.Any()
+                    ? matchedEarnTrans.Sum(t => t.PointChange)
+                    : (int)(finalAmt / 100000m) * 1000;
+
                 return new CustomerPurchaseHistoryDto
                 {
                     OrderId = o.Id,
@@ -303,7 +321,7 @@ namespace MenuGoBE.Controllers
                     CreatedAt = o.CreatedAt,
                     TotalAmount = o.TotalAmount,
                     FinalAmount = finalAmt,
-                    PointsEarned = (int)Math.Floor(finalAmt / 10000m),
+                    PointsEarned = actualPointsEarned,
                     PointsUsed = o.PointsUsed,
                     Status = o.Status
                 };
