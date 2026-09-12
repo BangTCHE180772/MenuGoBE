@@ -852,6 +852,55 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        // Quản lý từ chối/hủy yêu cầu đổi ca giữa 2 nhân viên — trả ca về đúng người
+        // đăng ký ban đầu và bắt buộc ghi lý do để thông báo cho cả 2 bên (không có
+        // cột lưu riêng nên gửi qua Notification, giống luồng hủy ca làm việc).
+        public async Task<bool> RejectShiftSwapAsync(long workScheduleId, long senderAccountId, string note, long rejectedBy)
+        {
+            if (string.IsNullOrWhiteSpace(note))
+            {
+                throw new InvalidOperationException("Phải nhập lý do từ chối/hủy yêu cầu đổi ca.");
+            }
+
+            var entity = await _repo.GetByIdAsync(workScheduleId);
+            if (entity == null) return false;
+
+            var receiverAccountId = entity.AccountId;
+            var canceller = await _accountRepo.GetByIdAsync(rejectedBy);
+            string cancellerName = canceller?.Name ?? "Quản lý";
+            string message = $"Yêu cầu đổi ca ngày {entity.WorkDate:dd/MM/yyyy} đã bị {cancellerName} từ chối/hủy. Lý do: {note.Trim()}";
+
+            entity.AccountId = senderAccountId;
+            entity.Status = "APPROVED";
+            entity.ManagerApproved = true;
+
+            var notifyIds = new List<long> { senderAccountId };
+            if (receiverAccountId != senderAccountId) notifyIds.Add(receiverAccountId);
+
+            foreach (var accId in notifyIds)
+            {
+                await _context.Notifications.AddAsync(new Notification
+                {
+                    BranchId = entity.BranchId,
+                    AccountId = accId,
+                    Type = "WorkSchedule",
+                    Message = message,
+                    IsImportant = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync();
+
+            foreach (var accId in notifyIds)
+            {
+                await _hubContext.Clients.Group($"user_{accId}").SendAsync("ReceiveWorkScheduleNotification", new { message });
+            }
+
+            return true;
+        }
+
         public async Task<bool> ApproveOTAsync(WorkScheduleOTApproveDto dto)
         {
             var ws = await _repo.GetByIdAsync(dto.WorkScheduleId);
