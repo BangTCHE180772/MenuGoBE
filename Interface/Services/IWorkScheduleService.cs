@@ -21,6 +21,7 @@ namespace MenuGoBE.Interface.Services
 
         Task<bool> RequestLeaveAsync(long accountId, LeaveRequestDto dto);
         Task<bool> RequestShiftSwapAsync(long accountId, ShiftSwapRequestDto dto);
+        Task<bool> RejectShiftSwapAsync(long workScheduleId, long senderAccountId, string note, long rejectedBy);
 
         // OT Approval & Forget Check-out verification
         Task<bool> ApproveOTAsync(WorkScheduleOTApproveDto dto);
