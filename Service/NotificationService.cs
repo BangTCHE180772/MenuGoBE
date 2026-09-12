@@ -395,6 +395,69 @@ namespace MenuGoBE.Service
                         });
                     }
                 }
+
+                #region Cảnh báo Hạn chốt bảng lương dành cho Quản lý
+                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == branchId);
+                if (branch != null)
+                {
+                    int payday = branch.PayrollPayday > 0 ? branch.PayrollPayday : 10;
+                    int lockDeadlineDay = Math.Max(1, payday - 2);
+
+                    int targetMonth = todayLocal.Day <= payday ? todayLocal.AddMonths(-1).Month : todayLocal.Month;
+                    int targetYear = todayLocal.Day <= payday ? todayLocal.AddMonths(-1).Year : todayLocal.Year;
+
+                    var activeBranchAccountIds = await _context.Contracts
+                        .Where(c => c.BranchId == branchId && !c.IsDeleted)
+                        .Select(c => c.AccountId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    if (activeBranchAccountIds.Any())
+                    {
+                        var finalizedAccountIds = await _context.Payrolls
+                            .Where(p => p.BranchId == branchId &&
+                                        p.Month == targetMonth &&
+                                        p.Year == targetYear &&
+                                        (p.Status == PayrollStatus.Locked ||
+                                         p.Status == PayrollStatus.Approved ||
+                                         p.Status == PayrollStatus.Paid))
+                            .Select(p => p.AccountId)
+                            .ToListAsync();
+
+                        int unfinalizedCount = activeBranchAccountIds.Except(finalizedAccountIds).Count();
+
+                        if (unfinalizedCount > 0)
+                        {
+                            var title = "CẢNH BÁO HẠN CHỐT LƯƠNG DÀNH CHO QUẢN LÝ";
+                            var msg = $"Chi nhánh {branch.Name} quy định trả lương vào ngày {payday} hàng tháng. Quản lý phải hoàn tất chốt bảng lương trước ngày {lockDeadlineDay}! Hiện đang có {unfinalizedCount} nhân sự chưa được chốt lương. Vui lòng rà soát và bấm \"Chốt lương\" gửi Chủ cửa hàng phê duyệt.";
+
+                            var exists = await _context.Notifications.AnyAsync(n =>
+                                n.BranchId == branchId &&
+                                n.Type == "Operational" &&
+                                n.CreatedAt >= startUtc &&
+                                n.CreatedAt <= endUtc &&
+                                n.ReferenceType == "PayrollDeadline");
+
+                            if (!exists)
+                            {
+                                newNotifications.Add(new Notification
+                                {
+                                    BranchId = branchId,
+                                    Type = "Operational",
+                                    Title = title,
+                                    Message = msg,
+                                    CreatedAt = DateTime.UtcNow,
+                                    IsRead = false,
+                                    IsImportant = true,
+                                    Priority = todayLocal.Day >= lockDeadlineDay ? "Critical" : "Warning",
+                                    ReferenceType = "PayrollDeadline",
+                                    RedirectUrl = "/payroll"
+                                });
+                            }
+                        }
+                    }
+                }
+                #endregion
             }
 
             if (newNotifications.Any())
