@@ -16,11 +16,16 @@ namespace MenuGoBE.Controllers
     {
         private readonly IPayrollService _payrollService;
         private readonly IAccountService _accountService;
+        private readonly IPayrollSuggestionService _suggestionService;
 
-        public PayrollController(IPayrollService payrollService, IAccountService accountService)
+        public PayrollController(
+            IPayrollService payrollService,
+            IAccountService accountService,
+            IPayrollSuggestionService suggestionService)
         {
             _payrollService = payrollService;
             _accountService = accountService;
+            _suggestionService = suggestionService;
         }
 
         private long? GetCurrentAccountId()
@@ -504,5 +509,139 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+        #region Kiến nghị bảng lương (Payroll Suggestions)
+
+        [HttpPost("suggestions")]
+        public async Task<IActionResult> CreateSuggestion([FromBody] PayrollSuggestionCreateDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var result = await _suggestionService.CreateAsync(currentUserId.Value, dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("suggestions")]
+        public async Task<IActionResult> GetSuggestions(
+            [FromQuery] long? branchId,
+            [FromQuery] long? accountId,
+            [FromQuery] int? month,
+            [FromQuery] int? year,
+            [FromQuery] string? status)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var query = new PayrollSuggestionQueryDto
+            {
+                BranchId = branchId,
+                AccountId = accountId,
+                Month = month,
+                Year = year,
+                Status = status
+            };
+
+            var (isAdmin, isManager, userBranchIds) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+            {
+                // Employees can only view their own suggestions
+                query.AccountId = currentUserId.Value;
+            }
+            else if (isManager && !isAdmin && (!query.BranchId.HasValue || query.BranchId.Value <= 0))
+            {
+                // Managers default filter to their assigned branches
+                if (userBranchIds.Any())
+                {
+                    query.BranchId = userBranchIds.First();
+                }
+            }
+
+            var result = await _suggestionService.GetFilteredAsync(query);
+            return Ok(result);
+        }
+
+        [HttpGet("suggestions/{id}")]
+        public async Task<IActionResult> GetSuggestionById(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var result = await _suggestionService.GetByIdAsync(id);
+            if (result == null)
+                return NotFound(new { message = $"Không tìm thấy kiến nghị lương ID {id}" });
+
+            return Ok(result);
+        }
+
+        [HttpPut("suggestions/{id}/process")]
+        public async Task<IActionResult> ProcessSuggestion(long id, [FromBody] PayrollSuggestionProcessDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
+            if (!isAdmin && !isManager)
+                return StatusCode(403, new { message = "Chỉ Quản lý hoặc Chủ cửa hàng mới có quyền duyệt kiến nghị lương." });
+
+            try
+            {
+                var result = await _suggestionService.ProcessAsync(id, currentUserId.Value, dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("suggestions/{id}")]
+        public async Task<IActionResult> UpdateSuggestion(long id, [FromBody] PayrollSuggestionUpdateDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var result = await _suggestionService.UpdateAsync(id, currentUserId.Value, dto);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpDelete("suggestions/{id}")]
+        public async Task<IActionResult> DeleteSuggestion(long id)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                await _suggestionService.DeleteAsync(id, currentUserId.Value);
+                return Ok(new { message = "Xóa kiến nghị lương thành công" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        #endregion
     }
 }

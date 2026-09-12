@@ -701,6 +701,18 @@ public static class ErrorCodes
         "Không được phép nhận một phần. Vui lòng chọn Nhận đủ hoặc Từ chối nhận.",
         400
     );
+
+    public static readonly ErrorResult PayrollSuggestionNotFound = new(
+        2201,
+        "Không tìm thấy kiến nghị lương.",
+        404
+    );
+
+    public static readonly ErrorResult PayrollSuggestionInvalidData = new(
+        2202,
+        "Dữ liệu kiến nghị lương không hợp lệ.",
+        400
+    );
 }
 
 

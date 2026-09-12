@@ -7,6 +7,7 @@ using MenuGoBE.Data;
 using MenuGoBE.Dtos.Payroll;
 using MenuGoBE.Dtos.SalaryDetail;
 using MenuGoBE.Interface.Repository;
+using MenuGoBE.Interface.Services;
 using MenuGoBE.Mapper;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
@@ -39,7 +40,9 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = config.CreateMapper();
 
-            _service = new PayrollService(_payrollRepoMock.Object, _context, _mapper);
+            var emailServiceMock = new Mock<IEmailService>();
+            var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<PayrollService>>();
+            _service = new PayrollService(_payrollRepoMock.Object, _context, _mapper, emailServiceMock.Object, loggerMock.Object);
         }
 
         #region GetAllAsync
