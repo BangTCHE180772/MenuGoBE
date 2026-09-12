@@ -166,7 +166,7 @@ namespace MenuGoBE.Service
                         Type = item.Type,
                         Amount = item.Amount,
                         Note = item.Note,
-                        CreatedBy = item.CreatedBy,
+                        CreatedBy = item.CreatedBy > 0 ? item.CreatedBy : entity.AccountId,
                         CreatedAt = DateTime.UtcNow
                     });
                 }
