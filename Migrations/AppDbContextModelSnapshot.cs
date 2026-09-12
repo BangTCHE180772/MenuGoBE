@@ -2037,6 +2037,90 @@ namespace MenuGoBE.Migrations
                     b.ToTable("PayrollShiftDetails");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.PayrollSuggestion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long?>("AppliedPayrollId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ApplyOption")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsApplied")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsResigned")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ManagerNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ProcessedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("AppliedPayrollId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("ProcessedBy");
+
+                    b.ToTable("PayrollSuggestions");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>
                 {
                     b.Property<long>("Id")
@@ -3559,6 +3643,47 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Payroll");
 
                     b.Navigation("WorkSchedule");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PayrollSuggestion", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Payroll", "AppliedPayroll")
+                        .WithMany()
+                        .HasForeignKey("AppliedPayrollId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Account", "Processor")
+                        .WithMany()
+                        .HasForeignKey("ProcessedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Account");
+
+                    b.Navigation("AppliedPayroll");
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Processor");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Product", b =>

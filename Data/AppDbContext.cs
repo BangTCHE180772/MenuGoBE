@@ -51,6 +51,7 @@ public class AppDbContext : DbContext
     public DbSet<HolidayConfig> HolidayConfigs { get; set; } = null!;
     public DbSet<WorkScheduleFeedback> WorkScheduleFeedbacks { get; set; } = null!;
     public DbSet<PayrollShiftDetail> PayrollShiftDetails { get; set; } = null!;
+    public DbSet<PayrollSuggestion> PayrollSuggestions { get; set; } = null!;
 
 
     // 7. Orders Module

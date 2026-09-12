@@ -118,6 +118,7 @@ builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IOrderAssignmentRepository, OrderAssignmentRepository>();
 builder.Services.AddScoped<IChatRepository, ChatRepository>();
 builder.Services.AddScoped<IShiftFeedbackRepository, ShiftFeedbackRepository>();
+builder.Services.AddScoped<IPayrollSuggestionRepository, PayrollSuggestionRepository>();
 
 // Service
 
@@ -177,6 +178,7 @@ builder.Services.AddScoped<IPhotoService, PhotoService>();
 builder.Services.AddScoped<IEmailService,EmailService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IShiftFeedbackService, ShiftFeedbackService>();
+builder.Services.AddScoped<IPayrollSuggestionService, PayrollSuggestionService>();
 
 // SignalR
 builder.Services.AddSignalR();
@@ -311,6 +313,13 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<MenuGoBE.Hubs.NotificationHub>("/notificationHub");
+
+// Tự động áp dụng EF Core Migrations khi ứng dụng khởi chạy
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<MenuGoBE.Data.AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 // Tự động khởi tạo Lô hàng kế thừa (LEGACY-INIT) cho các bản ghi tồn kho dương hiện có
 await MenuGoBE.Data.LegacyBatchSeeder.SeedLegacyBatchesAsync(app.Services);
