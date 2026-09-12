@@ -15,6 +15,7 @@ namespace MenuGoBE.Interface.Services
         Task<PartnerFinancialSummaryDto> GetPartnerFinancialSummaryAsync(long partnerId);
         Task<List<PartnerImportDocumentDto>> GetPartnerImportDocumentsAsync(long partnerId);
         Task<List<PartnerTransactionHistoryDto>> GetPartnerCashFlowHistoryAsync(long partnerId);
+        Task<PartnerImportDocumentDto> PayPartnerImportDocumentAsync(long partnerId, long documentId, PartnerPayDocumentDto dto, long? userId = null);
         Task<List<CustomerPurchaseHistoryDto>> GetCustomerPurchaseHistoryAsync(long customerId);
         Task<List<CustomerPointHistoryDto>> GetCustomerPointHistoryAsync(long customerId);
     }

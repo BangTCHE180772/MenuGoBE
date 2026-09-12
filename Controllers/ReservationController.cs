@@ -119,16 +119,20 @@ public class ReservationController : ControllerBase
     }
 
     [HttpPost("{id}/assign-tables")]
-    public async Task<IActionResult> AssignTables(long id, [FromBody] List<long> tableIds)
+    public async Task<IActionResult> AssignTables(long id, [FromBody] List<long> tableIds, [FromQuery] bool ignoreWarning = false)
     {
         try
         {
-            await _service.AssignTablesToReservationAsync(id, tableIds);
+            await _service.AssignTablesToReservationAsync(id, tableIds, ignoreWarning);
             return Ok(new { message = "Đã xếp bàn thành công." });
         }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (MenuGoBE.Exceptions.ReservationWarningException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message, isWarning = true });
         }
     }
 

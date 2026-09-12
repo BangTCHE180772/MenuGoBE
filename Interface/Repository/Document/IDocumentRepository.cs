@@ -27,6 +27,16 @@ namespace MenuGoBE.Interface.Repository.Document
         /// Lấy chứng từ Pending theo OrderId.
         /// </summary>
         Task<Models.Document?> GetPendingDocumentByOrderIdAsync(long orderId, DocumentType type);
+
+        /// <summary>
+        /// Lấy chứng từ bất kỳ theo OrderId và Type.
+        /// </summary>
+        Task<Models.Document?> GetDocumentByOrderIdAsync(long orderId, DocumentType type);
+
+        /// <summary>
+        /// Lấy Order đầy đủ OrderDetails và Recipes phục vụ trừ nguyên liệu.
+        /// </summary>
+        Task<Order?> GetOrderWithDetailsAsync(long orderId);
         #endregion
 
         #region Kiểm tra chứng từ gốc (Parent Document)

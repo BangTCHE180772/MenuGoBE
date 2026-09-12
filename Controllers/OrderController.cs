@@ -726,6 +726,47 @@ namespace MenuGoBE.Controllers
             return Ok(new { message = "Cập nhật trạng thái thành công" });
         }
 
+        [HttpPut("details/{id}/reuse-leftover")]
+        public async Task<IActionResult> ReuseLeftover(long id, [FromBody] ReuseLeftoverDto dto)
+        {
+            long? tableId = null;
+            string tableName = "Không rõ";
+            string productName = "Không rõ";
+
+            var detail = await _detailService.GetByIdAsync(id);
+            if (detail != null)
+            {
+                var order = await _service.GetByIdAsync(detail.OrderId);
+                if (order != null)
+                {
+                    tableId = order.TableId;
+                    var table = await _tableService.GetByIdAsync(order.TableId);
+                    if (table != null) tableName = table.Name;
+                }
+
+                var product = await _productService.GetByIdAsync(detail.ProductId);
+                if (product != null) productName = product.Name;
+            }
+
+            var result = await _detailService.ApplyLeftoverReuseAsync(id, dto.LeftoverId);
+            if (!result)
+                return NotFound(new { message = "Không tìm thấy chi tiết đơn." });
+
+            await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                type = "cooking-status-changed",
+                orderDetailId = id,
+                cookingStatus = "Ready",
+                tableId = tableId,
+                tableName = tableName,
+                productName = productName,
+                message = $"Món {productName} ({tableName}) đã dùng lại món thừa — dừng chế biến!",
+                timestamp = DateTime.UtcNow
+            });
+
+            return Ok(new { message = "Đã dùng lại món thừa, dừng chế biến." });
+        }
+
         [HttpPut("{orderId}/cancel")]
         public async Task<IActionResult> CancelOrder(long orderId)
         {

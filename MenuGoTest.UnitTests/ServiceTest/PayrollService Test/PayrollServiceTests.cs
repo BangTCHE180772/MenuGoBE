@@ -40,7 +40,7 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
             _mapper = config.CreateMapper();
 
-            var emailServiceMock = new Mock<IEmailService>();
+            var emailServiceMock = new Mock<MenuGoBE.Interface.Services.IEmailService>();
             var loggerMock = new Mock<Microsoft.Extensions.Logging.ILogger<PayrollService>>();
             _service = new PayrollService(_payrollRepoMock.Object, _context, _mapper, emailServiceMock.Object, loggerMock.Object);
         }

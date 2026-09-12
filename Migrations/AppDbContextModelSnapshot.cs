@@ -672,6 +672,9 @@ namespace MenuGoBE.Migrations
                     b.Property<int>("Point")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("ReceivePromoEmails")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
 
                     b.ToTable("Customer");
@@ -1727,10 +1730,16 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("OrderId")
                         .HasColumnType("bigint");
 
+                    b.Property<decimal>("OriginalPrice")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("PromotionId")
                         .HasColumnType("bigint");
 
                     b.Property<int>("Quantity")
@@ -1759,6 +1768,8 @@ namespace MenuGoBE.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("PromotionId");
 
                     b.HasIndex("ProductId", "Status", "CookingStatus")
                         .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
@@ -2161,6 +2172,9 @@ namespace MenuGoBE.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("RecommendedTimeMinutes")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SKUCode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2190,6 +2204,111 @@ namespace MenuGoBE.Migrations
                         .IsUnique();
 
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Promotion", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("DiscountType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("DiscountValue")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("MaxDiscount")
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.ToTable("Promotions");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PromotionBranch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("BranchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PromotionId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("PromotionId", "BranchId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PromotionBranch_Unique");
+
+                    b.ToTable("PromotionBranches");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PromotionProduct", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("ProductId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PromotionId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PromotionId", "ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PromotionProduct_Unique");
+
+                    b.ToTable("PromotionProducts");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.RecipesDetailed", b =>
@@ -2740,6 +2859,9 @@ namespace MenuGoBE.Migrations
                     b.Property<decimal>("MaxDiscount")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<int?>("MaxUsagePerCustomer")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("MinOrderValue")
                         .HasColumnType("decimal(18,4)");
 
@@ -2762,6 +2884,38 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("BranchId");
 
                     b.ToTable("Voucher");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.VoucherUsage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("CustomerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("VoucherId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("VoucherId", "CustomerId")
+                        .HasDatabaseName("IX_VoucherUsage_VoucherCustomer");
+
+                    b.ToTable("VoucherUsages");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.WorkSchedule", b =>
@@ -2801,6 +2955,9 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsAutoCheckout")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsHeadChef")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("ManagerApproved")
@@ -3545,9 +3702,16 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MenuGoBE.Models.Promotion", "Promotion")
+                        .WithMany()
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Order");
 
                     b.Navigation("Product");
+
+                    b.Navigation("Promotion");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Partner", b =>
@@ -3710,6 +3874,55 @@ namespace MenuGoBE.Migrations
                     b.Navigation("Group");
 
                     b.Navigation("Image");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Promotion", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Account", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Creator");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PromotionBranch", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Promotion", "Promotion")
+                        .WithMany("PromotionBranches")
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Promotion");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.PromotionProduct", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Promotion", "Promotion")
+                        .WithMany("PromotionProducts")
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Promotion");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.RecipesDetailed", b =>
@@ -3954,6 +4167,32 @@ namespace MenuGoBE.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Branch");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.VoucherUsage", b =>
+                {
+                    b.HasOne("MenuGoBE.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MenuGoBE.Models.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MenuGoBE.Models.Voucher", "Voucher")
+                        .WithMany("Usages")
+                        .HasForeignKey("VoucherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Voucher");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.WorkSchedule", b =>
@@ -4204,6 +4443,13 @@ namespace MenuGoBE.Migrations
                     b.Navigation("UsedInRecipeItems");
                 });
 
+            modelBuilder.Entity("MenuGoBE.Models.Promotion", b =>
+                {
+                    b.Navigation("PromotionBranches");
+
+                    b.Navigation("PromotionProducts");
+                });
+
             modelBuilder.Entity("MenuGoBE.Models.Reservation", b =>
                 {
                     b.Navigation("ReservationDetails");
@@ -4238,6 +4484,11 @@ namespace MenuGoBE.Migrations
             modelBuilder.Entity("MenuGoBE.Models.UnitConversion", b =>
                 {
                     b.Navigation("DerivedConversions");
+                });
+
+            modelBuilder.Entity("MenuGoBE.Models.Voucher", b =>
+                {
+                    b.Navigation("Usages");
                 });
 #pragma warning restore 612, 618
         }

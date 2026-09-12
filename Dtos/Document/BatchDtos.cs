@@ -93,6 +93,7 @@ namespace MenuGoBE.Dtos.Document
         public DateTime CreatedAt { get; set; }
 
         public long? DocumentId { get; set; }
+        public long? OrderId { get; set; }
         public string? DocumentCode { get; set; }
         public DocumentType? DocumentType { get; set; }
         public string? DocumentTypeName { get; set; }

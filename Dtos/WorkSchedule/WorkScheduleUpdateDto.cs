@@ -30,5 +30,6 @@ namespace MenuGoBE.Dtos.WorkSchedule
         public string? OTNotes { get; set; }
         public string Status { get; set; } = string.Empty;
         public bool ManagerApproved { get; set; }
+        public bool IsHeadChef { get; set; }
     }
 }
