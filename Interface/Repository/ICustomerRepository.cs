@@ -10,5 +10,6 @@ namespace MenuGoBE.Interface.Repository
         Task<Customer?> GetByEmailAsync(string email);
         Task CreateAsync(Customer customer);
         Task UpdateAsync(Customer customer);
+        Task<List<Customer>> GetPromoEmailSubscribersAsync();
     }
 }

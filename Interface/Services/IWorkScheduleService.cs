@@ -10,7 +10,7 @@ namespace MenuGoBE.Interface.Services
         Task<WorkScheduleViewDto?> GetByIdAsync(long id);
         Task<WorkScheduleViewDto> CreateAsync(WorkScheduleCreateDto dto);
         Task<bool> UpdateAsync(WorkScheduleUpdateDto dto);
-        Task<bool> DeleteAsync(long id);
+        Task<bool> DeleteAsync(long id, string reason, long cancelledBy);
         
         // (Check-in/Check-out)
         Task<(bool Success, string Message, string Action)> RecordAttendanceAsync(long accountId, long branchId, long? workScheduleId = null);
@@ -21,6 +21,7 @@ namespace MenuGoBE.Interface.Services
 
         Task<bool> RequestLeaveAsync(long accountId, LeaveRequestDto dto);
         Task<bool> RequestShiftSwapAsync(long accountId, ShiftSwapRequestDto dto);
+        Task<bool> RejectShiftSwapAsync(long workScheduleId, long senderAccountId, string note, long rejectedBy);
 
         // OT Approval & Forget Check-out verification
         Task<bool> ApproveOTAsync(WorkScheduleOTApproveDto dto);

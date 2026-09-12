@@ -165,6 +165,11 @@ namespace MenuGoBE.Service
             }
             entity.CreatedAt = DateTime.UtcNow;
 
+            if (entity.IsHeadChef)
+            {
+                await ClearOtherHeadChefsAsync(entity.BranchId, entity.ShiftId, entity.WorkDate, excludeId: null);
+            }
+
             await _repo.CreateAsync(entity);
             await _repo.SaveChangesAsync();
 
@@ -335,6 +340,11 @@ namespace MenuGoBE.Service
 
             _mapper.Map(dto, entity);
 
+            if (entity.IsHeadChef)
+            {
+                await ClearOtherHeadChefsAsync(entity.BranchId, entity.ShiftId, entity.WorkDate, excludeId: entity.Id);
+            }
+
             if (dto.ApprovedOTHours.HasValue)
             {
                 entity.ApprovedOTHours = dto.ApprovedOTHours.Value;
@@ -380,13 +390,54 @@ namespace MenuGoBE.Service
             return true;
         }
 
-        public async Task<bool> DeleteAsync(long id)
+        // Mỗi ca (chi nhánh + ca + ngày) chỉ có tối đa 1 bếp trưởng — bỏ cờ của người khác
+        // đang giữ trong cùng ca trước khi gán người mới.
+        private async Task ClearOtherHeadChefsAsync(long branchId, long shiftId, DateOnly workDate, long? excludeId)
         {
+            var others = await _context.WorkSchedules
+                .Where(ws => ws.BranchId == branchId && ws.ShiftId == shiftId && ws.WorkDate == workDate
+                          && ws.IsHeadChef && (excludeId == null || ws.Id != excludeId.Value))
+                .ToListAsync();
+
+            foreach (var other in others)
+            {
+                other.IsHeadChef = false;
+            }
+        }
+
+        public async Task<bool> DeleteAsync(long id, string reason, long cancelledBy)
+        {
+            if (string.IsNullOrWhiteSpace(reason))
+            {
+                throw new InvalidOperationException("Phải nhập lý do hủy ca làm việc.");
+            }
+
             var entity = await _repo.GetByIdAsync(id);
             if (entity == null) return false;
 
+            // Ghi lại lý do hủy cho nhân viên biết vì bản ghi ca sẽ bị xóa hẳn —
+            // đây là nơi duy nhất lưu lại lý do sau khi xóa.
+            var shift = await _shiftRepo.GetByIdAsync(entity.ShiftId);
+            var canceller = await _accountRepo.GetByIdAsync(cancelledBy);
+            string shiftLabel = shift?.Name ?? "làm việc";
+            string cancellerName = canceller?.Name ?? "Quản lý";
+            string message = $"Ca {shiftLabel} ngày {entity.WorkDate:dd/MM/yyyy} của bạn đã bị {cancellerName} hủy. Lý do: {reason.Trim()}";
+
+            var notification = new Notification
+            {
+                BranchId = entity.BranchId,
+                AccountId = entity.AccountId,
+                Type = "WorkSchedule",
+                Message = message,
+                IsImportant = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _context.Notifications.AddAsync(notification);
+
             await _repo.DeleteAsync(id);
             await _repo.SaveChangesAsync();
+
+            await _hubContext.Clients.Group($"user_{entity.AccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message });
 
             return true;
         }
@@ -797,6 +848,55 @@ namespace MenuGoBE.Service
 
             await _hubContext.Clients.Group($"user_{dto.TargetAccountId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Bạn có lời mời nhận ca làm việc mới." });
             await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveWorkScheduleNotification", new { message = "Có yêu cầu đổi ca mới đang được xử lý." });
+
+            return true;
+        }
+
+        // Quản lý từ chối/hủy yêu cầu đổi ca giữa 2 nhân viên — trả ca về đúng người
+        // đăng ký ban đầu và bắt buộc ghi lý do để thông báo cho cả 2 bên (không có
+        // cột lưu riêng nên gửi qua Notification, giống luồng hủy ca làm việc).
+        public async Task<bool> RejectShiftSwapAsync(long workScheduleId, long senderAccountId, string note, long rejectedBy)
+        {
+            if (string.IsNullOrWhiteSpace(note))
+            {
+                throw new InvalidOperationException("Phải nhập lý do từ chối/hủy yêu cầu đổi ca.");
+            }
+
+            var entity = await _repo.GetByIdAsync(workScheduleId);
+            if (entity == null) return false;
+
+            var receiverAccountId = entity.AccountId;
+            var canceller = await _accountRepo.GetByIdAsync(rejectedBy);
+            string cancellerName = canceller?.Name ?? "Quản lý";
+            string message = $"Yêu cầu đổi ca ngày {entity.WorkDate:dd/MM/yyyy} đã bị {cancellerName} từ chối/hủy. Lý do: {note.Trim()}";
+
+            entity.AccountId = senderAccountId;
+            entity.Status = "APPROVED";
+            entity.ManagerApproved = true;
+
+            var notifyIds = new List<long> { senderAccountId };
+            if (receiverAccountId != senderAccountId) notifyIds.Add(receiverAccountId);
+
+            foreach (var accId in notifyIds)
+            {
+                await _context.Notifications.AddAsync(new Notification
+                {
+                    BranchId = entity.BranchId,
+                    AccountId = accId,
+                    Type = "WorkSchedule",
+                    Message = message,
+                    IsImportant = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _repo.UpdateAsync(entity);
+            await _repo.SaveChangesAsync();
+
+            foreach (var accId in notifyIds)
+            {
+                await _hubContext.Clients.Group($"user_{accId}").SendAsync("ReceiveWorkScheduleNotification", new { message });
+            }
 
             return true;
         }

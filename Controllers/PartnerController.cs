@@ -125,6 +125,27 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region Lấy thông tin chi tiết đối tác theo ID
+        // 3b. GetById
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetById(long id)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.GetPartnerByIdAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
         // 4. Create (NeedToProvide BranchId)
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] PartnerCreateDto dto)
@@ -215,6 +236,26 @@ namespace MenuGoBE.Controllers
             try
             {
                 var result = await _partnerService.GetPartnerImportDocumentsAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Thanh toán tiền cho Nhà cung cấp theo phiếu nhập kho
+        [HttpPost("{partnerId}/import-documents/{documentId}/pay")]
+        public async Task<IActionResult> PayImportDocument(long partnerId, long documentId, [FromBody] PartnerPayDocumentDto dto)
+        {
+            if (!ValidateUserToken(out long userId, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.PayPartnerImportDocumentAsync(partnerId, documentId, dto, userId);
                 return Ok(result);
             }
             catch (Exception ex)

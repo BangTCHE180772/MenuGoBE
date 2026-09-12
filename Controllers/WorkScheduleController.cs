@@ -245,7 +245,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(long id)
+        public async Task<IActionResult> Delete(long id, [FromBody] CancelWorkScheduleDto dto)
         {
             var currentUserId = GetCurrentAccountId();
             if (!currentUserId.HasValue)
@@ -273,7 +273,7 @@ namespace MenuGoBE.Controllers
 
             try
             {
-                var result = await _service.DeleteAsync(id);
+                var result = await _service.DeleteAsync(id, dto?.Reason ?? string.Empty, currentUserId.Value);
                 if (!result)
                     return NotFound(new { message = "Không tìm thấy lịch làm việc để xóa" });
 
@@ -333,6 +333,27 @@ namespace MenuGoBE.Controllers
                 return Ok(new { message = "Đã gửi yêu cầu đổi ca thành công." });
             }
             catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPut("{id}/reject-transfer")]
+        public async Task<IActionResult> RejectTransfer(long id, [FromBody] RejectShiftSwapDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var result = await _service.RejectShiftSwapAsync(id, dto.SenderAccountId, dto.Note, currentUserId.Value);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy lịch làm việc để từ chối đổi ca." });
+
+                return Ok(new { message = "Đã từ chối/hủy yêu cầu đổi ca." });
+            }
+            catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }

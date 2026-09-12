@@ -8,7 +8,9 @@ using MenuGoBE.Dtos.Customer;
 using MenuGoBE.Dtos.Partner;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
+using MenuGoBE.Hubs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace MenuGoBE.Controllers
@@ -18,11 +20,30 @@ namespace MenuGoBE.Controllers
     public class CustomerManagementController : BaseApiController
     {
         private readonly AppDbContext _context;
+        private readonly IHubContext<NotificationHub>? _hubContext;
 
-        public CustomerManagementController(AppDbContext context)
+        public CustomerManagementController(AppDbContext context, IHubContext<NotificationHub>? hubContext = null)
         {
             _context = context;
+            _hubContext = hubContext;
         }
+
+        #region Helper phát thông báo SignalR cập nhật khách hàng
+        private async Task NotifyCustomerUpdatedAsync(string action, long customerId)
+        {
+            if (_hubContext != null)
+            {
+                try
+                {
+                    await _hubContext.Clients.All.SendAsync("ReceiveCustomerUpdate", new { action, customerId });
+                }
+                catch
+                {
+                    // Tránh lỗi SignalR ảnh hưởng luồng xử lý chính
+                }
+            }
+        }
+        #endregion
 
         #region Lấy danh sách khách hàng (Có phân trang và tìm kiếm)
         [HttpGet]
@@ -163,6 +184,8 @@ namespace MenuGoBE.Controllers
                 await _context.SaveChangesAsync();
             }
 
+            await NotifyCustomerUpdatedAsync("create", customer.Id);
+
             return Ok(new CustomerViewDto
             {
                 Id = customer.Id,
@@ -177,7 +200,7 @@ namespace MenuGoBE.Controllers
 
         #region Cập nhật thông tin profile khách hàng (Không sửa mật khẩu)
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCustomerProfile(long id, [FromBody] CustomerProfileUpdateDto dto)
+        public async Task<IActionResult> UpdateCustomer(long id, [FromBody] CustomerProfileUpdateDto dto)
         {
             if (!ValidateUserToken(out _, out var errorResult))
             {
@@ -209,6 +232,8 @@ namespace MenuGoBE.Controllers
             customer.Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
 
             await _context.SaveChangesAsync();
+
+            await NotifyCustomerUpdatedAsync("update", customer.Id);
 
             return Ok(new CustomerViewDto
             {
@@ -247,6 +272,8 @@ namespace MenuGoBE.Controllers
             _context.Customers.Remove(customer);
             await _context.SaveChangesAsync();
 
+            await NotifyCustomerUpdatedAsync("delete", id);
+
             return Ok(new { success = true, message = "Xóa khách hàng thành công." });
         }
         #endregion
@@ -266,17 +293,35 @@ namespace MenuGoBE.Controllers
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
 
+            var orderIds = orders.Select(o => o.Id).ToList();
+
+            // Lấy các giao dịch tích điểm thực tế tương ứng với từng hóa đơn
+            var earnPointTransactions = await _context.CustomerPointTransactions
+                .Where(t => t.CustomerId == id
+                         && t.OrderId.HasValue
+                         && orderIds.Contains(t.OrderId.Value)
+                         && t.Type == PointTransactionType.Earn
+                         && !t.IsReversed)
+                .ToListAsync();
+
             var result = orders.Select(o =>
             {
                 decimal finalAmt = Math.Max(0m, o.TotalAmount - o.DiscountAmount);
+
+                // Lấy điểm nhận thực tế từ lịch sử biến động điểm đã ghi nhận cho hóa đơn này
+                var matchedEarnTrans = earnPointTransactions.Where(t => t.OrderId == o.Id).ToList();
+                int actualPointsEarned = matchedEarnTrans.Any()
+                    ? matchedEarnTrans.Sum(t => t.PointChange)
+                    : (int)(finalAmt / 100000m) * 1000;
+
                 return new CustomerPurchaseHistoryDto
                 {
                     OrderId = o.Id,
-                    InvoiceCode = $"HD{o.Id:D6}",
+                    InvoiceCode = $"HD{o.Id}",
                     CreatedAt = o.CreatedAt,
                     TotalAmount = o.TotalAmount,
                     FinalAmount = finalAmt,
-                    PointsEarned = (int)Math.Floor(finalAmt / 10000m),
+                    PointsEarned = actualPointsEarned,
                     PointsUsed = o.PointsUsed,
                     Status = o.Status
                 };
@@ -314,7 +359,7 @@ namespace MenuGoBE.Controllers
                          : t.Type == PointTransactionType.Reversal ? "Hoàn tác điều chỉnh"
                          : "Điều chỉnh thủ công",
                     TypeEnum = t.Type,
-                    RelatedCode = t.RelatedCode,
+                    RelatedCode = t.OrderId.HasValue ? $"HD{t.OrderId.Value}" : t.RelatedCode,
                     OrderId = t.OrderId,
                     PointChange = t.PointChange,
                     PointBefore = t.PointBefore,
@@ -344,7 +389,7 @@ namespace MenuGoBE.Controllers
             {
                 if (existingOrderIds.Contains(ord.Id)) continue;
 
-                string code = $"HD{ord.Id:D6}";
+                string code = $"HD{ord.Id}";
                 decimal finalAmt = Math.Max(0m, ord.TotalAmount - ord.DiscountAmount);
 
                 if (ord.PointsUsed > 0)
@@ -456,6 +501,8 @@ namespace MenuGoBE.Controllers
                 await _context.CustomerPointTransactions.AddAsync(trans);
                 await _context.SaveChangesAsync();
 
+                await NotifyCustomerUpdatedAsync("point_change", customer.Id);
+
                 return Ok(new
                 {
                     success = true,
@@ -538,6 +585,8 @@ namespace MenuGoBE.Controllers
 
             await _context.SaveChangesAsync();
 
+            await NotifyCustomerUpdatedAsync("point_change", customer.Id);
+
             return Ok(new
             {
                 success = true,
@@ -616,6 +665,8 @@ namespace MenuGoBE.Controllers
 
                 await _context.CustomerPointTransactions.AddAsync(reversalTrans);
                 await _context.SaveChangesAsync();
+
+                await NotifyCustomerUpdatedAsync("point_change", customer.Id);
 
                 return Ok(new
                 {

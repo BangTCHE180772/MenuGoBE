@@ -23,6 +23,8 @@ namespace MenuGoBE.Dtos.Document
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cash;
 
         public decimal AmountPaid { get; set; } = 0;
+
+        public decimal DebtDeductionAmount { get; set; } = 0;
         #endregion
 
         [Required(ErrorMessage = "Danh sách chi tiết mặt hàng nhập kho không được để trống.")]

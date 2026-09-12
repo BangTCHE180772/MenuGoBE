@@ -16,6 +16,7 @@ namespace MenuGoTest.UnitTests
         private readonly Mock<IOrderDetailRepository> _detailRepoMock;
         private readonly Mock<IOrderRepository> _orderRepoMock;
         private readonly Mock<IMapper> _mapperMock;
+        private readonly Mock<MenuGoBE.Interface.Services.ILeftoverRecordService> _leftoverServiceMock;
         private readonly OrderDetailService _service;
 
         public OrderDetailServiceTests()
@@ -23,6 +24,7 @@ namespace MenuGoTest.UnitTests
             _detailRepoMock = new Mock<IOrderDetailRepository>();
             _orderRepoMock = new Mock<IOrderRepository>();
             _mapperMock = new Mock<IMapper>();
+            _leftoverServiceMock = new Mock<MenuGoBE.Interface.Services.ILeftoverRecordService>();
 
             _service = new OrderDetailService(
                 _detailRepoMock.Object,
@@ -30,13 +32,13 @@ namespace MenuGoTest.UnitTests
                 _mapperMock.Object,
                 new Mock<MenuGoBE.Interface.Repository.ITableRepository>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IProductRepository>().Object,
-                new Mock<MenuGoBE.Interface.Repository.IAreaRepository>().Object, 
-                new Mock<MenuGoBE.Interface.Services.IKitchenService>().Object, 
+                new Mock<MenuGoBE.Interface.Repository.IAreaRepository>().Object,
+                new Mock<MenuGoBE.Interface.Services.IKitchenService>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IBInventoryRepository>().Object,
                 new Mock<MenuGoBE.Interface.Repository.IRecipesDetailedRepository>().Object,
                 new Mock<Microsoft.AspNetCore.SignalR.IHubContext<MenuGoBE.Hubs.NotificationHub>>().Object,
                 new Mock<MenuGoBE.Interface.Services.Document.IDocumentService>().Object,
-                new Mock<MenuGoBE.Interface.Services.ILeftoverRecordService>().Object);
+                _leftoverServiceMock.Object);
         }
 
         [Fact]
@@ -99,6 +101,92 @@ namespace MenuGoTest.UnitTests
             Assert.Equal("http://example.com/pho.jpg", item.ProductImage);
             Assert.Equal(2, item.Quantity);
             Assert.Equal("Waiting", item.CookingStatus);
+        }
+
+        [Theory]
+        [InlineData("Waiting")]
+        [InlineData("Accepted")]
+        public async Task ApplyLeftoverReuseAsync_ShouldMarkUsedAndSetReady_WhenDetailIsWaitingOrAccepted(string cookingStatus)
+        {
+            // Arrange
+            var detail = new OrderDetail
+            {
+                Id = 200,
+                ProductId = 10,
+                Quantity = 2,
+                CookingStatus = cookingStatus
+            };
+
+            _detailRepoMock.Setup(r => r.GetByIdAsync(200)).ReturnsAsync(detail);
+            _leftoverServiceMock
+                .Setup(s => s.MarkUsedAsync(999, 10, 2, 200))
+                .Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.ApplyLeftoverReuseAsync(200, 999);
+
+            // Assert
+            Assert.True(result);
+            Assert.Equal("Ready", detail.CookingStatus);
+            _leftoverServiceMock.Verify(s => s.MarkUsedAsync(999, 10, 2, 200), Times.Once);
+            _detailRepoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
+        }
+
+        [Fact]
+        public async Task ApplyLeftoverReuseAsync_ShouldReturnFalse_WhenDetailNotFound()
+        {
+            // Arrange
+            _detailRepoMock.Setup(r => r.GetByIdAsync(200)).ReturnsAsync((OrderDetail?)null);
+
+            // Act
+            var result = await _service.ApplyLeftoverReuseAsync(200, 999);
+
+            // Assert
+            Assert.False(result);
+            _leftoverServiceMock.Verify(s => s.MarkUsedAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<long>()), Times.Never);
+        }
+
+        [Theory]
+        [InlineData("Cooking")]
+        [InlineData("Ready")]
+        public async Task ApplyLeftoverReuseAsync_ShouldThrow_WhenDetailAlreadyPastWaiting(string cookingStatus)
+        {
+            // Arrange
+            var detail = new OrderDetail
+            {
+                Id = 200,
+                ProductId = 10,
+                Quantity = 2,
+                CookingStatus = cookingStatus
+            };
+            _detailRepoMock.Setup(r => r.GetByIdAsync(200)).ReturnsAsync(detail);
+
+            // Act & Assert
+            await Assert.ThrowsAsync<InvalidOperationException>(() => _service.ApplyLeftoverReuseAsync(200, 999));
+            _leftoverServiceMock.Verify(s => s.MarkUsedAsync(It.IsAny<long>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<long>()), Times.Never);
+            Assert.Equal(cookingStatus, detail.CookingStatus);
+        }
+
+        [Fact]
+        public async Task ApplyLeftoverReuseAsync_ShouldNotChangeStatus_WhenMarkUsedAsyncThrows()
+        {
+            // Arrange
+            var detail = new OrderDetail
+            {
+                Id = 200,
+                ProductId = 10,
+                Quantity = 2,
+                CookingStatus = "Waiting"
+            };
+            _detailRepoMock.Setup(r => r.GetByIdAsync(200)).ReturnsAsync(detail);
+            _leftoverServiceMock
+                .Setup(s => s.MarkUsedAsync(999, 10, 2, 200))
+                .ThrowsAsync(new MenuGoBE.Exceptions.MenuGoException(new MenuGoBE.Exceptions.ErrorResult(400, "Món hoặc số lượng không khớp với món thừa đã chọn.", 400)));
+
+            // Act & Assert
+            await Assert.ThrowsAsync<MenuGoBE.Exceptions.MenuGoException>(() => _service.ApplyLeftoverReuseAsync(200, 999));
+            Assert.Equal("Waiting", detail.CookingStatus);
+            _detailRepoMock.Verify(r => r.SaveChangesAsync(), Times.Never);
         }
     }
 }

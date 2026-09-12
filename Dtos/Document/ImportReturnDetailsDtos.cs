@@ -20,6 +20,12 @@ namespace MenuGoBE.Dtos.Document
         /// <summary>Tên Nhà cung cấp (Snapshot từ phiếu Nhập gốc).</summary>
         public string PartnerName { get; set; } = string.Empty;
 
+        /// <summary>Tổng tiền của phiếu nhập gốc.</summary>
+        public decimal TotalAmount { get; set; }
+
+        /// <summary>Số tiền cửa hàng đã thanh toán cho phiếu nhập gốc.</summary>
+        public decimal AmountPaid { get; set; }
+
         /// <summary>Danh sách dòng sản phẩm trong phiếu Nhập gốc kèm thông tin trả hàng.</summary>
         public List<ImportReturnDetailItemDto> Details { get; set; } = new List<ImportReturnDetailItemDto>();
     }

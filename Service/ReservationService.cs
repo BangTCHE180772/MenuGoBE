@@ -6,6 +6,7 @@ using MenuGoBE.Models;
 using MenuGoBE.Dtos.Table;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using MenuGoBE.Repositories;
 
 namespace MenuGoBE.Service;
 
@@ -22,6 +23,8 @@ public class ReservationService : IReservationService
     private readonly IHubContext<NotificationHub> _hubContext;
     private readonly INotificationRepository _notificationRepo;
     private readonly IOrderDetailService _orderDetailService;
+    private readonly IPromotionService _promotionService;
+    private readonly IAreaRepository _areaRepo;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -34,7 +37,9 @@ public class ReservationService : IReservationService
         IReservationSignalService signalService,
         IHubContext<NotificationHub> hubContext,
         INotificationRepository notificationRepo,
-        IOrderDetailService orderDetailService)
+        IOrderDetailService orderDetailService,
+        IPromotionService promotionService,
+        IAreaRepository areaRepo)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -47,6 +52,8 @@ public class ReservationService : IReservationService
         _hubContext = hubContext;
         _notificationRepo = notificationRepo;
         _orderDetailService = orderDetailService;
+        _promotionService = promotionService;
+        _areaRepo = areaRepo;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -258,7 +265,12 @@ public class ReservationService : IReservationService
     public async Task<List<TableViewDto>> GetAvailableTablesAsync(long branchId, DateTime reservationTime)
     {
         var allTables = await _tableRepo.GetByBranchIdsAsync(new List<long> { branchId });
-        var validTables = allTables.Where(t => t.Status != "Maintenance" && t.Status != "Inactive").ToList();
+        var validTables = allTables.Where(t => 
+            t.Status != "Maintenance" && 
+            t.Status != "Inactive" && 
+            t.Area?.IsActive == true && 
+            (t.Area?.Name == null || (!t.Area.Name.ToLower().Contains("internal") && !t.Area.Name.ToLower().Contains("nội bộ")))
+        ).ToList();
 
         var startTime = reservationTime.AddMinutes(-14);
         var endTime = reservationTime.AddMinutes(14);
@@ -488,7 +500,7 @@ public class ReservationService : IReservationService
 
         if (dto.TableIds != null && dto.TableIds.Any())
         {
-            await AssignTablesToReservationAsync(reservation.Id, dto.TableIds);
+            await AssignTablesToReservationAsync(reservation.Id, dto.TableIds, dto.IgnoreWarning);
         }
 
         // Notify Background Task to recalculate the sleep timer
@@ -525,7 +537,7 @@ public class ReservationService : IReservationService
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
 
-    public async Task AssignTablesToReservationAsync(long reservationId, List<long> tableIds)
+    public async Task AssignTablesToReservationAsync(long reservationId, List<long> tableIds, bool ignoreWarning = false)
     {
         var reservation = await _reservationRepo.GetByIdAsync(reservationId);
         if (reservation == null)
@@ -607,13 +619,9 @@ public class ReservationService : IReservationService
         // In the requirement: Báo cảnh báo ±60m đích danh Tên bàn.
         // If they can't ignore it in the modal, they would be stuck.
         // Let's just return InvalidOperationException for now, or just throw it.
-        if (overlap60Tables.Any())
+        if (overlap60Tables.Any() && !ignoreWarning)
         {
-            // If they can't ignore, maybe we shouldn't throw exception, just let it pass? 
-            // I'll just throw InvalidOperationException since the instruction is "Báo cảnh báo ±60m đích danh Tên bàn".
-            // To properly do warning, they need a popup.
-            // I will throw an exception to prevent it. They can uncheck the table.
-            throw new InvalidOperationException($"Chú ý: Bàn [{string.Join(", ", overlap60Tables.Distinct())}] đang có khách hoặc có lịch đặt trong vòng 1 tiếng tới. Vui lòng chọn bàn khác.");
+            throw new MenuGoBE.Exceptions.ReservationWarningException($"Chú ý: Bàn [{string.Join(", ", overlap60Tables.Distinct())}] đang có khách hoặc có lịch đặt trong vòng 1 tiếng tới. Bạn có chắc chắn muốn chọn?");
         }
 
         var fatherTableId = tableIds.First();
@@ -735,6 +743,23 @@ public class ReservationService : IReservationService
                 }
 
                 var details = await _detailRepo.GetByOrderIdAsync(fatherOrder.Id);
+
+                // Lấy branchId để áp dụng KM tại thời điểm check-in
+                long branchId = 0;
+                var fatherTableForPromo = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
+                if (fatherTableForPromo != null)
+                {
+                    var area = await _areaRepo.GetByIdAsync(fatherTableForPromo.AreaId);
+                    if (area != null) branchId = area.BranchId;
+                }
+
+                // Cập nhật giá KM hiện tại cho pre-order items (giá lock tại thời điểm check-in)
+                Dictionary<long, Dtos.Promotion.PromotionDto> promoMap = null;
+                if (branchId > 0)
+                {
+                    promoMap = await _promotionService.GetActivePromotionMapForBranchAsync(branchId);
+                }
+
                 foreach (var detail in details)
                 {
                     if (detail.Status == "PreOrder" || detail.CookingStatus == "PreOrder")
@@ -742,6 +767,28 @@ public class ReservationService : IReservationService
                         var product = await _productRepo.GetByIdAsync(detail.ProductId);
                         if (product != null)
                         {
+                            // Cập nhật giá theo KM hiện tại (thời điểm khách đến)
+                            detail.OriginalPrice = product.SellPrice;
+                            if (promoMap != null && promoMap.TryGetValue(detail.ProductId, out var promo))
+                            {
+                                detail.PromotionId = promo.Id;
+                                if (promo.DiscountType == "Percentage")
+                                {
+                                    var discount = product.SellPrice * (promo.DiscountValue / 100);
+                                    if (promo.MaxDiscount > 0 && discount > promo.MaxDiscount) discount = promo.MaxDiscount;
+                                    detail.Price = Math.Max(0, product.SellPrice - discount);
+                                }
+                                else
+                                {
+                                    detail.Price = Math.Max(0, product.SellPrice - promo.DiscountValue);
+                                }
+                            }
+                            else
+                            {
+                                detail.Price = product.SellPrice;
+                            }
+                            await _detailRepo.UpdateAsync(detail);
+
                             try
                             {
                                 await _orderDetailService.ConfirmAsync(detail.Id);
