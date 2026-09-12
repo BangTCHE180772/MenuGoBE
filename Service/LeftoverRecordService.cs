@@ -4,16 +4,20 @@ using MenuGoBE.Interface.Services;
 using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using MenuGoBE.Exceptions;
+using MenuGoBE.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MenuGoBE.Service
 {
     public class LeftoverRecordService : ILeftoverRecordService
     {
         private readonly ILeftoverRecordRepository _repo;
+        private readonly IHubContext<NotificationHub> _hubContext;
 
-        public LeftoverRecordService(ILeftoverRecordRepository repo)
+        public LeftoverRecordService(ILeftoverRecordRepository repo, IHubContext<NotificationHub> hubContext)
         {
             _repo = repo;
+            _hubContext = hubContext;
         }
 
         public async Task<List<LeftoverRecordViewDto>> GetByBranchAsync(long branchId, LeftoverType? type, DateOnly? fromDate, DateOnly? toDate)
@@ -157,6 +161,30 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
 
             var saved = await _repo.GetByIdAsync(entity.Id);
+
+            // Báo cho bếp biết ngay khi khách trả món — chỉ để xem, bếp không thao tác
+            // gì trên thông báo này (nếu khớp món đang chờ nấu thì bếp tự bấm nút gợi ý
+            // dùng lại món thừa ở màn hình KDS như bình thường).
+            if (entity.Type == LeftoverType.Return)
+            {
+                string tableName = orderDetail?.Order?.Table?.Name ?? "?";
+                string productName = saved?.Product?.Name ?? "?";
+                string notifMessage = $"Bàn {tableName} vừa trả món \"{productName}\" x{entity.Quantity}. Lý do: {entity.Reason}";
+
+                await _hubContext.Clients.Group($"branch_{entity.BranchId}").SendAsync("ReceiveNotification", new
+                {
+                    type = "leftover-return",
+                    branchId = entity.BranchId,
+                    leftoverId = entity.Id,
+                    productId = entity.ProductId,
+                    productName,
+                    quantity = entity.Quantity,
+                    tableName,
+                    reason = entity.Reason,
+                    message = notifMessage,
+                    timestamp = DateTime.UtcNow
+                });
+            }
 
             return new LeftoverRecordViewDto
             {

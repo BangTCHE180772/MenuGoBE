@@ -338,6 +338,27 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpPut("{id}/reject-transfer")]
+        public async Task<IActionResult> RejectTransfer(long id, [FromBody] RejectShiftSwapDto dto)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            try
+            {
+                var result = await _service.RejectShiftSwapAsync(id, dto.SenderAccountId, dto.Note, currentUserId.Value);
+                if (!result)
+                    return NotFound(new { message = "Không tìm thấy lịch làm việc để từ chối đổi ca." });
+
+                return Ok(new { message = "Đã từ chối/hủy yêu cầu đổi ca." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
         [HttpPost("approve-ot")]
         public async Task<IActionResult> ApproveOT([FromBody] WorkScheduleOTApproveDto dto)
         {
