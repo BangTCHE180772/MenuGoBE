@@ -24,6 +24,8 @@ namespace MenuGoBE.Repositories
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
                 .Include(o => o.Payments)
+                .Include(o => o.OrderDetails)
+                    .ThenInclude(od => od.Product)
                 .Include(o => o.ChildOrders)
                     .ThenInclude(c => c.Table)
                         .ThenInclude(t => t.Area)
