@@ -407,7 +407,7 @@ namespace MenuGoBE.Service
                     int targetYear = todayLocal.Day <= payday ? todayLocal.AddMonths(-1).Year : todayLocal.Year;
 
                     var activeBranchAccountIds = await _context.Contracts
-                        .Where(c => c.BranchId == branchId && !c.IsDeleted)
+                        .Where(c => c.BranchId == branchId && c.Status == "Active")
                         .Select(c => c.AccountId)
                         .Distinct()
                         .ToListAsync();
@@ -431,14 +431,14 @@ namespace MenuGoBE.Service
                             var title = "CẢNH BÁO HẠN CHỐT LƯƠNG DÀNH CHO QUẢN LÝ";
                             var msg = $"Chi nhánh {branch.Name} quy định trả lương vào ngày {payday} hàng tháng. Quản lý phải hoàn tất chốt bảng lương trước ngày {lockDeadlineDay}! Hiện đang có {unfinalizedCount} nhân sự chưa được chốt lương. Vui lòng rà soát và bấm \"Chốt lương\" gửi Chủ cửa hàng phê duyệt.";
 
-                            var exists = await _context.Notifications.AnyAsync(n =>
+                            var existingNotif = await _context.Notifications.FirstOrDefaultAsync(n =>
                                 n.BranchId == branchId &&
                                 n.Type == "Operational" &&
                                 n.CreatedAt >= startUtc &&
                                 n.CreatedAt <= endUtc &&
                                 n.ReferenceType == "PayrollDeadline");
 
-                            if (!exists)
+                            if (existingNotif == null)
                             {
                                 newNotifications.Add(new Notification
                                 {
@@ -453,6 +453,12 @@ namespace MenuGoBE.Service
                                     ReferenceType = "PayrollDeadline",
                                     RedirectUrl = "/payroll"
                                 });
+                            }
+                            else if (existingNotif.Message != msg)
+                            {
+                                existingNotif.Message = msg;
+                                existingNotif.Priority = todayLocal.Day >= lockDeadlineDay ? "Critical" : "Warning";
+                                _context.Notifications.Update(existingNotif);
                             }
                         }
                     }
