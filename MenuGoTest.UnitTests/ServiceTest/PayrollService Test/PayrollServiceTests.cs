@@ -299,6 +299,51 @@ namespace MenuGoTest.UnitTests.ServiceTest.PayrollServiceTest
             _payrollRepoMock.Verify(r => r.UpdateAsync(existingPayroll), Times.Once);
         }
 
+        [Fact]
+        public async Task UpdateAsync_WhenSalaryDetailCreatedByZero_ShouldFallbackToEntityAccountId()
+        {
+            // Arrange
+            long payrollId = 1;
+            long accountId = 10;
+            var existingPayroll = new Payroll
+            {
+                Id = payrollId,
+                AccountId = accountId,
+                Status = PayrollStatus.Draft,
+                CalculatedSalary = 10000000,
+                SalaryDetails = new List<SalaryDetail>()
+            };
+
+            var updateDto = new PayrollUpdateDto
+            {
+                Id = payrollId,
+                Month = 8,
+                Year = 2026,
+                SalaryType = "Monthly",
+                BaseSalary = 10000000,
+                BaseWorkDays = 26,
+                ActualWorkDays = 26,
+                CalculatedSalary = 10000000,
+                Status = PayrollStatus.Pending,
+                SalaryDetails = new List<SalaryDetailCreateDto>
+                {
+                    new SalaryDetailCreateDto { Title = "Phụ cấp", Type = SalaryAdjustmentType.Allowance, Amount = 100000, CreatedBy = 0, AccountId = 0 }
+                }
+            };
+
+            _payrollRepoMock.Setup(r => r.GetByIdAsync(payrollId)).ReturnsAsync(existingPayroll);
+            _payrollRepoMock.Setup(r => r.UpdateAsync(It.IsAny<Payroll>())).Returns(Task.CompletedTask);
+
+            // Act
+            var result = await _service.UpdateAsync(updateDto);
+
+            // Assert
+            Assert.True(result);
+            Assert.Single(existingPayroll.SalaryDetails);
+            Assert.Equal(accountId, existingPayroll.SalaryDetails.First().CreatedBy);
+            Assert.Equal(accountId, existingPayroll.SalaryDetails.First().AccountId);
+        }
+
         #endregion
 
         #region DeleteAsync
