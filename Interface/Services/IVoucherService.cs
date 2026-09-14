@@ -5,6 +5,7 @@ namespace MenuGoBE.Interface.Services;
 public interface IVoucherService
 {
     Task<List<VoucherDto>> GetAllAsync();
+    Task<List<VoucherDto>> GetByBranchIdAsync(long branchId);
     Task<VoucherDto?> GetByIdAsync(long id);
     Task<VoucherDto> CreateAsync(VoucherCreateDto dto);
     Task<bool> UpdateAsync(VoucherUpdateDto dto);

@@ -63,7 +63,14 @@ public class PromotionController : ControllerBase
     {
         try
         {
-            var result = await _promotionService.GetAllPromotionsAsync(branchId);
+            var branchIdClaim = User.FindFirst("branchId") ?? User.FindFirst("BranchId");
+            if (branchIdClaim != null && long.TryParse(branchIdClaim.Value, out var bId) && !User.IsInRole("Owner") && !User.IsInRole("Admin"))
+            {
+                var resultByBranch = await _promotionService.GetAllPromotionsByBranchAsync(bId);
+                return Ok(resultByBranch);
+            }
+
+            var result = await _promotionService.GetAllPromotionsAsync();
             return Ok(result);
         }
         catch (Exception ex)
