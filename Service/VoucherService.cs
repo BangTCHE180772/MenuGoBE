@@ -45,6 +45,29 @@ public class VoucherService : IVoucherService
         }).ToList();
     }
 
+    public async Task<List<VoucherDto>> GetByBranchIdAsync(long branchId)
+    {
+        var list = await _repo.GetByBranchIdAsync(branchId);
+        return list.Select(v => new VoucherDto
+        {
+            Id = v.Id,
+            Code = v.Code,
+            Name = v.Name,
+            DiscountType = v.DiscountType,
+            DiscountValue = v.DiscountValue,
+            MaxDiscount = v.MaxDiscount,
+            MinOrderValue = v.MinOrderValue,
+            BranchId = v.BranchId,
+            BranchName = v.Branch?.Name,
+            StartDate = v.StartDate,
+            EndDate = v.EndDate,
+            Quantity = v.Quantity,
+            UsedCount = v.UsedCount,
+            IsActive = v.IsActive,
+            MaxUsagePerCustomer = v.MaxUsagePerCustomer
+        }).ToList();
+    }
+
     public async Task<VoucherDto?> GetByIdAsync(long id)
     {
         var v = await _repo.GetByIdAsync(id);

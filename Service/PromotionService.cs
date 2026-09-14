@@ -88,9 +88,20 @@ public class PromotionService : IPromotionService
         return promotion == null ? null : await MapToDtoAsync(promotion);
     }
 
-    public async Task<IEnumerable<PromotionDto>> GetAllPromotionsAsync(long? branchId)
+    public async Task<IEnumerable<PromotionDto>> GetAllPromotionsAsync()
     {
-        var promotions = await _promotionRepo.GetAllPromotionsAsync(branchId);
+        var promotions = await _promotionRepo.GetAllPromotionsAsync();
+        var dtos = new List<PromotionDto>();
+        foreach (var p in promotions)
+        {
+            dtos.Add(await MapToDtoAsync(p));
+        }
+        return dtos;
+    }
+
+    public async Task<IEnumerable<PromotionDto>> GetAllPromotionsByBranchAsync(long branchId)
+    {
+        var promotions = await _promotionRepo.GetAllPromotionsByBranchAsync(branchId);
         var dtos = new List<PromotionDto>();
         foreach (var p in promotions)
         {
