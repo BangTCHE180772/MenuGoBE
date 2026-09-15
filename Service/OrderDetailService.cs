@@ -450,20 +450,25 @@ namespace MenuGoBE.Service
                         if (area != null)
                         {
                             long branchId = area.BranchId;
-                            int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId);
-                            if (quantityDiff > availableQty)
-                            {
-                                throw new InvalidOperationException($"Số lượng khả dụng không đủ. Chỉ còn {availableQty} phần.");
-                            }
-                            
                             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-                            if (productType == "Regular" || productType == "Manufactured" && oldStatus == "Confirmed")
+                            bool isInternalManufactured = productType == "Manufactured" && order_check.Status == "Internal";
+
+                            if (!isInternalManufactured)
                             {
-                                var product = await _productRepo.GetByIdAsync(entity.ProductId);
-                                if (product != null)
+                                int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId);
+                                if (quantityDiff > availableQty)
                                 {
-                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, entity.OrderId, MenuGoBE.Models.Enums.DocumentType.Sale, order_check.CreatedBy ?? 1);
-                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, quantityDiff, entity.Id, order_check.CreatedBy ?? 1);
+                                    throw new InvalidOperationException($"Số lượng khả dụng không đủ. Chỉ còn {availableQty} phần.");
+                                }
+                                
+                                if (productType == "Regular" || productType == "Manufactured")
+                                {
+                                    var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                    if (product != null)
+                                    {
+                                        var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, entity.OrderId, MenuGoBE.Models.Enums.DocumentType.Sale, order_check.CreatedBy ?? 1);
+                                        await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, quantityDiff, entity.Id, order_check.CreatedBy ?? 1);
+                                    }
                                 }
                             }
                         }
@@ -474,9 +479,11 @@ namespace MenuGoBE.Service
             {
                 int quantityDiff = oldQuantity - entity.Quantity; // positive diff to restore
                 var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
-                if (productType == "Regular" || productType == "Manufactured")
+                var order_check = await _orderRepo.GetByIdAsync(entity.OrderId);
+                bool isInternalManufactured = productType == "Manufactured" && order_check != null && order_check.Status == "Internal";
+
+                if ((productType == "Regular" || productType == "Manufactured") && !isInternalManufactured)
                 {
-                    var order_check = await _orderRepo.GetByIdAsync(entity.OrderId);
                     if (order_check != null)
                     {
                         var table = await _tableRepo.GetByIdAsync(order_check.TableId);
@@ -529,9 +536,10 @@ namespace MenuGoBE.Service
             if (status == "Confirmed")
             {
                 var productType = await _productRepo.GetProductTypeAsync(productId);
-                if (productType == "Regular" || productType == "Manufactured")
+                if (order != null)
                 {
-                    if (order != null)
+                    bool isInternalManufactured = productType == "Manufactured" && order.Status == "Internal";
+                    if ((productType == "Regular" || productType == "Manufactured") && !isInternalManufactured)
                     {
                         var table = await _tableRepo.GetByIdAsync(order.TableId);
                         if (table != null)
@@ -543,8 +551,8 @@ namespace MenuGoBE.Service
                                 var product = await _productRepo.GetByIdAsync(productId);
                                 if (product != null)
                                 {
-                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, orderId, MenuGoBE.Models.Enums.DocumentType.Sale, order?.CreatedBy ?? 1);
-                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, -quantity, entity.Id, order?.CreatedBy ?? 1);
+                                    var saleDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, orderId, MenuGoBE.Models.Enums.DocumentType.Sale, order.CreatedBy ?? 1);
+                                    await _documentService.AppendItemToSaleDocumentAsync(saleDoc.Id, product, -quantity, entity.Id, order.CreatedBy ?? 1);
                                 }
                             }
                         }
@@ -682,6 +690,12 @@ namespace MenuGoBE.Service
 
         public async Task<bool> UpdateCookingStatusAsync(long orderDetailId, string cookingStatus, int? quantity = null)
         {
+            var strategy = _orderRepo.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _orderRepo.BeginTransactionAsync();
+                try
+                {
             var detail = await _detailRepo.GetByIdAsync(orderDetailId);
             if (detail == null) return false;
 
@@ -713,9 +727,54 @@ namespace MenuGoBE.Service
                 if (detail != null)
                 {
                     var productType = await _productRepo.GetProductTypeAsync(detail.ProductId);
+                    var order = await _orderRepo.GetByIdAsync(detail.OrderId);
+                    bool isInternalManufactured = productType == "Manufactured" && order != null && order.Status == "Internal";
+
+                    // 1. Kiểm tra sớm nguyên liệu (Early Validation) cho cả Processed và Manufactured (Internal)
+                    if (productType == "Processed" || isInternalManufactured)
+                    {
+                        long branchId = 0;
+                        if (order != null)
+                        {
+                            var table = await _tableRepo.GetByIdAsync(order.TableId);
+                            if (table != null)
+                            {
+                                var area = await _areaRepo.GetByIdAsync(table.AreaId);
+                                if (area != null) branchId = area.BranchId;
+                            }
+                        }
+
+                        if (branchId > 0)
+                        {
+                            var recipes = await _recipesRepo.GetRecipesByProductIdAsync(detail.ProductId);
+                            if (recipes != null && recipes.Any())
+                            {
+                                decimal multiplier = isInternalManufactured ? 10m : 1m;
+                                decimal totalProduced = detail.Quantity * multiplier;
+
+                                foreach (var recipe in recipes)
+                                {
+                                    var ingBinv = await _bInventoryRepo.GetByProductAndBranchAsync(recipe.IngredientProductId, branchId);
+                                    if (ingBinv != null && ingBinv.IsManageQuantity)
+                                    {
+                                        decimal physical = ingBinv.Quantity;
+                                        decimal required = totalProduced * recipe.Quantity;
+
+                                        if (physical < required)
+                                        {
+                                            var ingProduct = await _productRepo.GetByIdAsync(recipe.IngredientProductId);
+                                            string ingName = ingProduct?.Name ?? $"ID {recipe.IngredientProductId}";
+                                            throw new InvalidOperationException($"Cảnh báo: Không đủ nguyên liệu '{ingName}' để bắt đầu nấu. Cần: {required:N2}, Kho hiện tại chỉ còn: {physical:N2}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Logic tạo phiếu Sale nháp (Pending) cho Processed
                     if (productType == "Processed")
                     {
-                        var order = await _orderRepo.GetByIdAsync(detail.OrderId);
                         if (order != null)
                         {
                             var table = await _tableRepo.GetByIdAsync(order.TableId);
@@ -748,7 +807,7 @@ namespace MenuGoBE.Service
                                             timestamp = DateTime.UtcNow
                                         });
 
-                                        throw new InvalidOperationException($"Không đủ nguyên liệu để nấu: {ex.Message}");
+                                        throw new InvalidOperationException($"Không đủ nguyên liệu để lập phiếu nấu: {ex.Message}");
                                     }
                                 }
                             }
@@ -760,14 +819,23 @@ namespace MenuGoBE.Service
             var result = await _detailRepo.UpdateCookingStatusAsync(orderDetailId, cookingStatus);
             if (result)
             {
-                if (cookingStatus == "Served")
+                if (cookingStatus == "Ready")
                 {
                     await _kitchenService.HandleInternalRestockCompletionAsync(orderDetailId);
                 }
 
                 await _detailRepo.SaveChangesAsync();
             }
+
+            await transaction.CommitAsync();
             return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            });
         }
 
         // Dùng lại món thừa (khách trả, bếp đã làm xong, còn trong 30p) cho một món
@@ -909,7 +977,9 @@ namespace MenuGoBE.Service
             {
                 var tableName = order.Table?.Name ?? $"Bàn #{order.TableId}";
                 var items = order.OrderDetails
-                    .Where(od => od.Product != null && od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && 
+                    .Where(od => od.Product != null && 
+                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed || 
+                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Manufactured && order.Status == "Internal")) && 
                                  (string.Equals(od.Status, "Confirmed", StringComparison.OrdinalIgnoreCase) || 
                                   string.Equals(od.Status, "PartialReturned", StringComparison.OrdinalIgnoreCase)) &&
                                  !string.Equals(od.CookingStatus, "Served", StringComparison.OrdinalIgnoreCase) && 
