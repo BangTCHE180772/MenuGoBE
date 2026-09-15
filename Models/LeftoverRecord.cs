@@ -35,8 +35,8 @@ public class LeftoverRecord
     public long? OrderDetailId { get; set; }
     public LeftoverHandlingAction? HandlingAction { get; set; }
 
-    [Column(TypeName = "decimal(18,4)")]
-    public decimal? DiscountAmount { get; set; }
+    // Bù bằng điểm tích lũy cho khách thay vì giảm giá tiền mặt.
+    public int? CompensationPoints { get; set; }
 
     // Reuse: trong 30p kể từ CreatedAt, nếu có đơn khác cần đúng món này thì
     // gợi ý dùng lại thay vì bắt bếp làm mới. Set khi được dùng lại.
