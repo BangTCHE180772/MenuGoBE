@@ -25,12 +25,26 @@ public class PaymentRepository : IPaymentRepository
             .FirstOrDefaultAsync(p => p.TransactionId == transactionId && p.Status == "Pending");
     }
 
+    public async Task<Payment?> GetByTransactionIdAsync(string transactionId)
+    {
+        return await _context.Payments
+            .FirstOrDefaultAsync(p => p.TransactionId == transactionId);
+    }
+
     public async Task<Payment?> GetLatestPendingByOrderIdAsync(long orderId)
     {
         return await _context.Payments
             .Where(p => p.OrderId == orderId && p.Method == "PayOS" && p.Status == "Pending")
             .OrderByDescending(p => p.CreatedAt)
             .FirstOrDefaultAsync();
+    }
+
+    public async Task<List<Payment>> GetAllByOrderIdAsync(long orderId)
+    {
+        return await _context.Payments
+            .Where(p => p.OrderId == orderId)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
     }
 
     public async Task<bool> HasSuccessPaymentAsync(long orderId)

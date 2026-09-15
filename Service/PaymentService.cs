@@ -83,7 +83,7 @@ public class PaymentService : IPaymentService
         return payment;
     }
 
-    public async Task<(bool verified, List<long> paidTableIds)> VerifyPaymentWebhookAsync(Webhook webhookBody)
+    public async Task<(bool verified, List<long> paidTableIds, long orderId)> VerifyPaymentWebhookAsync(Webhook webhookBody)
     {
         try
         {
@@ -94,62 +94,81 @@ public class PaymentService : IPaymentService
             {
                 // Find payment by TransactionId (orderCode)
                 var transactionId = webhookData.OrderCode.ToString();
-                var payment = await _paymentRepo.GetByTransactionIdPendingAsync(transactionId);
+                var payment = await _paymentRepo.GetByTransactionIdAsync(transactionId);
 
-                if (payment != null)
+                if (payment != null && (payment.Status == "Pending" || payment.Status == "Failed"))
                 {
                     payment.Status = "Success";
                     payment.CompletedAt = DateTime.UtcNow;
                     await _paymentRepo.UpdateAsync(payment);
 
                     // Complete the Order automatically
-                    var paidTableIds = await _orderService.PayOrderAsync(payment.OrderId, new OrderPayDto(), paymentMethod: "PayOS");
-                    return (true, paidTableIds);
+                    var paidTableIds = await _orderService.PayOrderAsync(payment.OrderId, null, paymentMethod: "PayOS");
+                    return (true, paidTableIds, payment.OrderId);
                 }
             }
-            return (false, new List<long>());
+            return (false, new List<long>(), 0);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Webhook verify failed: {ex.Message}");
-            return (false, new List<long>());
+            return (false, new List<long>(), 0);
         }
     }
 
     public async Task<(Payment payment, List<long> paidTableIds)> CheckPaymentStatusAsync(long orderId)
     {
-        var payment = await _paymentRepo.GetLatestPendingByOrderIdAsync(orderId);
-        if (payment == null || string.IsNullOrEmpty(payment.TransactionId))
+        // 1. Check if there's already a successful payment in DB
+        var allPayments = await _paymentRepo.GetAllByOrderIdAsync(orderId);
+        var successPayment = allPayments.FirstOrDefault(p => p.Status == "Success");
+        
+        if (successPayment != null)
         {
-            throw new Exception("Không tìm thấy giao dịch chờ thanh toán nào cho đơn hàng này.");
-        }
-
-        var paidTableIds = new List<long>();
-
-        try
-        {
-            var paymentInfo = await _payOS.PaymentRequests.GetAsync(long.Parse(payment.TransactionId));
-            if (paymentInfo.Status.ToString() == "Paid" && payment.Status == "Pending")
+            // Verify if the order was ACTUALLY paid (in case PayOrderAsync crashed previously)
+            var orderWithDetails = await _orderRepo.GetActiveOrderByIdWithDetailsAsync(orderId);
+            if (orderWithDetails != null)
             {
-                payment.Status = "Success";
-                payment.CompletedAt = DateTime.UtcNow;
-                await _paymentRepo.UpdateAsync(payment);
+                var paidTableIds = await _orderService.PayOrderAsync(orderId, null, paymentMethod: "PayOS");
+                return (successPayment, paidTableIds);
+            }
 
-                paidTableIds = await _orderService.PayOrderAsync(payment.OrderId, new OrderPayDto(), paymentMethod: "PayOS");
-            }
-            else if (paymentInfo.Status.ToString() == "Cancelled" && payment.Status == "Pending")
-            {
-                payment.Status = "Failed";
-                payment.CompletedAt = DateTime.UtcNow;
-                await _paymentRepo.UpdateAsync(payment);
-            }
+            // Payment is already marked as success in DB and order is paid
+            return (successPayment, new List<long>());
         }
-        catch (Exception ex)
+
+        // 2. Otherwise, check PayOS API for all Pending/Failed payments to see if any of them was actually paid
+        var paymentsToCheck = allPayments.Where(p => p.Status == "Pending" || p.Status == "Failed").ToList();
+        
+        foreach (var payment in paymentsToCheck)
         {
-            Console.WriteLine($"CheckPaymentStatus failed: {ex.Message}");
-            throw new Exception("Không thể kiểm tra trạng thái thanh toán từ PayOS.");
+            if (string.IsNullOrEmpty(payment.TransactionId)) continue;
+            
+            try
+            {
+                var paymentInfo = await _payOS.PaymentRequests.GetAsync(long.Parse(payment.TransactionId));
+                
+                if (paymentInfo.Status.ToString() == "Paid")
+                {
+                    payment.Status = "Success";
+                    payment.CompletedAt = DateTime.UtcNow;
+                    await _paymentRepo.UpdateAsync(payment);
+
+                    var paidTableIds = await _orderService.PayOrderAsync(payment.OrderId, null, paymentMethod: "PayOS");
+                    return (payment, paidTableIds);
+                }
+                else if (paymentInfo.Status.ToString() == "Cancelled" && payment.Status == "Pending")
+                {
+                    payment.Status = "Failed";
+                    payment.CompletedAt = DateTime.UtcNow;
+                    await _paymentRepo.UpdateAsync(payment);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error checking payment {payment.TransactionId}: {ex.Message}");
+            }
         }
 
-        return (payment, paidTableIds);
+        throw new Exception("Không tìm thấy giao dịch nào đã được thanh toán cho đơn hàng này.");
     }
 }
