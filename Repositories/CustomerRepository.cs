@@ -1,4 +1,6 @@
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 using MenuGoBE.Data;
 using MenuGoBE.Interface.Repository;
 using MenuGoBE.Models;
@@ -46,6 +48,11 @@ namespace MenuGoBE.Repositories
             return await _context.Customers
                 .Where(c => c.ReceivePromoEmails && !string.IsNullOrEmpty(c.Email))
                 .ToListAsync();
+        }
+
+        public async Task SaveChangesAsync()
+        {
+            await _context.SaveChangesAsync();
         }
     }
 }
