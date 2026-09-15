@@ -23,7 +23,7 @@ namespace MenuGoBE.Dtos.Leftover
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public LeftoverHandlingAction? HandlingAction { get; set; }
 
-        public decimal? DiscountAmount { get; set; }
+        public int? CompensationPoints { get; set; }
 
         public DateTime? UsedAt { get; set; }
         public long? UsedByOrderDetailId { get; set; }

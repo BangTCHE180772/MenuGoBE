@@ -36,7 +36,7 @@ namespace MenuGoBE.Service
                 OrderDetailId = l.OrderDetailId,
                 TableName = l.OrderDetail?.Order?.Table?.Name,
                 HandlingAction = l.HandlingAction,
-                DiscountAmount = l.DiscountAmount,
+                CompensationPoints = l.CompensationPoints,
                 UsedAt = l.UsedAt,
                 UsedByOrderDetailId = l.UsedByOrderDetailId,
                 ShiftId = l.ShiftId,
@@ -133,9 +133,9 @@ namespace MenuGoBE.Service
                 {
                     throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không được gắn với đơn hàng của khách.", 400));
                 }
-                if (dto.DiscountAmount.HasValue)
+                if (dto.CompensationPoints.HasValue)
                 {
-                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không có giảm giá.", 400));
+                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không có bù điểm.", 400));
                 }
             }
 
@@ -148,7 +148,7 @@ namespace MenuGoBE.Service
                 Reason = dto.Reason.Trim(),
                 OrderDetailId = dto.OrderDetailId,
                 HandlingAction = dto.HandlingAction,
-                DiscountAmount = dto.DiscountAmount,
+                CompensationPoints = dto.CompensationPoints,
                 ShiftId = dto.ShiftId,
                 RecordDate = dto.RecordDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
                 CreatedBy = createdBy,
@@ -198,7 +198,7 @@ namespace MenuGoBE.Service
                 OrderDetailId = entity.OrderDetailId,
                 TableName = orderDetail?.Order?.Table?.Name,
                 HandlingAction = entity.HandlingAction,
-                DiscountAmount = entity.DiscountAmount,
+                CompensationPoints = entity.CompensationPoints,
                 ShiftId = entity.ShiftId,
                 RecordDate = entity.RecordDate,
                 CreatedBy = entity.CreatedBy,
