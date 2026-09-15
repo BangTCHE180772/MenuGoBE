@@ -98,6 +98,16 @@ public class VoucherService : IVoucherService
         var existing = await _repo.GetByCodeAsync(dto.Code);
         if (existing != null) throw new Exception("Mã Voucher đã tồn tại.");
 
+        if (dto.DiscountValue < 0)
+        {
+            throw new Exception("Giá trị giảm giá không được âm.");
+        }
+
+        if (dto.DiscountType == "Percentage" && dto.DiscountValue > 100)
+        {
+            throw new Exception("Giá trị giảm giá theo phần trăm không được vượt quá 100%.");
+        }
+
         var v = new Voucher
         {
             Code = dto.Code.ToUpper(),
@@ -134,6 +144,16 @@ public class VoucherService : IVoucherService
         var existing = await _repo.GetByCodeAsync(dto.Code);
         if (existing != null && existing.Id != dto.Id)
             throw new Exception("Mã Voucher đã tồn tại ở chương trình khác.");
+
+        if (dto.DiscountValue < 0)
+        {
+            throw new Exception("Giá trị giảm giá không được âm.");
+        }
+
+        if (dto.DiscountType == "Percentage" && dto.DiscountValue > 100)
+        {
+            throw new Exception("Giá trị giảm giá theo phần trăm không được vượt quá 100%.");
+        }
 
         if (v.UsedCount > 0)
         {
@@ -319,28 +339,62 @@ public class VoucherService : IVoucherService
                 }
 
                 string subject;
-                if (isNew) subject = $"[MenuGo] Tặng bạn Voucher mới: {v.Name}!";
-                else if (justEnabled) subject = $"[MenuGo] Voucher {v.Name} đã được kích hoạt lại!";
-                else subject = $"[MenuGo] Cập nhật ưu đãi Voucher: {v.Name}!";
+                if (isNew) subject = $"[MenuGo] Thông báo mã giảm giá mới: {v.Name}";
+                else if (justEnabled) subject = $"[MenuGo] Mã giảm giá {v.Name} đã được kích hoạt lại";
+                else subject = $"[MenuGo] Cập nhật ưu đãi mã giảm giá: {v.Name}";
                 
                 var discountText = v.DiscountType == "Percentage" 
                     ? $"{v.DiscountValue}% (Tối đa {v.MaxDiscount:N0}đ)" 
                     : $"{v.DiscountValue:N0}đ";
 
                 var body = $@"
-                    <h2>Xin chào!</h2>
-                    <p>MenuGo xin gửi đến bạn thông tin Voucher: <strong>{v.Name}</strong></p>
-                    <p>Mã ưu đãi: <strong style='color: #ea580c; font-size: 1.2em;'>{v.Code}</strong></p>
-                    <ul>
-                        <li><strong>Mức giảm:</strong> {discountText}</li>
-                        <li><strong>Đơn tối thiểu:</strong> {v.MinOrderValue:N0}đ</li>
-                        <li><strong>Địa điểm áp dụng:</strong> {branchName}</li>
-                        <li><strong>Hạn mức sử dụng:</strong> {(v.MaxUsagePerCustomer.HasValue ? $"{v.MaxUsagePerCustomer.Value} lần/khách" : "Không giới hạn")}</li>
-                        <li><strong>Thời gian áp dụng:</strong> {v.StartDate:dd/MM/yyyy HH:mm} - {v.EndDate:dd/MM/yyyy HH:mm}</li>
-                    </ul>
-                    <p>Hãy nhanh tay sử dụng trước khi hết hạn nhé!</p>
-                    <br/>
-                    <p>Trân trọng,<br/>Đội ngũ MenuGo</p>
+                    <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);'>
+                        <div style='background-color: #3b82f6; color: white; padding: 25px 20px; text-align: center;'>
+                            <h1 style='margin: 0; font-size: 24px;'>Quà tặng từ MenuGo</h1>
+                            <p style='margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;'>MenuGo gửi tặng bạn mã giảm giá</p>
+                        </div>
+                        
+                        <div style='padding: 30px 20px;'>
+                            <h2 style='color: #0f172a; margin-top: 0; font-size: 20px; text-align: center;'>{v.Name}</h2>
+                            <p style='color: #475569; font-size: 15px; line-height: 1.6; text-align: center;'>
+                                Nhập mã dưới đây khi đặt món tại MenuGo để nhận ưu đãi:
+                            </p>
+                            
+                            <div style='background: #fffbeb; border: 2px dashed #f59e0b; border-radius: 8px; padding: 20px; margin: 25px 0; text-align: center;'>
+                                <span style='display: block; color: #b45309; font-size: 14px; margin-bottom: 8px; font-weight: bold;'>Mã khuyến mãi của bạn</span>
+                                <div style='font-size: 28px; font-weight: 900; color: #ea580c; letter-spacing: 2px;'>{v.Code}</div>
+                            </div>
+
+                            <div style='background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 20px 0;'>
+                                <h3 style='color: #0f172a; font-size: 16px; margin: 0 0 15px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;'>Chi Tiết Ưu Đãi</h3>
+                                <div style='margin-bottom: 12px; display: flex; align-items: flex-start;'>
+                                    <strong style='width: 150px; color: #475569; flex-shrink: 0;'>Mức giảm:</strong> 
+                                    <span style='color: #ef4444; font-weight: bold;'>{discountText}</span>
+                                </div>
+                                <div style='margin-bottom: 12px; display: flex; align-items: flex-start;'>
+                                    <strong style='width: 150px; color: #475569; flex-shrink: 0;'>Đơn tối thiểu:</strong> 
+                                    <span style='color: #0f172a; font-weight: 500;'>{v.MinOrderValue:N0}đ</span>
+                                </div>
+                                <div style='margin-bottom: 12px; display: flex; align-items: flex-start;'>
+                                    <strong style='width: 150px; color: #475569; flex-shrink: 0;'>Áp dụng tại:</strong> 
+                                    <span style='color: #0f172a; font-weight: 500;'>{branchName}</span>
+                                </div>
+                                <div style='margin-bottom: 12px; display: flex; align-items: flex-start;'>
+                                    <strong style='width: 150px; color: #475569; flex-shrink: 0;'>Hạn mức:</strong> 
+                                    <span style='color: #0f172a; font-weight: 500;'>{(v.MaxUsagePerCustomer.HasValue ? $"{v.MaxUsagePerCustomer.Value} lần/khách" : "Không giới hạn")}</span>
+                                </div>
+                                <div style='display: flex; align-items: flex-start;'>
+                                    <strong style='width: 150px; color: #475569; flex-shrink: 0;'>Thời gian:</strong> 
+                                    <span style='color: #0f172a; font-weight: 500;'>{v.StartDate:dd/MM/yyyy HH:mm} - {v.EndDate:dd/MM/yyyy HH:mm}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style='background-color: #f1f5f9; padding: 15px 20px; text-align: center; color: #64748b; font-size: 12px;'>
+                            <p style='margin: 0;'>Email này được gửi tự động từ hệ thống MenuGo.</p>
+                            <p style='margin: 5px 0 0 0;'>Cảm ơn bạn đã luôn đồng hành cùng chúng tôi!</p>
+                        </div>
+                    </div>
                 ";
 
                 foreach (var customer in subscribers)

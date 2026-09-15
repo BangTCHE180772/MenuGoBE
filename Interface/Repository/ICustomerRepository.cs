@@ -11,5 +11,6 @@ namespace MenuGoBE.Interface.Repository
         Task CreateAsync(Customer customer);
         Task UpdateAsync(Customer customer);
         Task<List<Customer>> GetPromoEmailSubscribersAsync();
+        Task SaveChangesAsync();
     }
 }
