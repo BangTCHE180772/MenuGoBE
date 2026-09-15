@@ -25,6 +25,7 @@ public class ReservationService : IReservationService
     private readonly IOrderDetailService _orderDetailService;
     private readonly IPromotionService _promotionService;
     private readonly IAreaRepository _areaRepo;
+    private readonly IReservationNotificationQueue _notificationQueue;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -39,7 +40,8 @@ public class ReservationService : IReservationService
         INotificationRepository notificationRepo,
         IOrderDetailService orderDetailService,
         IPromotionService promotionService,
-        IAreaRepository areaRepo)
+        IAreaRepository areaRepo,
+        IReservationNotificationQueue notificationQueue)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -54,6 +56,7 @@ public class ReservationService : IReservationService
         _orderDetailService = orderDetailService;
         _promotionService = promotionService;
         _areaRepo = areaRepo;
+        _notificationQueue = notificationQueue;
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -534,6 +537,18 @@ public class ReservationService : IReservationService
             });
         }
 
+        // Queue Email notification cho khách
+        _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
+        {
+            CustomerId = reservation.CustomerId,
+            CustomerEmail = customer.Email,
+            CustomerName = customer.Name,
+            EventType = "Created",
+            ReservationTime = reservation.ReservationTime,
+            BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+            ReservationId = reservation.Id
+        });
+
         return (await GetAllAsync()).FirstOrDefault(r => r.Id == reservation.Id)!;
     }
 
@@ -708,6 +723,49 @@ public class ReservationService : IReservationService
         await _reservationRepo.UpdateAsync(reservation);
         await _reservationRepo.SaveChangesAsync();
 
+        // Create Customer Notification
+        var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+        var notif = new Notification
+        {
+            BranchId = reservation.BranchId ?? (fatherOrder.Table?.Area?.BranchId ?? 0),
+            CustomerId = reservation.CustomerId,
+            Type = "Reservation",
+            Title = "Đặt bàn đã được xác nhận",
+            Message = $"Đặt bàn của bạn vào lúc {reservation.ReservationTime:dd/MM/yyyy HH:mm} tại {branchName} đã được xác nhận.",
+            CreatedAt = DateTime.UtcNow,
+            IsRead = false,
+            IsImportant = true,
+            Priority = "Information",
+            ReferenceType = "Reservation",
+            ReferenceId = reservationId
+        };
+        await _notificationRepo.CreateAsync(notif);
+        await _notificationRepo.SaveChangesAsync();
+
+        if (reservation.CustomerId > 0)
+        {
+            await _hubContext.Clients.Group($"customer_{reservation.CustomerId}").SendAsync("ReceiveNotification", new
+            {
+                type = "reservation-confirmed",
+                message = $"Đặt bàn của bạn tại {branchName} đã được xác nhận.",
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        // Queue Email notification cho khách
+        var confirmCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
+        _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
+        {
+            CustomerId = reservation.CustomerId,
+            CustomerEmail = confirmCustomer?.Email,
+            CustomerName = confirmCustomer?.Name ?? "",
+            EventType = "Confirmed",
+            ReservationTime = reservation.ReservationTime,
+            BranchName = branchName,
+            ReservationId = reservation.Id,
+            TableNames = string.Join(", ", tableIds.Select(async tid => (await _tableRepo.GetByIdAsync(tid))?.Name ?? "").Select(t => t.Result))
+        });
+
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
@@ -840,6 +898,19 @@ public class ReservationService : IReservationService
             });
         }
 
+        // Queue Email notification cho khách
+        var checkInCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
+        _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
+        {
+            CustomerId = reservation.CustomerId,
+            CustomerEmail = checkInCustomer?.Email,
+            CustomerName = checkInCustomer?.Name ?? "",
+            EventType = "CheckedIn",
+            ReservationTime = reservation.ReservationTime,
+            BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+            ReservationId = reservation.Id
+        });
+
         return new { Success = true, FailedItems = failedItems };
     }
 
@@ -940,6 +1011,23 @@ public class ReservationService : IReservationService
         {
             // Ignore notification errors to not fail the cancellation process
         }
+
+        // Queue Email notification cho khách
+        try
+        {
+            var cancelCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
+            _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
+            {
+                CustomerId = reservation.CustomerId,
+                CustomerEmail = cancelCustomer?.Email,
+                CustomerName = cancelCustomer?.Name ?? "",
+                EventType = "Cancelled",
+                ReservationTime = reservation.ReservationTime,
+                BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+                ReservationId = reservation.Id
+            });
+        }
+        catch { /* Bỏ qua lỗi email */ }
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
@@ -1054,6 +1142,45 @@ public class ReservationService : IReservationService
             }
         }
 
+        // Lấy danh sách tất cả các bàn của reservation
+        var allTableNames = new List<string>();
+        if (reservation.OrderId.HasValue)
+        {
+            var rOrder = await _orderRepo.GetActiveOrderByIdWithDetailsAsync(reservation.OrderId.Value) 
+                         ?? await _orderRepo.GetByIdAsync(reservation.OrderId.Value);
+            if (rOrder != null)
+            {
+                var mainTable = await _tableRepo.GetByIdAsync(rOrder.TableId);
+                if (mainTable != null) allTableNames.Add(mainTable.Name);
+
+                var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(rOrder.Id);
+                foreach (var child in childOrders)
+                {
+                    var childTable = await _tableRepo.GetByIdAsync(child.TableId);
+                    if (childTable != null) allTableNames.Add(childTable.Name);
+                }
+            }
+        }
+        else
+        {
+            allTableNames.Add(newTable.Name);
+        }
+        var tableNamesStr = string.Join(", ", allTableNames);
+
+        // Queue Email notification cho khách
+        var confirmCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
+        _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
+        {
+            CustomerId = reservation.CustomerId,
+            CustomerEmail = confirmCustomer?.Email,
+            CustomerName = confirmCustomer?.Name ?? "",
+            EventType = "Confirmed",
+            ReservationTime = reservation.ReservationTime,
+            BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+            ReservationId = reservation.Id,
+            TableNames = tableNamesStr
+        });
+
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");
         await _hubContext.Clients.All.SendAsync("ReceiveReservationUpdate");
@@ -1147,6 +1274,19 @@ public class ReservationService : IReservationService
                 timestamp = DateTime.UtcNow
             });
         }
+
+        // Queue Email notification cho khách
+        var rejectCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
+        _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
+        {
+            CustomerId = reservation.CustomerId,
+            CustomerEmail = rejectCustomer?.Email,
+            CustomerName = rejectCustomer?.Name ?? "",
+            EventType = "Rejected",
+            ReservationTime = reservation.ReservationTime,
+            BranchName = branchName,
+            ReservationId = reservation.Id
+        });
 
         _signalService.TriggerSignal();
         await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate");

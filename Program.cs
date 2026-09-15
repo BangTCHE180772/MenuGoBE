@@ -191,6 +191,10 @@ builder.Services.AddSingleton<IDictionary<string, long>>(opts => new Dictionary<
 builder.Services.AddSingleton<IReservationSignalService, ReservationSignalService>();
 builder.Services.AddHostedService<ReservationMonitorService>();
 
+// Reservation Email Notification Queue & Worker
+builder.Services.AddSingleton<IReservationNotificationQueue, ReservationNotificationQueue>();
+builder.Services.AddHostedService<ReservationNotificationWorker>();
+
 // Device Auth Service (QR + SignalR)
 builder.Services.AddSingleton<DeviceAuthService>();
 builder.Services.AddSingleton<IDeviceAuthService>(provider => provider.GetRequiredService<DeviceAuthService>());
