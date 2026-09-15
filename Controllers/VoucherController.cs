@@ -16,10 +16,16 @@ public class VoucherController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] long? branchId)
     {
-        var result = await _service.GetAllAsync();
-        return Ok(result);
+        var branchIdClaim = User.FindFirst("branchId") ?? User.FindFirst("BranchId");
+        if (branchIdClaim != null && long.TryParse(branchIdClaim.Value, out var bId) && !User.IsInRole("Owner") && !User.IsInRole("Admin"))
+        {
+            var result = await _service.GetByBranchIdAsync(bId);
+            return Ok(result);
+        }
+        var allResult = await _service.GetAllAsync();
+        return Ok(allResult);
     }
 
     [HttpGet("{id}")]
@@ -35,6 +41,12 @@ public class VoucherController : ControllerBase
     {
         try
         {
+            var branchIdClaim = User.FindFirst("branchId") ?? User.FindFirst("BranchId");
+            if (branchIdClaim != null && long.TryParse(branchIdClaim.Value, out var bId) && !User.IsInRole("Owner") && !User.IsInRole("Admin"))
+            {
+                dto.BranchId = bId;
+            }
+
             var result = await _service.CreateAsync(dto);
             return Ok(result);
         }
@@ -49,6 +61,12 @@ public class VoucherController : ControllerBase
     {
         try
         {
+            var branchIdClaim = User.FindFirst("branchId") ?? User.FindFirst("BranchId");
+            if (branchIdClaim != null && long.TryParse(branchIdClaim.Value, out var bId) && !User.IsInRole("Owner") && !User.IsInRole("Admin"))
+            {
+                dto.BranchId = bId;
+            }
+
             var result = await _service.UpdateAsync(dto);
             if (!result) return NotFound(new { message = "Không tìm thấy Voucher để cập nhật" });
             return Ok(new { message = "Cập nhật thành công" });
