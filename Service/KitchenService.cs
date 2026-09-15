@@ -101,6 +101,18 @@ public class KitchenService : IKitchenService
             await _orderRepo.CreateAsync(internalOrder);
             await _orderRepo.SaveChangesAsync();
         }
+        else
+        {
+            var existingDetails = await _orderDetailRepo.GetByOrderIdAsync(internalOrder.Id);
+            var pendingQuantity = existingDetails
+                .Where(od => od.ProductId == dto.ProductId && od.Status != "Cancelled" && od.CookingStatus != "Served")
+                .Sum(od => od.Quantity);
+
+            if (pendingQuantity + dto.Quantity > 5)
+            {
+                throw new Exception($"Bếp đang thực hiện {pendingQuantity} Ca món này. Vui lòng không yêu cầu vượt quá 5 Ca cùng lúc!");
+            }
+        }
 
         var orderDetail = new OrderDetail
         {
@@ -110,14 +122,21 @@ public class KitchenService : IKitchenService
             Price = 0,
             Status = "Confirmed",
             CookingStatus = "Waiting",
-            Note = "Yêu cầu sản xuất thêm",
+            Note = "Yêu cầu sản xuất thêm theo Ca (1 Ca = 10 Phần)",
             CreatedAt = DateTime.UtcNow
         };
 
         await _orderDetailRepo.CreateAsync(orderDetail);
         await _orderDetailRepo.SaveChangesAsync();
 
-        await _hubContext.Clients.All.SendAsync("ReceiveKitchenOrderUpdate", dto.BranchId);
+        try 
+        {
+            await _hubContext.Clients.All.SendAsync("ReceiveKitchenOrderUpdate", dto.BranchId);
+        }
+        catch 
+        {
+            // Ignore signalR errors to not block the request
+        }
 
         return true;
     }
@@ -199,16 +218,16 @@ public class KitchenService : IKitchenService
                 BranchId = branchId,
                 Type = DocumentType.Production,
                 TotalAmount = 0,
-                Note = "Sản xuất nội bộ",
+                Note = "Sản xuất nội bộ (Theo Ca)",
                 DocumentDetails = new List<DocumentDetail>
                 {
                     new DocumentDetail
                     {
                         BInventoryId = productInventory.Id,
-                        BaseQuantity = detail.Quantity,
-                        Quantity = detail.Quantity,
+                        BaseQuantity = detail.Quantity * 10,
+                        Quantity = detail.Quantity * 10,
                         UnitPrice = 0,
-                        Note = "Nhập thành phẩm sau sản xuất"
+                        Note = "Nhập thành phẩm sau sản xuất (1 Ca = 10 Phần)"
                     }
                 }
             };
