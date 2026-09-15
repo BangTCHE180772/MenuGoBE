@@ -26,6 +26,7 @@ public class ReservationService : IReservationService
     private readonly IPromotionService _promotionService;
     private readonly IAreaRepository _areaRepo;
     private readonly IReservationNotificationQueue _notificationQueue;
+    private readonly IBranchRepository _branchRepo;
 
     public ReservationService(
         IReservationRepository reservationRepo,
@@ -41,7 +42,8 @@ public class ReservationService : IReservationService
         IOrderDetailService orderDetailService,
         IPromotionService promotionService,
         IAreaRepository areaRepo,
-        IReservationNotificationQueue notificationQueue)
+        IReservationNotificationQueue notificationQueue,
+        IBranchRepository branchRepo)
     {
         _reservationRepo = reservationRepo;
         _orderRepo = orderRepo;
@@ -57,6 +59,17 @@ public class ReservationService : IReservationService
         _promotionService = promotionService;
         _areaRepo = areaRepo;
         _notificationQueue = notificationQueue;
+        _branchRepo = branchRepo;
+    }
+
+    /// <summary>
+    /// Lấy tên chi nhánh từ DB, tránh phụ thuộc vào navigation property (có thể null).
+    /// </summary>
+    private async Task<string> GetBranchNameAsync(long? branchId)
+    {
+        if (!branchId.HasValue || branchId.Value <= 0) return "Chi nhánh";
+        var branch = await _branchRepo.GetByIdAsync(branchId.Value);
+        return branch?.Name ?? "Chi nhánh";
     }
 
     public async Task<List<ReservationViewDto>> GetAllAsync()
@@ -545,7 +558,7 @@ public class ReservationService : IReservationService
             CustomerName = customer.Name,
             EventType = "Created",
             ReservationTime = reservation.ReservationTime,
-            BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+            BranchName = await GetBranchNameAsync(reservation.BranchId),
             ReservationId = reservation.Id
         });
 
@@ -724,7 +737,7 @@ public class ReservationService : IReservationService
         await _reservationRepo.SaveChangesAsync();
 
         // Create Customer Notification
-        var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+        var branchName = await GetBranchNameAsync(reservation.BranchId);
         var notif = new Notification
         {
             BranchId = reservation.BranchId ?? (fatherOrder.Table?.Area?.BranchId ?? 0),
@@ -907,7 +920,7 @@ public class ReservationService : IReservationService
             CustomerName = checkInCustomer?.Name ?? "",
             EventType = "CheckedIn",
             ReservationTime = reservation.ReservationTime,
-            BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+            BranchName = await GetBranchNameAsync(reservation.BranchId),
             ReservationId = reservation.Id
         });
 
@@ -978,7 +991,7 @@ public class ReservationService : IReservationService
             long resolvedBranchId = reservation.BranchId ?? (reservation.Order?.Table?.Area?.BranchId ?? 0);
             if (resolvedBranchId > 0)
             {
-                var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+                var branchName = await GetBranchNameAsync(reservation.BranchId);
                 var notif = new Notification
                 {
                     BranchId = resolvedBranchId,
@@ -1023,7 +1036,7 @@ public class ReservationService : IReservationService
                 CustomerName = cancelCustomer?.Name ?? "",
                 EventType = "Cancelled",
                 ReservationTime = reservation.ReservationTime,
-                BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+                BranchName = await GetBranchNameAsync(reservation.BranchId),
                 ReservationId = reservation.Id
             });
         }
@@ -1113,7 +1126,7 @@ public class ReservationService : IReservationService
             await _reservationRepo.UpdateAsync(reservation);
 
             // Create Customer Notification
-            var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+            var branchName = await GetBranchNameAsync(reservation.BranchId);
             var notif = new Notification
             {
                 BranchId = reservation.BranchId ?? (fatherOrder.Table?.Area?.BranchId ?? 0),
@@ -1176,7 +1189,7 @@ public class ReservationService : IReservationService
             CustomerName = confirmCustomer?.Name ?? "",
             EventType = "Confirmed",
             ReservationTime = reservation.ReservationTime,
-            BranchName = reservation.Branch?.Name ?? "Chi nhánh",
+            BranchName = await GetBranchNameAsync(reservation.BranchId),
             ReservationId = reservation.Id,
             TableNames = tableNamesStr
         });
@@ -1247,7 +1260,7 @@ public class ReservationService : IReservationService
         await _reservationRepo.SaveChangesAsync();
 
         // Create Customer Notification
-        var branchName = reservation.Branch?.Name ?? "Chi nhánh";
+        var branchName = await GetBranchNameAsync(reservation.BranchId);
         var notif = new Notification
         {
             BranchId = reservation.BranchId ?? 0,

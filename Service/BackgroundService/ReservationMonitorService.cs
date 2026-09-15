@@ -53,8 +53,9 @@ public class ReservationMonitorService : BackgroundService
 
                     // 1. Process expired reservations (30 minutes late)
                     var expiredList = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null && r.ReservationTime <= expiredTime)
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.Order != null && r.Order.Table != null && r.ReservationTime <= expiredTime)
                         .ToListAsync(stoppingToken);
 
                     foreach (var expired in expiredList)
@@ -162,8 +163,9 @@ public class ReservationMonitorService : BackgroundService
 
                     // 3. Lock Bàn (Bình thường)
                     var toLockList = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null 
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.Order != null && r.Order.Table != null 
                                  && (r.Order.Table.Status == "Empty" || r.Order.Table.Status == "Available")
                                  && r.ReservationTime <= lockThreshold && r.ReservationTime > expiredTime)
                         .ToListAsync(stoppingToken);
@@ -215,8 +217,9 @@ public class ReservationMonitorService : BackgroundService
 
                     // 4. Auto-Transfer (Cứu hộ bàn bị chiếm dụng đối với TẤT CẢ các bàn của đơn)
                     var pendingReservationsInThreshold = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null 
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.Order != null && r.Order.Table != null 
                                  && r.ReservationTime <= lockThreshold && r.ReservationTime > expiredTime)
                         .ToListAsync(stoppingToken);
 
@@ -290,8 +293,9 @@ public class ReservationMonitorService : BackgroundService
                     // 5. Process late warnings: 15 mins late
                     var lateWarningThreshold = now.AddMinutes(-15);
                     var lateWarnCandidates = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.ReservationTime <= lateWarningThreshold && r.ReservationTime > expiredTime)
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.ReservationTime <= lateWarningThreshold && r.ReservationTime > expiredTime)
                         .ToListAsync(stoppingToken);
 
                     var toLateWarnList = lateWarnCandidates.Where(r => !_lateWarnedReservationIds.Contains(r.Id)).ToList();

@@ -322,6 +322,7 @@ namespace MenuGoBE.Service
                 {
                     OrderDetailId = od.Id,
                     OrderId = od.OrderId,
+                    ProductId = od.ProductId,
                     ProductName = isMerged ? $"{od.Product?.Name ?? "Không rõ"} ({order.Table?.Name})" : (od.Product?.Name ?? "Không rõ"),
                     Quantity = od.Quantity,
                     Price = od.Price,
@@ -341,6 +342,7 @@ namespace MenuGoBE.Service
                     {
                         OrderDetailId = od.Id,
                         OrderId = od.OrderId,
+                        ProductId = od.ProductId,
                         ProductName = $"{od.Product?.Name ?? "Không rõ"} ({child.Table?.Name})",
                         Quantity = od.Quantity,
                         Price = od.Price,
@@ -404,6 +406,16 @@ namespace MenuGoBE.Service
                     };
                     await _customerRepo.CreateAsync(customer);
                     await _repo.SaveChangesAsync();
+                }
+                else
+                {
+                    // Cập nhật tên mới nếu thu ngân có nhập tên khác
+                    if (!string.IsNullOrEmpty(dto.CustomerName) && customer.Name != dto.CustomerName)
+                    {
+                        customer.Name = dto.CustomerName;
+                        await _customerRepo.UpdateAsync(customer);
+                        await _repo.SaveChangesAsync();
+                    }
                 }
                 order.CustomerId = customer.Id;
             }
@@ -755,9 +767,30 @@ namespace MenuGoBE.Service
                             Phone = searchPhone,
                             Email = string.Empty,
                             CreatedBy = validCreatedBy,
-                            CreatedAt = DateTime.UtcNow
+                            CreatedAt = DateTime.UtcNow,
+                            CustomerId = order.CustomerId // Gắn CustomerId vào Partner mới
                         };
                         targetPartner = await _partnerRepo.CreatePartnerAsync(targetPartner);
+                    }
+                    else
+                    {
+                        bool partnerUpdated = false;
+                        if (!string.IsNullOrEmpty(partnerName) && targetPartner.Name != partnerName)
+                        {
+                            targetPartner.Name = partnerName;
+                            partnerUpdated = true;
+                        }
+                        
+                        if (order.CustomerId.HasValue && targetPartner.CustomerId != order.CustomerId.Value)
+                        {
+                            targetPartner.CustomerId = order.CustomerId.Value;
+                            partnerUpdated = true;
+                        }
+
+                        if (partnerUpdated)
+                        {
+                            await _partnerRepo.UpdatePartnerAsync(targetPartner);
+                        }
                     }
 
                     // 2. Chốt các chứng từ Pending của Order và tự động sinh CashFlow

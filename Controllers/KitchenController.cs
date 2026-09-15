@@ -38,7 +38,7 @@ public class KitchenController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Message = "Lỗi hệ thống.", Error = ex.Message });
+            return BadRequest(new { Message = ex.Message });
         }
     }
 }
