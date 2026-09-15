@@ -1274,14 +1274,14 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
+                    b.Property<int?>("CompensationPoints")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("CreatedBy")
                         .HasColumnType("bigint");
-
-                    b.Property<decimal?>("DiscountAmount")
-                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int?>("HandlingAction")
                         .HasColumnType("integer");
