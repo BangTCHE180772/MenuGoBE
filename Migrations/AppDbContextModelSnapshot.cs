@@ -1797,6 +1797,9 @@ namespace MenuGoBE.Migrations
                     b.Property<long?>("CreatedBy")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("CustomerId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Email")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -1821,6 +1824,8 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("BranchId");
 
                     b.HasIndex("CreatedBy");
+
+                    b.HasIndex("CustomerId");
 
                     b.ToTable("Partners");
                 });
@@ -3732,11 +3737,18 @@ namespace MenuGoBE.Migrations
                         .HasForeignKey("CreatedBy")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("MenuGoBE.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Address");
 
                     b.Navigation("Branch");
 
                     b.Navigation("Creator");
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("MenuGoBE.Models.Payment", b =>
