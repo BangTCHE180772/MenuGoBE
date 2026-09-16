@@ -359,6 +359,10 @@ namespace MenuGoBE.Controllers
                                     await _assignmentService.TouchAsync(orderId);
                                     isAssignedToUser = true; // Coi như đã được gán cho user hiện tại
                                 }
+                                else if (existingAccountId.HasValue)
+                                {
+                                    await _assignmentService.RecordSupportAsync(orderId, currentUserId.Value, table.BranchId);
+                                }
                             }
                         }
                         
@@ -439,6 +443,10 @@ namespace MenuGoBE.Controllers
                                 {
                                     await _assignmentService.TouchAsync(orderId);
                                     isAssignedToUser = true;
+                                }
+                                else if (existingAccountId.HasValue)
+                                {
+                                    await _assignmentService.RecordSupportAsync(orderId, currentUserId.Value, table.BranchId);
                                 }
                             }
                         }
@@ -546,6 +554,10 @@ namespace MenuGoBE.Controllers
                                     {
                                         await _assignmentService.TouchAsync(order.Id);
                                         isAssignedToUser = true;
+                                    }
+                                    else if (existingAccountId.HasValue)
+                                    {
+                                        await _assignmentService.RecordSupportAsync(order.Id, currentUserId.Value, table.BranchId);
                                     }
                                 }
                             }

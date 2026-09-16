@@ -1,3 +1,6 @@
+using System.Text.Json.Serialization;
+using MenuGoBE.Models.Enums;
+
 namespace MenuGoBE.Dtos.Order;
 
 /// <summary>
@@ -13,4 +16,16 @@ public class ReturnItemRequestDto
     /// true nếu sản phẩm Regular còn nguyên vẹn → cộng lại kho
     /// </summary>
     public bool IsIntact { get; set; } = false;
+
+    /// <summary>
+    /// Cách xử lý: Discard, StaffUse, Reuse. 
+    /// Nếu null → tự suy từ IsIntact (intact=Reuse, else=Discard)
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public LeftoverHandlingAction? HandlingAction { get; set; }
+
+    /// <summary>
+    /// Điểm tích lũy bù cho khách (nếu có). Null = không bù.
+    /// </summary>
+    public int? CompensationPoints { get; set; }
 }

@@ -1674,6 +1674,10 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("AssignedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("AssignmentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
@@ -1698,8 +1702,9 @@ namespace MenuGoBE.Migrations
 
                     b.HasIndex("BranchId");
 
-                    b.HasIndex("OrderId")
-                        .IsUnique();
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("OrderId", "AccountId", "AssignmentType");
 
                     b.ToTable("OrderAssignments");
                 });
@@ -3681,8 +3686,8 @@ namespace MenuGoBE.Migrations
                         .IsRequired();
 
                     b.HasOne("MenuGoBE.Models.Order", "Order")
-                        .WithOne("Assignment")
-                        .HasForeignKey("MenuGoBE.Models.OrderAssignment", "OrderId")
+                        .WithMany("Assignments")
+                        .HasForeignKey("OrderId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -4417,7 +4422,7 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.Order", b =>
                 {
-                    b.Navigation("Assignment");
+                    b.Navigation("Assignments");
 
                     b.Navigation("ChildOrders");
 

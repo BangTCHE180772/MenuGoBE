@@ -2035,8 +2035,8 @@ namespace MenuGoBE.Service.Document
             {
                 string note = returnReason; // Lưu lý do thực tế khách/nhân viên chọn
                 
-                // Logic kiểm tra Regular và IsIntact: Chỉ cộng lại kho nếu là món Thường và còn nguyên vẹn
-                if (product.Type == MenuGoBE.Models.Enums.ProductType.Regular && isIntact)
+                // Logic kiểm tra Regular/Manufactured và IsIntact: Chỉ cộng lại kho nếu là món Thường/Đóng gói và còn nguyên vẹn
+                if ((product.Type == MenuGoBE.Models.Enums.ProductType.Regular || product.Type == MenuGoBE.Models.Enums.ProductType.Manufactured) && isIntact)
                 {
                     // Cộng lại tồn kho
                     binventory.Quantity += baseQuantity;

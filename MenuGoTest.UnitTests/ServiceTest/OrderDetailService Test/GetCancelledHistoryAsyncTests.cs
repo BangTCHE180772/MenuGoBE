@@ -80,3 +80,4 @@ public class GetCancelledHistoryAsyncTests
         Assert.Empty(result);
     }
 }
+
