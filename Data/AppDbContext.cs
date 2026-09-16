@@ -422,12 +422,13 @@ public class AppDbContext : DbContext
             .Property(f => f.Status)
             .HasConversion<string>();
 
-        // ── OrderAssignment: 1 order = 1 waiter ──
+        // ── OrderAssignment: 1 order = N assignments (1 Primary + N Support) ──
         modelBuilder.Entity<OrderAssignment>(entity =>
         {
-            entity.HasIndex(e => e.OrderId).IsUnique();
+            entity.HasIndex(e => new { e.OrderId, e.AccountId, e.AssignmentType });
             entity.HasIndex(e => e.AccountId);
             entity.HasIndex(e => e.BranchId);
+            entity.HasIndex(e => e.IsActive);
         });
 
         // ── Chat Module: GuestChatSession & Conversation Indexes ──

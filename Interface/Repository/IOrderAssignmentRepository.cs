@@ -19,6 +19,9 @@ namespace MenuGoBE.Interface.Repository
         Task CreateAsync(OrderAssignment assignment);
         Task UpdateAsync(OrderAssignment assignment);
 
+        // === Support ===
+        Task CreateSupportAssignmentAsync(long orderId, long accountId, long branchId);
+
         // === Soft delete ===
         Task DeactivateByOrderIdAsync(long orderId, string reason);
         Task DeactivateByAccountIdAsync(long accountId, string reason);
