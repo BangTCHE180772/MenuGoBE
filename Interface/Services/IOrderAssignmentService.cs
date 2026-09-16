@@ -10,6 +10,11 @@ namespace MenuGoBE.Interface.Services
         Task<bool> TryAssignAsync(long orderId, long accountId, long branchId);
 
         /// <summary>
+        /// Ghi nhận hành động hỗ trợ của nhân viên.
+        /// </summary>
+        Task RecordSupportAsync(long orderId, long accountId, long branchId);
+
+        /// <summary>
         /// Manager chỉ định bắt buộc. Deactivate assignment cũ nếu có.
         /// </summary>
         Task ForceAssignAsync(long orderId, long accountId, long branchId);

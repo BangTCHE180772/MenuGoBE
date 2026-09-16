@@ -30,7 +30,13 @@ public class OrderAssignment
     public bool IsActive { get; set; } = true;
 
     /// <summary>
-    /// Lý do deactivate: "Paid", "Cancelled", "Reassigned", "Merged", "ShiftEnded", "ManualUnassign"
+    /// "Primary" = người phụ trách chính bàn, "Support" = người hỗ trợ.
+    /// Support luôn tạo với IsActive=false để giữ lịch sử.
+    /// </summary>
+    public string AssignmentType { get; set; } = "Primary";
+
+    /// <summary>
+    /// Lý do deactivate: "Paid", "Cancelled", "Reassigned", "Merged", "ShiftEnded", "ManualUnassign", "SupportAssist"
     /// </summary>
     public string? DeactivatedReason { get; set; }
 
