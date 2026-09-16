@@ -52,5 +52,5 @@ public class Order
 
     public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
 
-    public OrderAssignment? Assignment { get; set; }
+    public ICollection<OrderAssignment> Assignments { get; set; } = new List<OrderAssignment>();
 }

@@ -67,11 +67,11 @@ namespace MenuGoBE.Service
 
             var unattendedOrders = await db.Orders
                 .Include(o => o.Table).ThenInclude(t => t.Area)
-                .Include(o => o.Assignment)
+                .Include(o => o.Assignments)
                 .Include(o => o.OrderDetails)
                 .Where(o =>
                     o.Status == "Active" &&
-                    o.Assignment == null &&
+                    !o.Assignments.Any(a => a.IsActive && a.AssignmentType == "Primary") &&
                     o.OrderDetails.Any(od =>
                         od.Status == "CustomerPending" &&
                         od.CreatedAt <= now.AddMinutes(-2)))
