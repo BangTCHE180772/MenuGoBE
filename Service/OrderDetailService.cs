@@ -1078,7 +1078,21 @@ namespace MenuGoBE.Service
 
             // Bỏ validation chặn hàng không nguyên vẹn hoặc hàng chế biến (cho phép trả mọi loại)
             
-            // Re-stock logic: CHỈ Regular + còn nguyên vẹn mới cộng lại kho
+            // Determine if the item should be restocked (cộng kho)
+            bool shouldRestock = false;
+            bool shouldCreateLeftover = true;
+
+            if (product.Type == MenuGoBE.Models.Enums.ProductType.Regular || product.Type == MenuGoBE.Models.Enums.ProductType.Manufactured)
+            {
+                if (dto.IsIntact && dto.HandlingAction == MenuGoBE.Models.Enums.LeftoverHandlingAction.Reuse)
+                {
+                    shouldRestock = true;
+                    shouldCreateLeftover = false; // Không cần báo cho bếp vì đã nhập lại kho
+                }
+            }
+
+            long? branchIdForLeftover = null;
+            // Re-stock logic:
             // Logic trừ/cộng kho và ghi sổ kho được quản lý tập trung ở DocumentService
             var order = await _orderRepo.GetByIdAsync(entity.OrderId);
             if (order != null)
@@ -1090,8 +1104,11 @@ namespace MenuGoBE.Service
                     if (area != null)
                     {
                         long branchId = area.BranchId;
+                        branchIdForLeftover = branchId;
+                        
                         var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
-                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, dto.IsIntact, dto.ReturnReason, entity.Id, confirmedByUserId);
+                        // Truyền shouldRestock thay cho IsIntact để DocumentService quyết định cộng kho hay không
+                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, dto.ReturnQuantity, shouldRestock, dto.ReturnReason, entity.Id, confirmedByUserId);
                     }
                 }
             }
@@ -1104,6 +1121,32 @@ namespace MenuGoBE.Service
             var orderForRecalc = await _orderRepo.GetByIdAsync(entity.OrderId);
             if (orderForRecalc != null)
                 await RecalculateTotalAmountAsync(orderForRecalc);
+
+            // ── Tự động ghi nhận vào bảng LeftoverRecords + gửi SignalR cho KDS ──
+            if (branchIdForLeftover.HasValue && shouldCreateLeftover)
+            {
+                try
+                {
+                    var leftoverDto = new LeftoverRecordCreateDto
+                    {
+                        BranchId = branchIdForLeftover.Value,
+                        Type = LeftoverType.Return,
+                        ProductId = entity.ProductId,
+                        Quantity = dto.ReturnQuantity,
+                        Reason = dto.ReturnReason,
+                        OrderDetailId = entity.Id,
+                        HandlingAction = dto.HandlingAction
+                            ?? (dto.IsIntact ? LeftoverHandlingAction.Reuse : LeftoverHandlingAction.Discard),
+                        CompensationPoints = dto.CompensationPoints
+                    };
+                    await _leftoverRecordService.CreateAsync(leftoverDto, confirmedByUserId);
+                }
+                catch
+                {
+                    // Non-blocking: Nếu tạo LeftoverRecord thất bại, vẫn trả món thành công
+                    // (LeftoverRecord chỉ là log + gợi ý reuse, không ảnh hưởng nghiệp vụ chính)
+                }
+            }
 
             return true;
         }
