@@ -16,7 +16,7 @@ namespace MenuGoBE.Interface.Repository
         Task<List<Conversation>> GetGuestConversationsAsync(long guestSessionId);
         Task<Conversation?> GetActiveGuestConversationAsync(long guestSessionId, long branchId);
         Task AddConversationAsync(Conversation conversation);
-        Task<int> GetUnreadMessagesCountAsync(long conversationId);
+        Task<int> GetUnreadMessagesCountAsync(long conversationId, bool forCustomer = false);
         Task<List<Message>> GetMessagesByConversationIdAsync(long conversationId);
         Task AddMessageAsync(Message message);
         Task AddAssignmentHistoryAsync(ConversationAssignmentHistory history);
