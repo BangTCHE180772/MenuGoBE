@@ -3540,6 +3540,25 @@ namespace MenuGoBE.Service.Document
             parentDetail.UnitConversionId = null;
             parentDetail.ConversionRate = 1;
             parentDetail.BaseQuantity = parentDetail.Quantity;
+
+            // Kiểm tra bắt buộc tồn kho nguyên liệu NVL tại chi nhánh
+            foreach (var recipeItem in recipeItems)
+            {
+                decimal requiredQty = parentDetail.BaseQuantity * recipeItem.Quantity;
+                var ingredientBinventory = await _repo.GetBInventoryByBranchAndProductAsync(document.BranchId, recipeItem.IngredientProductId);
+
+                if (ingredientBinventory == null)
+                {
+                    string ingredientName = recipeItem.IngredientProduct?.Name ?? $"ProductId {recipeItem.IngredientProductId}";
+                    throw new MenuGoException(ErrorCodes.DocumentProductNotInInventory, $"Không tìm thấy kho hàng của nguyên liệu '{ingredientName}' tại chi nhánh để sản xuất.");
+                }
+
+                if (requiredQty > ingredientBinventory.Quantity)
+                {
+                    string ingredientName = ingredientBinventory.Product?.Name ?? recipeItem.IngredientProduct?.Name ?? $"ProductId {recipeItem.IngredientProductId}";
+                    throw new MenuGoException(ErrorCodes.DocumentProductionInsufficientRawMaterial, $"Nguyên liệu '{ingredientName}' không đủ tồn kho để sản xuất. Số lượng cần: {requiredQty:N3}, Tồn kho hiện tại: {ingredientBinventory.Quantity:N3}.");
+                }
+            }
             #endregion
 
             document.PartnerId = null;
