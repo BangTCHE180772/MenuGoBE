@@ -23,4 +23,9 @@ public class ReturnItemRequestDto
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public LeftoverHandlingAction? HandlingAction { get; set; }
+
+    /// <summary>
+    /// ID tài khoản bếp làm sai (nếu có)
+    /// </summary>
+    public long? AtFaultAccountId { get; set; }
 }
