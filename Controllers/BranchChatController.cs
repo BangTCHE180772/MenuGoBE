@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using MenuGoBE.Data;
 using MenuGoBE.Dtos.Chat;
 using MenuGoBE.Interface.Services;
 
@@ -16,13 +18,15 @@ namespace MenuGoBE.Controllers
     public class BranchChatController : BaseApiController
     {
         private readonly IChatService _chatService;
+        private readonly AppDbContext _context;
 
-        public BranchChatController(IChatService chatService)
+        public BranchChatController(IChatService chatService, AppDbContext context)
         {
             _chatService = chatService;
+            _context = context;
         }
 
-        #region Helper Claims Extraction
+        #region Helper Claims Extraction & Shift Validation
         private long[] GetAllowedBranchIds()
         {
             var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId"));
@@ -44,6 +48,75 @@ namespace MenuGoBE.Controllers
         {
             return User.IsInRole("Manager") || User.HasClaim(ClaimTypes.Role, "Manager") || User.HasClaim("role", "Manager");
         }
+
+        private bool IsCashier()
+        {
+            return User.IsInRole("Cashier") || User.HasClaim(ClaimTypes.Role, "Cashier") || User.HasClaim("role", "Cashier");
+        }
+
+        /// <summary>
+        /// Kiểm tra quyền truy cập tính năng chat của nhân viên:
+        /// - Admin, Owner và Manager: Luôn có quyền truy cập 24/7.
+        /// - Cashier (Thu ngân): Chỉ được truy cập khi đang trong ca làm việc hôm nay (đã check-in, chưa check-out, chưa quá 30 phút sau khi ca kết thúc).
+        /// - Các vai trò khác: Không có quyền truy cập chat với khách.
+        /// </summary>
+        private async Task<(bool Allowed, string Reason)> ValidateStaffChatAccessAsync(long userId, long? targetBranchId)
+        {
+            // Admin, Owner và Manager được quyền truy cập mọi lúc (24/7)
+            if (IsAdminOrOwner() || IsManager())
+            {
+                return (true, string.Empty);
+            }
+
+            // Chỉ cho phép Cashier (Thu ngân), các vai trò khác không được quyền chat với khách
+            if (!IsCashier())
+            {
+                return (false, "Chức năng trò chuyện với khách hàng chỉ dành cho Quản lý, Chủ nhà hàng và Thu ngân đang trong ca làm việc.");
+            }
+
+            // Kiểm tra ca làm việc hôm nay của Thu ngân (theo giờ Việt Nam UTC+7)
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+            var now = DateTime.UtcNow.AddHours(7);
+
+            var query = _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => ws.AccountId == userId && ws.WorkDate == today && ws.CheckInAt != null && ws.CheckOutAt == null);
+
+            if (targetBranchId.HasValue && targetBranchId.Value > 0)
+            {
+                query = query.Where(ws => ws.BranchId == targetBranchId.Value);
+            }
+
+            var activeSchedule = await query.FirstOrDefaultAsync();
+
+            if (activeSchedule == null)
+            {
+                return (false, "Bạn chưa điểm danh (Check-in) ca làm việc hôm nay hoặc đã điểm danh ra về.");
+            }
+
+            // Kiểm tra thời gian kết thúc ca + 30 phút gia hạn
+            if (activeSchedule.Shift != null)
+            {
+                var endTime = activeSchedule.Shift.EndTime;
+                DateTime shiftEndDateTime;
+                if (activeSchedule.Shift.IsNightShift || endTime < activeSchedule.Shift.StartTime)
+                {
+                    shiftEndDateTime = today.ToDateTime(endTime).AddDays(1);
+                }
+                else
+                {
+                    shiftEndDateTime = today.ToDateTime(endTime);
+                }
+
+                var disconnectDateTime = shiftEndDateTime.AddMinutes(30);
+                if (now > disconnectDateTime)
+                {
+                    return (false, "Ca làm việc hôm nay của bạn đã kết thúc quá 30 phút. Quyền trò chuyện đã bị ngắt.");
+                }
+            }
+
+            return (true, string.Empty);
+        }
         #endregion
 
         #region GET Lấy danh sách các cuộc trò chuyện
@@ -52,7 +125,13 @@ namespace MenuGoBE.Controllers
         {
             try
             {
-                if (!TryGetUserId(out _)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+                if (!TryGetUserId(out long userId)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+
+                var (allowed, reason) = await ValidateStaffChatAccessAsync(userId, branchId);
+                if (!allowed)
+                {
+                    return StatusCode(403, new { message = reason });
+                }
 
                 var allowedBranchIds = GetAllowedBranchIds();
                 var isAdminOrOwner = IsAdminOrOwner();
@@ -77,7 +156,13 @@ namespace MenuGoBE.Controllers
         {
             try
             {
-                if (!TryGetUserId(out _)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+                if (!TryGetUserId(out long userId)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+
+                var (allowed, reason) = await ValidateStaffChatAccessAsync(userId, null);
+                if (!allowed)
+                {
+                    return StatusCode(403, new { message = reason });
+                }
 
                 var allowedBranchIds = GetAllowedBranchIds();
                 var isAdminOrOwner = IsAdminOrOwner();
@@ -150,6 +235,12 @@ namespace MenuGoBE.Controllers
             try
             {
                 if (!TryGetUserId(out long currentUserId)) return Unauthorized(new { message = "Không thể trích xuất người dùng." });
+
+                var (allowed, reason) = await ValidateStaffChatAccessAsync(currentUserId, null);
+                if (!allowed)
+                {
+                    return StatusCode(403, new { message = reason });
+                }
 
                 var allowedBranchIds = GetAllowedBranchIds();
                 var isAdminOrOwner = IsAdminOrOwner();
