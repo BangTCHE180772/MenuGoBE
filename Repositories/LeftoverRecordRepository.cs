@@ -21,6 +21,7 @@ namespace MenuGoBE.Repositories
                 .Include(l => l.Product)
                 .Include(l => l.Shift)
                 .Include(l => l.Creator)
+                .Include(l => l.AtFaultAccount)
                 .Include(l => l.OrderDetail)
                     .ThenInclude(od => od!.Order)
                         .ThenInclude(o => o.Table)
