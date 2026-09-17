@@ -1277,9 +1277,6 @@ namespace MenuGoBE.Migrations
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
-                    b.Property<int?>("CompensationPoints")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
