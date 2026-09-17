@@ -25,6 +25,9 @@ namespace MenuGoBE.Dtos.Leftover
 
         public int? CompensationPoints { get; set; }
 
+        public long? AtFaultAccountId { get; set; }
+        public string? AtFaultAccountName { get; set; }
+
         public DateTime? UsedAt { get; set; }
         public long? UsedByOrderDetailId { get; set; }
 

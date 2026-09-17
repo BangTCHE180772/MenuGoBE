@@ -38,6 +38,10 @@ public class LeftoverRecord
     // Bù bằng điểm tích lũy cho khách thay vì giảm giá tiền mặt.
     public int? CompensationPoints { get; set; }
 
+    // Tài khoản bếp (Chef) bị gắn trách nhiệm khi món bị trả do làm sai — phục vụ
+    // chọn khi lập biên bản trả món, không bắt buộc chính bếp phải tự khai báo.
+    public long? AtFaultAccountId { get; set; }
+
     // Reuse: trong 30p kể từ CreatedAt, nếu có đơn khác cần đúng món này thì
     // gợi ý dùng lại thay vì bắt bếp làm mới. Set khi được dùng lại.
     public DateTime? UsedAt { get; set; }
@@ -68,4 +72,7 @@ public class LeftoverRecord
 
     [ForeignKey("CreatedBy")]
     public Account? Creator { get; set; }
+
+    [ForeignKey("AtFaultAccountId")]
+    public Account? AtFaultAccount { get; set; }
 }

@@ -24,6 +24,8 @@ namespace MenuGoBE.Dtos.Leftover
 
         public int? CompensationPoints { get; set; }
 
+        public long? AtFaultAccountId { get; set; }
+
         // Extra-only (optional for Return)
         public long? ShiftId { get; set; }
         public DateOnly? RecordDate { get; set; }
