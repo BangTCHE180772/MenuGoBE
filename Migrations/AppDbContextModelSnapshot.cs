@@ -1271,6 +1271,9 @@ namespace MenuGoBE.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("AtFaultAccountId")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("BranchId")
                         .HasColumnType("bigint");
 
@@ -1315,6 +1318,8 @@ namespace MenuGoBE.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AtFaultAccountId");
 
                     b.HasIndex("BranchId");
 
@@ -3492,6 +3497,11 @@ namespace MenuGoBE.Migrations
 
             modelBuilder.Entity("MenuGoBE.Models.LeftoverRecord", b =>
                 {
+                    b.HasOne("MenuGoBE.Models.Account", "AtFaultAccount")
+                        .WithMany()
+                        .HasForeignKey("AtFaultAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MenuGoBE.Models.Branch", "Branch")
                         .WithMany()
                         .HasForeignKey("BranchId")
@@ -3523,6 +3533,8 @@ namespace MenuGoBE.Migrations
                         .WithMany()
                         .HasForeignKey("UsedByOrderDetailId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AtFaultAccount");
 
                     b.Navigation("Branch");
 
