@@ -153,7 +153,7 @@ public class LeftoverRecordServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_Extra_Throws_WhenCompensationPointsProvided()
+    public async Task CreateAsync_Extra_Throws_WhenAtFaultAccountProvided()
     {
         var dto = new LeftoverRecordCreateDto
         {
@@ -162,7 +162,7 @@ public class LeftoverRecordServiceTests
             ProductId = 1,
             Quantity = 1,
             Reason = "Làm dư",
-            CompensationPoints = 50,
+            AtFaultAccountId = 9,
         };
 
         await Assert.ThrowsAsync<MenuGoException>(() => _service.CreateAsync(dto, 1));
@@ -185,7 +185,7 @@ public class LeftoverRecordServiceTests
 
         Assert.Equal(LeftoverType.Extra, result.Type);
         Assert.Null(result.OrderDetailId);
-        Assert.Null(result.CompensationPoints);
+        Assert.Null(result.AtFaultAccountId);
         // The repo mock has no order/inventory repositories at all — if the service
         // tried to touch Order.TotalAmount or BInventory it would have nothing to call.
         _repoMock.Verify(r => r.GetOrderDetailWithTableAsync(It.IsAny<long>()), Times.Never);
