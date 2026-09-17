@@ -35,9 +35,6 @@ public class LeftoverRecord
     public long? OrderDetailId { get; set; }
     public LeftoverHandlingAction? HandlingAction { get; set; }
 
-    // Bù bằng điểm tích lũy cho khách thay vì giảm giá tiền mặt.
-    public int? CompensationPoints { get; set; }
-
     // Tài khoản bếp (Chef) bị gắn trách nhiệm khi món bị trả do làm sai — phục vụ
     // chọn khi lập biên bản trả món, không bắt buộc chính bếp phải tự khai báo.
     public long? AtFaultAccountId { get; set; }

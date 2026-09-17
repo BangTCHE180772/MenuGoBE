@@ -23,9 +23,4 @@ public class ReturnItemRequestDto
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public LeftoverHandlingAction? HandlingAction { get; set; }
-
-    /// <summary>
-    /// Điểm tích lũy bù cho khách (nếu có). Null = không bù.
-    /// </summary>
-    public int? CompensationPoints { get; set; }
 }

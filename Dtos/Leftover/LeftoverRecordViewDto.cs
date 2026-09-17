@@ -23,8 +23,6 @@ namespace MenuGoBE.Dtos.Leftover
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public LeftoverHandlingAction? HandlingAction { get; set; }
 
-        public int? CompensationPoints { get; set; }
-
         public long? AtFaultAccountId { get; set; }
         public string? AtFaultAccountName { get; set; }
 
