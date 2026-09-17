@@ -36,7 +36,8 @@ namespace MenuGoBE.Service
                 OrderDetailId = l.OrderDetailId,
                 TableName = l.OrderDetail?.Order?.Table?.Name,
                 HandlingAction = l.HandlingAction,
-                CompensationPoints = l.CompensationPoints,
+                AtFaultAccountId = l.AtFaultAccountId,
+                AtFaultAccountName = l.AtFaultAccount?.Name,
                 UsedAt = l.UsedAt,
                 UsedByOrderDetailId = l.UsedByOrderDetailId,
                 ShiftId = l.ShiftId,
@@ -133,9 +134,9 @@ namespace MenuGoBE.Service
                 {
                     throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không được gắn với đơn hàng của khách.", 400));
                 }
-                if (dto.CompensationPoints.HasValue)
+                if (dto.AtFaultAccountId.HasValue)
                 {
-                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không có bù điểm.", 400));
+                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không gắn tài khoản làm sai.", 400));
                 }
             }
 
@@ -148,7 +149,7 @@ namespace MenuGoBE.Service
                 Reason = dto.Reason.Trim(),
                 OrderDetailId = dto.OrderDetailId,
                 HandlingAction = dto.HandlingAction,
-                CompensationPoints = dto.CompensationPoints,
+                AtFaultAccountId = dto.AtFaultAccountId,
                 ShiftId = dto.ShiftId,
                 RecordDate = dto.RecordDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
                 CreatedBy = createdBy,
@@ -198,7 +199,7 @@ namespace MenuGoBE.Service
                 OrderDetailId = entity.OrderDetailId,
                 TableName = orderDetail?.Order?.Table?.Name,
                 HandlingAction = entity.HandlingAction,
-                CompensationPoints = entity.CompensationPoints,
+                AtFaultAccountId = entity.AtFaultAccountId,
                 ShiftId = entity.ShiftId,
                 RecordDate = entity.RecordDate,
                 CreatedBy = entity.CreatedBy,
