@@ -855,6 +855,12 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        public async Task<List<OrderViewDto>> GetReturnableOrdersByBranchAsync(long branchId)
+        {
+            var orders = await _repo.GetReturnableOrdersByBranchAsync(branchId);
+            return _mapper.Map<List<OrderViewDto>>(orders);
+        }
+
         public async Task<List<OrderViewDto>> GetPaidOrdersByBranchAsync(long branchId)
         {
             var orders = await _repo.GetPaidOrdersByBranchAsync(branchId);
