@@ -136,7 +136,7 @@ public class ReservationController : ControllerBase
         }
     }
 
-    [HttpPost("{id}/check-in")]
+    [HttpPut("{id}/check-in")]
     public async Task<IActionResult> CheckIn(long id)
     {
         try

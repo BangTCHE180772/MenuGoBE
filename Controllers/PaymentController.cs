@@ -13,11 +13,13 @@ public class PaymentController : ControllerBase
 {
     private readonly IPaymentService _paymentService;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly IOrderAssignmentService _assignmentService;
 
-    public PaymentController(IPaymentService paymentService, IHubContext<NotificationHub> hubContext)
+    public PaymentController(IPaymentService paymentService, IHubContext<NotificationHub> hubContext, IOrderAssignmentService assignmentService)
     {
         _paymentService = paymentService;
         _hubContext = hubContext;
+        _assignmentService = assignmentService;
     }
 
     [HttpPost("create-payment-link/{orderId}")]
@@ -44,10 +46,12 @@ public class PaymentController : ControllerBase
     [HttpPost("webhook")]
     public async Task<IActionResult> Webhook([FromBody] Webhook body)
     {
-        var (verified, paidTableIds) = await _paymentService.VerifyPaymentWebhookAsync(body);
+        var (verified, paidTableIds, orderId) = await _paymentService.VerifyPaymentWebhookAsync(body);
 
         if (verified)
         {
+            await _assignmentService.DeactivateAssignmentAsync(orderId, "Paid");
+
             foreach (var tableId in paidTableIds)
             {
                 await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
@@ -61,6 +65,7 @@ public class PaymentController : ControllerBase
             await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
             {
                 Type = "PaymentWebhook",
+                OrderId = orderId,
                 Message = "Thanh toán qua mã QR PayOS thành công!"
             });
             return Ok(new { success = true });
@@ -76,16 +81,21 @@ public class PaymentController : ControllerBase
         {
             var (payment, paidTableIds) = await _paymentService.CheckPaymentStatusAsync(orderId);
 
-            if (payment.Status == "Success" && paidTableIds.Any())
+            if (payment.Status == "Success")
             {
-                foreach (var tableId in paidTableIds)
+                await _assignmentService.DeactivateAssignmentAsync(orderId, "Paid");
+                
+                if (paidTableIds.Any())
                 {
-                    await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                    foreach (var tableId in paidTableIds)
                     {
-                        TableId = tableId,
-                        Type = "Payment",
-                        Message = "Thanh toán qua PayOS thành công. Bàn cần dọn dẹp!"
-                    });
+                        await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
+                        {
+                            TableId = tableId,
+                            Type = "Payment",
+                            Message = "Thanh toán qua PayOS thành công. Bàn cần dọn dẹp!"
+                        });
+                    }
                 }
             }
 

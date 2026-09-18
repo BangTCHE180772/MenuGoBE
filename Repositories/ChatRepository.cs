@@ -107,10 +107,18 @@ namespace MenuGoBE.Repositories
         #endregion
 
         #region GET Lấy số lượng tin nhắn chưa đọc
-        public async Task<int> GetUnreadMessagesCountAsync(long conversationId)
+        public async Task<int> GetUnreadMessagesCountAsync(long conversationId, bool forCustomer = false)
         {
-            return await _context.Messages
-                .CountAsync(m => m.ConversationId == conversationId && (m.CustomerId.HasValue || m.GuestChatSessionId.HasValue) && !m.ReadAt.HasValue);
+            if (forCustomer)
+            {
+                return await _context.Messages
+                    .CountAsync(m => m.ConversationId == conversationId && m.EmployeeId.HasValue && !m.ReadAt.HasValue);
+            }
+            else
+            {
+                return await _context.Messages
+                    .CountAsync(m => m.ConversationId == conversationId && (m.CustomerId.HasValue || m.GuestChatSessionId.HasValue) && !m.ReadAt.HasValue);
+            }
         }
         #endregion
 

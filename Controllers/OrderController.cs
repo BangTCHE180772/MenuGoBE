@@ -106,6 +106,31 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        [HttpGet("returnable")]
+        public async Task<IActionResult> GetReturnableOrders([FromQuery] long branchId)
+        {
+            if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
+            {
+                bool isAdminOrOwner = User.IsInRole("Admin") || User.IsInRole("Owner") || 
+                                      User.HasClaim(ClaimTypes.Role, "Admin") || User.HasClaim(ClaimTypes.Role, "Owner") ||
+                                      User.HasClaim("role", "Admin") || User.HasClaim("role", "Owner");
+                
+                if (!isAdminOrOwner)
+                {
+                    var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId")).Select(c => c.Value).ToList();
+                    var branchIds = branchClaims.Select(b => long.TryParse(b, out var bid) ? bid : 0L).Where(id => id > 0).ToList();
+                    
+                    if (!branchIds.Contains(branchId))
+                    {
+                        return Forbid();
+                    }
+                }
+            }
+
+            var result = await _service.GetReturnableOrdersByBranchAsync(branchId);
+            return Ok(result);
+        }
+
         [HttpGet("invoices")]
         public async Task<IActionResult> GetInvoices([FromQuery] long branchId)
         {
@@ -359,6 +384,10 @@ namespace MenuGoBE.Controllers
                                     await _assignmentService.TouchAsync(orderId);
                                     isAssignedToUser = true; // Coi như đã được gán cho user hiện tại
                                 }
+                                else if (existingAccountId.HasValue)
+                                {
+                                    await _assignmentService.RecordSupportAsync(orderId, currentUserId.Value, table.BranchId);
+                                }
                             }
                         }
                         
@@ -439,6 +468,10 @@ namespace MenuGoBE.Controllers
                                 {
                                     await _assignmentService.TouchAsync(orderId);
                                     isAssignedToUser = true;
+                                }
+                                else if (existingAccountId.HasValue)
+                                {
+                                    await _assignmentService.RecordSupportAsync(orderId, currentUserId.Value, table.BranchId);
                                 }
                             }
                         }
@@ -546,6 +579,10 @@ namespace MenuGoBE.Controllers
                                     {
                                         await _assignmentService.TouchAsync(order.Id);
                                         isAssignedToUser = true;
+                                    }
+                                    else if (existingAccountId.HasValue)
+                                    {
+                                        await _assignmentService.RecordSupportAsync(order.Id, currentUserId.Value, table.BranchId);
                                     }
                                 }
                             }

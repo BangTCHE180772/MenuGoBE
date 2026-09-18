@@ -83,6 +83,8 @@ namespace MenuGoBE.Service
                 await _customerRepo.CreateAsync(customer);
             }
 
+            await _customerRepo.SaveChangesAsync();
+
             if (_hubContext != null)
             {
                 try
@@ -217,6 +219,7 @@ namespace MenuGoBE.Service
 
             customer.HashedPassword = HashHelper.HashPassword(dto.NewPassword);
             await _customerRepo.UpdateAsync(customer);
+            await _customerRepo.SaveChangesAsync();
 
             // Xóa cache sau khi dùng
             _cache.Remove($"OTP_CUSTOMER_RESET_{normalizedEmail}");

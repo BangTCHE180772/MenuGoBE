@@ -42,4 +42,8 @@ public class Partner
 
     public ICollection<Document> Documents { get; set; } = new List<Document>();
     public ICollection<CashFlow> CashFlows { get; set; } = new List<CashFlow>();
+
+    public long? CustomerId { get; set; }
+    [ForeignKey("CustomerId")]
+    public Customer? Customer { get; set; }
 }

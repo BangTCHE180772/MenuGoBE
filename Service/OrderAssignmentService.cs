@@ -38,10 +38,31 @@ namespace MenuGoBE.Service
                 BranchId = branchId,
                 AssignedAt = DateTime.UtcNow,
                 LastActionAt = DateTime.UtcNow,
-                IsActive = true
+                IsActive = true,
+                AssignmentType = "Primary"
             });
             await _repo.SaveChangesAsync();
             return true;
+        }
+
+        public async Task RecordSupportAsync(long orderId, long accountId, long branchId)
+        {
+            var primaryAssignment = await _repo.GetActiveByOrderIdAsync(orderId);
+            if (primaryAssignment != null && primaryAssignment.AccountId == accountId)
+            {
+                await TouchAsync(orderId);
+                return;
+            }
+
+            if (!await _repo.IsWaiterAsync(accountId))
+                return;
+
+            await _repo.CreateSupportAssignmentAsync(orderId, accountId, branchId);
+            await _repo.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Support recorded: Order {OrderId} <- Support Waiter {AccountId}",
+                orderId, accountId);
         }
 
         public async Task ForceAssignAsync(long orderId, long accountId, long branchId)
@@ -56,7 +77,8 @@ namespace MenuGoBE.Service
                 BranchId = branchId,
                 AssignedAt = DateTime.UtcNow,
                 LastActionAt = DateTime.UtcNow,
-                IsActive = true
+                IsActive = true,
+                AssignmentType = "Primary"
             });
             await _repo.SaveChangesAsync();
         }
@@ -132,7 +154,8 @@ namespace MenuGoBE.Service
                 BranchId = branchId,
                 AssignedAt = DateTime.UtcNow,
                 LastActionAt = DateTime.UtcNow,
-                IsActive = true
+                IsActive = true,
+                AssignmentType = "Primary"
             });
             await _repo.SaveChangesAsync();
 
