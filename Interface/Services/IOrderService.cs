@@ -22,5 +22,6 @@ namespace MenuGoBE.Interface.Services
         Task<decimal> PreparePaymentAsync(long orderId, OrderPayDto? dto, string paymentMethod = "Cash");
         Task<bool> CancelOrderAsync(long orderId);
         Task<List<OrderViewDto>> GetPaidOrdersByBranchAsync(long branchId);
+        Task<List<OrderViewDto>> GetReturnableOrdersByBranchAsync(long branchId);
     }
 }
