@@ -263,6 +263,7 @@ namespace MenuGoBE.Service
                             newNotifications.Add(new Notification
                             {
                                 BranchId = branchId,
+                                AccountId = ws.AccountId,
                                 Type = "Attendance",
                                 Title = "Nhân viên chưa chấm công vào ca",
                                 Message = msg,
@@ -293,6 +294,7 @@ namespace MenuGoBE.Service
                             newNotifications.Add(new Notification
                             {
                                 BranchId = branchId,
+                                AccountId = ws.AccountId,
                                 Type = "Attendance",
                                 Title = "Bắt đầu chấm công ca làm việc",
                                 Message = msg,
