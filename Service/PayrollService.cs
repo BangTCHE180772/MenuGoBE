@@ -247,6 +247,7 @@ namespace MenuGoBE.Service
             return true;
         }
 
+        #region Tự động tạo phiếu chi lương nhân viên (PLNV)
         private async Task CreateCashFlowForPayrollAsync(Payroll payroll)
         {
             if (payroll.NetSalary <= 0) return;
@@ -254,7 +255,8 @@ namespace MenuGoBE.Service
             var account = await _context.Accounts.FirstOrDefaultAsync(a => a.Id == payroll.AccountId);
             var employeeName = account?.Name ?? $"ID {payroll.AccountId}";
 
-            var tempCode = $"PC{DateTime.UtcNow.Ticks % 1_000_000:D6}";
+            // Khởi tạo mã phiếu tạm thời với tiền tố PLNV
+            var tempCode = $"PLNV{DateTime.UtcNow.Ticks % 1_000_000:D6}";
             var cashFlow = new CashFlow
             {
                 BranchId = payroll.BranchId,
@@ -273,10 +275,12 @@ namespace MenuGoBE.Service
             await _context.CashFlows.AddAsync(cashFlow);
             await _context.SaveChangesAsync();
 
-            cashFlow.Code = $"PC{cashFlow.Id:D6}";
+            // Cập nhật mã phiếu chính thức sau khi có Id tự tăng
+            cashFlow.Code = $"PLNV{cashFlow.Id:D6}";
             _context.CashFlows.Update(cashFlow);
             await _context.SaveChangesAsync();
         }
+        #endregion
 
         public async Task<bool> LockPayrollAsync(long id, long userId)
         {

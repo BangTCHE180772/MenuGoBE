@@ -231,6 +231,18 @@ namespace MenuGoBE.Controllers
             customer.Phone = cleanPhone;
             customer.Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim();
 
+            // Đồng bộ thông tin cập nhật sang bảng Partner (ở tất cả các chi nhánh)
+            var linkedPartners = await _context.Partners.Where(p => p.CustomerId == customer.Id).ToListAsync();
+            foreach (var partner in linkedPartners)
+            {
+                partner.Name = customer.Name;
+                partner.Phone = customer.Phone;
+                if (customer.Email != null)
+                {
+                    partner.Email = customer.Email;
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             await NotifyCustomerUpdatedAsync("update", customer.Id);

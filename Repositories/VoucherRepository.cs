@@ -19,6 +19,14 @@ public class VoucherRepository : IVoucherRepository
         return await _context.Vouchers.Include(v => v.Branch).ToListAsync();
     }
 
+    public async Task<List<Voucher>> GetByBranchIdAsync(long branchId)
+    {
+        return await _context.Vouchers
+            .Include(v => v.Branch)
+            .Where(v => v.BranchId == null || v.BranchId == branchId)
+            .ToListAsync();
+    }
+
     public async Task<Voucher?> GetByIdAsync(long id)
     {
         return await _context.Vouchers.Include(v => v.Branch).FirstOrDefaultAsync(v => v.Id == id);

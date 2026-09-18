@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -80,8 +80,11 @@ namespace MenuGoBE.Controllers
                             .Select(rd => new
                             {
                                 id = rd.Id,
-                                productId = rd.Id,
-                                ingredientId = rd.Id,
+                                productId = rd.ParentProductId,
+                                ingredientProductId = rd.IngredientProductId,
+                                ingredientId = rd.IngredientProductId,
+                                ingredientName = rd.IngredientProduct != null ? rd.IngredientProduct.Name : string.Empty,
+                                ingredientCode = rd.IngredientProduct != null ? rd.IngredientProduct.SKUCode : string.Empty,
                                 quantity = rd.Quantity
                             }).ToList()
                     }).ToListAsync();
@@ -157,8 +160,11 @@ namespace MenuGoBE.Controllers
                         .Select(rd => new
                         {
                             id = rd.Id,
-                            productId = rd.Id,
-                            ingredientId = rd.Id,
+                            productId = rd.ParentProductId,
+                            ingredientProductId = rd.IngredientProductId,
+                            ingredientId = rd.IngredientProductId,
+                            ingredientName = rd.IngredientProduct != null ? rd.IngredientProduct.Name : string.Empty,
+                            ingredientCode = rd.IngredientProduct != null ? rd.IngredientProduct.SKUCode : string.Empty,
                             quantity = rd.Quantity
                         }).ToList()
                 };
@@ -480,6 +486,17 @@ namespace MenuGoBE.Controllers
                                 unitName = uc.Unit != null ? uc.Unit.Name : string.Empty,
                                 conversionPoint = uc.ConversionPoint,
                                 isBaseUnit = uc.BaseId == null
+                            }).ToList(),
+                        recipeDetailes = b.Product.RecipeItems
+                            .Select(rd => new
+                            {
+                                id = rd.Id,
+                                productId = rd.ParentProductId,
+                                ingredientProductId = rd.IngredientProductId,
+                                ingredientId = rd.IngredientProductId,
+                                ingredientName = rd.IngredientProduct != null ? rd.IngredientProduct.Name : string.Empty,
+                                ingredientCode = rd.IngredientProduct != null ? rd.IngredientProduct.SKUCode : string.Empty,
+                                quantity = rd.Quantity
                             }).ToList()
                     })
                     .ToListAsync();
@@ -693,10 +710,18 @@ namespace MenuGoBE.Controllers
                         .Where(l => l.DocumentType == DocumentType.Transfer && l.QuantityDelta < 0)
                         .Sum(l => Math.Abs(l.QuantityDelta));
 
-                    // 6. Tiêu thụ định mức (Expected Consumption) / Bán hàng
-                    decimal expectedConsumption = periodLedgers
+                    // 6. Tiêu thụ định mức (Expected Consumption) / Bán hàng (trừ Khách trả hàng)
+                    decimal saleQty = periodLedgers
                         .Where(l => l.DocumentType == DocumentType.Sale)
                         .Sum(l => Math.Abs(l.QuantityDelta));
+
+                    // 6e. Khách hàng trả lại hàng (Customer Return)
+                    decimal customerReturn = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.CustomerReturn)
+                        .Sum(l => l.QuantityDelta);
+
+                    decimal expectedConsumption = saleQty - customerReturn;
+                    if (expectedConsumption < 0) expectedConsumption = 0;
 
                     // 6a. Xuất hủy (Destruction)
                     decimal destruction = periodLedgers
@@ -708,8 +733,18 @@ namespace MenuGoBE.Controllers
                         .Where(l => l.DocumentType == DocumentType.Check)
                         .Sum(l => l.QuantityDelta);
 
+                    // 6c. Sản xuất / Chế biến (Production)
+                    decimal production = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Production && l.QuantityDelta < 0)
+                        .Sum(l => Math.Abs(l.QuantityDelta));
+
+                    // 6d. Trả hàng nhà cung cấp (Return to Vendor)
+                    decimal returnVendor = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Return)
+                        .Sum(l => Math.Abs(l.QuantityDelta));
+
                     // 7. Tồn lý thuyết (Theoretical Stock)
-                    decimal theoreticalStock = openingStock + import + transferIn - transferOut - expectedConsumption - destruction + adjustment;
+                    decimal theoreticalStock = openingStock + import + transferIn - transferOut - expectedConsumption - destruction - production - returnVendor;
 
                     // 8. Chênh lệch (Variance) = Tồn cuối - Tồn lý thuyết
                     decimal variance = closingStock - theoreticalStock;
@@ -726,7 +761,7 @@ namespace MenuGoBE.Controllers
                     }
 
                     // Tiêu hao thực tế ghi nhận
-                    decimal systemConsumption = openingStock + import + transferIn - transferOut - destruction + adjustment - closingStock;
+                    decimal systemConsumption = openingStock + import + transferIn - transferOut + customerReturn - destruction - production - returnVendor - closingStock;
                     if (systemConsumption < 0) systemConsumption = 0;
 
                     var unitName = bInv.Product.UnitConversions
@@ -746,6 +781,9 @@ namespace MenuGoBE.Controllers
                         transferIn,
                         transferOut,
                         destruction,
+                        production,
+                        returnVendor,
+                        customerReturn,
                         adjustment,
                         systemConsumption,
                         expectedConsumption,

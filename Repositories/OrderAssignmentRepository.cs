@@ -120,6 +120,22 @@ namespace MenuGoBE.Repositories
             return Task.CompletedTask;
         }
 
+        public async Task CreateSupportAssignmentAsync(long orderId, long accountId, long branchId)
+        {
+            await _context.OrderAssignments.AddAsync(new OrderAssignment
+            {
+                OrderId = orderId,
+                AccountId = accountId,
+                BranchId = branchId,
+                AssignedAt = DateTime.UtcNow,
+                LastActionAt = DateTime.UtcNow,
+                IsActive = false,
+                AssignmentType = "Support",
+                DeactivatedReason = "SupportAssist",
+                DeactivatedAt = DateTime.UtcNow
+            });
+        }
+
         // === Soft delete ===
 
         public async Task DeactivateByOrderIdAsync(long orderId, string reason)

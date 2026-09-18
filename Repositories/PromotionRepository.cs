@@ -32,23 +32,29 @@ public class PromotionRepository : IPromotionRepository
             .FirstOrDefaultAsync(p => p.Id == id);
     }
 
-    public async Task<IEnumerable<Promotion>> GetAllPromotionsAsync(long? branchId)
+    public async Task<IEnumerable<Promotion>> GetAllPromotionsAsync()
     {
-        var query = _context.Promotions
+        return await _context.Promotions
             .Include(p => p.PromotionProducts)
                 .ThenInclude(pp => pp.Product)
             .Include(p => p.PromotionBranches)
                 .ThenInclude(pb => pb.Branch)
-            .AsQueryable();
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+    }
 
-        if (branchId.HasValue)
-        {
-            query = query.Where(p => 
+    public async Task<IEnumerable<Promotion>> GetAllPromotionsByBranchAsync(long branchId)
+    {
+        return await _context.Promotions
+            .Include(p => p.PromotionProducts)
+                .ThenInclude(pp => pp.Product)
+            .Include(p => p.PromotionBranches)
+                .ThenInclude(pb => pb.Branch)
+            .Where(p => 
                 p.Scope == PromotionScope.AllBranches || 
-                p.PromotionBranches.Any(pb => pb.BranchId == branchId.Value));
-        }
-
-        return await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
+                p.PromotionBranches.Any(pb => pb.BranchId == branchId))
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
     }
 
     public async Task<Promotion> UpdatePromotionAsync(Promotion promotion)

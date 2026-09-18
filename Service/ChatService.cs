@@ -83,7 +83,7 @@ namespace MenuGoBE.Service
             var dtos = new List<ConversationViewDto>();
             foreach (var c in list)
             {
-                var unreadCount = await _chatRepo.GetUnreadMessagesCountAsync(c.Id);
+                var unreadCount = await _chatRepo.GetUnreadMessagesCountAsync(c.Id, forCustomer: false);
                 var dto = _mapper.Map<ConversationViewDto>(c);
                 dto.UnreadCount = unreadCount;
                 
@@ -118,6 +118,20 @@ namespace MenuGoBE.Service
                 if (conversation.CustomerId != currentUserId)
                 {
                     throw new UnauthorizedAccessException("Bạn không có quyền truy cập cuộc trò chuyện này.");
+                }
+
+                // Đánh dấu tin nhắn từ nhân viên là đã đọc đối với khách hàng
+                var unreadMessages = await _context.Messages
+                    .Where(m => m.ConversationId == id && m.EmployeeId.HasValue && !m.ReadAt.HasValue)
+                    .ToListAsync();
+
+                if (unreadMessages.Any())
+                {
+                    foreach (var m in unreadMessages)
+                    {
+                        m.ReadAt = DateTime.UtcNow;
+                    }
+                    await _chatRepo.SaveChangesAsync();
                 }
             }
             else
@@ -600,7 +614,7 @@ namespace MenuGoBE.Service
 
             foreach (var c in list)
             {
-                var unreadCount = await _chatRepo.GetUnreadMessagesCountAsync(c.Id);
+                var unreadCount = await _chatRepo.GetUnreadMessagesCountAsync(c.Id, forCustomer: true);
                 var dto = new ConversationViewDto
                 {
                     Id = c.Id,
@@ -697,7 +711,7 @@ namespace MenuGoBE.Service
 
             foreach (var c in list)
             {
-                var unreadCount = await _chatRepo.GetUnreadMessagesCountAsync(c.Id);
+                var unreadCount = await _chatRepo.GetUnreadMessagesCountAsync(c.Id, forCustomer: true);
                 var dto = new ConversationViewDto
                 {
                     Id = c.Id,

@@ -10,6 +10,8 @@ using System.Linq;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.SignalR;
 using MenuGoBE.Hubs;
+using MenuGoBE.Interface.Services;
+using MenuGoBE.Dtos.Reservation;
 
 namespace MenuGoBE.Service;
 
@@ -17,15 +19,20 @@ public class ReservationMonitorService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly IReservationNotificationQueue _notificationQueue;
     private readonly HashSet<long> _warnedReservationIds = new HashSet<long>();
     private readonly HashSet<long> _lateWarnedReservationIds = new HashSet<long>();
+    private readonly HashSet<long> _reminderSentIds = new HashSet<long>();
+    private readonly HashSet<long> _expiredEmailSentIds = new HashSet<long>();
 
     public ReservationMonitorService(
         IServiceProvider serviceProvider, 
-        IHubContext<NotificationHub> hubContext)
+        IHubContext<NotificationHub> hubContext,
+        IReservationNotificationQueue notificationQueue)
     {
         _serviceProvider = serviceProvider;
         _hubContext = hubContext;
+        _notificationQueue = notificationQueue;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -46,8 +53,9 @@ public class ReservationMonitorService : BackgroundService
 
                     // 1. Process expired reservations (30 minutes late)
                     var expiredList = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null && r.ReservationTime <= expiredTime)
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.Order != null && r.Order.Table != null && r.ReservationTime <= expiredTime)
                         .ToListAsync(stoppingToken);
 
                     foreach (var expired in expiredList)
@@ -83,6 +91,30 @@ public class ReservationMonitorService : BackgroundService
                                 db.Tables.Update(child.Table);
                                 updatedTableIds.Add(child.Table.Id);
                             }
+                        }
+                    }
+
+                    // Email: Thông báo khách bàn đã bị tự động hủy (30 phút trễ)
+                    foreach (var expired in expiredList)
+                    {
+                        if (!_expiredEmailSentIds.Contains(expired.Id))
+                        {
+                            var customer = await db.Customers.FindAsync(expired.CustomerId);
+                            if (customer != null)
+                            {
+                                _ = _notificationQueue.QueueAsync(new ReservationEmailNotification
+                                {
+                                    CustomerId = expired.CustomerId,
+                                    CustomerEmail = customer.Email,
+                                    CustomerName = customer.Name,
+                                    EventType = "AutoCancelled30Min",
+                                    ReservationTime = expired.ReservationTime,
+                                    BranchName = expired.Branch?.Name ?? "Chi nhánh",
+                                    ReservationId = expired.Id,
+                                    TableNames = expired.Order?.Table?.Name
+                                });
+                            }
+                            _expiredEmailSentIds.Add(expired.Id);
                         }
                     }
 
@@ -131,8 +163,9 @@ public class ReservationMonitorService : BackgroundService
 
                     // 3. Lock Bàn (Bình thường)
                     var toLockList = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null 
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.Order != null && r.Order.Table != null 
                                  && (r.Order.Table.Status == "Empty" || r.Order.Table.Status == "Available")
                                  && r.ReservationTime <= lockThreshold && r.ReservationTime > expiredTime)
                         .ToListAsync(stoppingToken);
@@ -158,10 +191,35 @@ public class ReservationMonitorService : BackgroundService
                         }
                     }
 
+                    // Email: Nhắc lịch cho khách (30 phút trước giờ đặt bàn)
+                    foreach (var res in toLockList)
+                    {
+                        if (!_reminderSentIds.Contains(res.Id))
+                        {
+                            var customer = await db.Customers.FindAsync(res.CustomerId);
+                            if (customer != null)
+                            {
+                                _ = _notificationQueue.QueueAsync(new ReservationEmailNotification
+                                {
+                                    CustomerId = res.CustomerId,
+                                    CustomerEmail = customer.Email,
+                                    CustomerName = customer.Name,
+                                    EventType = "Reminder30Min",
+                                    ReservationTime = res.ReservationTime,
+                                    BranchName = res.Branch?.Name ?? "Chi nhánh",
+                                    ReservationId = res.Id,
+                                    TableNames = res.Order?.Table?.Name
+                                });
+                            }
+                            _reminderSentIds.Add(res.Id);
+                        }
+                    }
+
                     // 4. Auto-Transfer (Cứu hộ bàn bị chiếm dụng đối với TẤT CẢ các bàn của đơn)
                     var pendingReservationsInThreshold = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.Order != null && r.Order.Table != null 
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.Order != null && r.Order.Table != null 
                                  && r.ReservationTime <= lockThreshold && r.ReservationTime > expiredTime)
                         .ToListAsync(stoppingToken);
 
@@ -235,8 +293,9 @@ public class ReservationMonitorService : BackgroundService
                     // 5. Process late warnings: 15 mins late
                     var lateWarningThreshold = now.AddMinutes(-15);
                     var lateWarnCandidates = await db.Reservations
+                        .Include(r => r.Branch)
                         .Include(r => r.Order).ThenInclude(o => o!.Table)
-                        .Where(r => r.Status == "Pending" && r.ReservationTime <= lateWarningThreshold && r.ReservationTime > expiredTime)
+                        .Where(r => (r.Status == "Pending" || r.Status == "Confirmed") && r.ReservationTime <= lateWarningThreshold && r.ReservationTime > expiredTime)
                         .ToListAsync(stoppingToken);
 
                     var toLateWarnList = lateWarnCandidates.Where(r => !_lateWarnedReservationIds.Contains(r.Id)).ToList();
@@ -256,6 +315,23 @@ public class ReservationMonitorService : BackgroundService
                             Message = $"Khách đặt bàn {tableName} lúc {lateWarn.ReservationTime:HH:mm} đã trễ hơn 15 phút. Bạn có muốn gia hạn thời gian giữ bàn không?"
                         });
                         _lateWarnedReservationIds.Add(lateWarn.Id);
+
+                        // Email: Nhắc nhở khách đã trễ 15 phút
+                        var lateCustomer = await db.Customers.FindAsync(lateWarn.CustomerId);
+                        if (lateCustomer != null)
+                        {
+                            _ = _notificationQueue.QueueAsync(new ReservationEmailNotification
+                            {
+                                CustomerId = lateWarn.CustomerId,
+                                CustomerEmail = lateCustomer.Email,
+                                CustomerName = lateCustomer.Name,
+                                EventType = "LateWarning15Min",
+                                ReservationTime = lateWarn.ReservationTime,
+                                BranchName = lateWarn.Branch?.Name ?? "Chi nhánh",
+                                ReservationId = lateWarn.Id,
+                                TableNames = tableName
+                            });
+                        }
                     }
 
                     if (expiredList.Any() || toLockList.Any() || unassignedList.Any() || pendingReservationsInThreshold.Any())
