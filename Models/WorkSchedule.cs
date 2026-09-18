@@ -41,7 +41,7 @@ public class WorkSchedule
 
     public string Status { get; set; } = string.Empty;
 
-    public bool ManagerApproved { get; set; }
+    public bool ManagerApproved { get; set; } = true;
 
     /// <summary>
     /// Đánh dấu nhân viên này là bếp trưởng phụ trách chính cho ca làm việc này
