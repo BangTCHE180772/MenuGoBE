@@ -99,6 +99,33 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        [HttpGet("chefs")]
+        public async Task<IActionResult> GetChefs([FromQuery] long? branchId)
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var (isAdmin, isManager, branchIds) = await _service.GetAccountPermissionsAsync(currentUserId.Value);
+
+            long? targetBranchId = null;
+            if (branchId.HasValue)
+            {
+                if (!isAdmin && !branchIds.Contains(branchId.Value))
+                {
+                    return StatusCode(403, new { message = "Bạn không thuộc chi nhánh này." });
+                }
+                targetBranchId = branchId.Value;
+            }
+            else
+            {
+                targetBranchId = !isAdmin && branchIds.Any() ? branchIds.First() : null;
+            }
+
+            var result = await _service.GetAccountsByRolesAsync(new List<long> { 5 }, targetBranchId);
+            return Ok(result);
+        }
+
         [HttpGet("managers")]
         public async Task<IActionResult> GetManagerAccounts()
         {

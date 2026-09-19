@@ -1137,6 +1137,7 @@ namespace MenuGoBE.Service
                         OrderDetailId = entity.Id,
                         HandlingAction = dto.HandlingAction
                             ?? (dto.IsIntact ? LeftoverHandlingAction.Reuse : LeftoverHandlingAction.Discard),
+                        AtFaultAccountId = dto.AtFaultAccountId,
                     };
                     await _leftoverRecordService.CreateAsync(leftoverDto, confirmedByUserId);
                 }
