@@ -527,18 +527,21 @@ namespace MenuGoBE.Service
                     orderDetailIdsForBonus.AddRange(child.OrderDetails.Select(od => od.Id));
                 }
 
-                int kitchenDelayBonusPoints = 0;
+                int compensationBonusPoints = 0;
                 if (orderDetailIdsForBonus.Count > 0 && _pointConfig.EarnRate_SpendAmount > 0)
                 {
                     var delayedRecords = await _context.LeftoverRecords
                         .Include(l => l.OrderDetail)
+                        .ThenInclude(od => od.Product)
                         .Where(l => l.Type == LeftoverType.Return
-                                 && l.Reason == LeftoverRecord.KitchenDelayReason
+                                 && l.OrderDetail != null
+                                 && l.OrderDetail.Product != null
+                                 && l.OrderDetail.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed
                                  && l.OrderDetailId.HasValue
                                  && orderDetailIdsForBonus.Contains(l.OrderDetailId.Value))
                         .ToListAsync();
 
-                    kitchenDelayBonusPoints = delayedRecords.Sum(l =>
+                    compensationBonusPoints = delayedRecords.Sum(l =>
                         (int)(((l.OrderDetail?.Price ?? 0) * l.Quantity) / _pointConfig.EarnRate_SpendAmount) * _pointConfig.EarnRate_PointReward);
                 }
 
@@ -592,22 +595,21 @@ namespace MenuGoBE.Service
                             await _context.CustomerPointTransactions.AddAsync(earnTrans);
                         }
 
-                        // 3. Bù điểm khi bếp làm chậm khiến món đã hoàn thành bị huỷ
-                        // (LeftoverRecord Return với lý do KitchenDelayReason) — thay cho hoàn tiền.
-                        if (kitchenDelayBonusPoints > 0)
+                        // 3. Bù điểm khi trả món đã chế biến — thay cho hoàn tiền.
+                        if (compensationBonusPoints > 0)
                         {
                             int before = currentPoint;
-                            currentPoint += kitchenDelayBonusPoints;
+                            currentPoint += compensationBonusPoints;
                             var bonusTrans = new CustomerPointTransaction
                             {
                                 CustomerId = customer.Id,
                                 OrderId = order.Id,
                                 RelatedCode = orderCode,
                                 Type = MenuGoBE.Models.Enums.PointTransactionType.Earn,
-                                PointChange = kitchenDelayBonusPoints,
+                                PointChange = compensationBonusPoints,
                                 PointBefore = before,
                                 PointAfter = currentPoint,
-                                Reason = $"Bù điểm do bếp làm chậm, món đã hoàn thành bị huỷ - {orderCode}",
+                                Reason = $"Bù điểm do lỗi của nhà hàng khi làm món ăn - {orderCode}",
                                 IsManual = false,
                                 CreatedAt = DateTime.UtcNow
                             };
@@ -851,6 +853,12 @@ namespace MenuGoBE.Service
             await _repo.SaveChangesAsync();
 
             return true;
+        }
+
+        public async Task<List<OrderViewDto>> GetReturnableOrdersByBranchAsync(long branchId)
+        {
+            var orders = await _repo.GetReturnableOrdersByBranchAsync(branchId);
+            return _mapper.Map<List<OrderViewDto>>(orders);
         }
 
         public async Task<List<OrderViewDto>> GetPaidOrdersByBranchAsync(long branchId)

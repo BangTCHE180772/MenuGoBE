@@ -150,6 +150,20 @@ namespace MenuGoBE.Repositories
                 .ToListAsync();
         }
 
+        public async Task<List<Order>> GetReturnableOrdersByBranchAsync(long branchId)
+        {
+            var validOrders = await _context.Orders
+                .Where(o => o.Table != null && o.Table.Area != null && o.Table.Area.BranchId == branchId && o.Status != "Paid" && o.Status != "Completed" && o.Status != "Cancelled" && o.Status != "Internal")
+                .Include(o => o.Table)
+                    .ThenInclude(t => t.Area)
+                .Include(o => o.OrderDetails.Where(od => od.Status != "Cancelled" && (od.CookingStatus == "Served" || od.CookingStatus == null || od.Status == "PartialReturned") && od.Quantity > od.ReturnedQuantity))
+                    .ThenInclude(od => od.Product)
+                .Where(o => o.OrderDetails.Any(od => od.Status != "Cancelled" && (od.CookingStatus == "Served" || od.CookingStatus == null || od.Status == "PartialReturned") && od.Quantity > od.ReturnedQuantity))
+                .OrderByDescending(o => o.CreatedAt)
+                .ToListAsync();
+            return validOrders;
+        }
+
         public async Task CreateAsync(Order entity)
         {
             await _context.Orders.AddAsync(entity);
