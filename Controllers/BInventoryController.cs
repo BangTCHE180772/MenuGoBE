@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -1001,9 +1001,19 @@ namespace MenuGoBE.Controllers
                 var totalCount = await query.CountAsync();
 
                 var items = await query
-                    .OrderBy(b => b.ExpiryDate.HasValue ? 0 : 1)
-                    .ThenBy(b => b.ExpiryDate)
-                    .ThenByDescending(b => b.CreatedAt)
+                    // 1. Đang hoạt động (Active) lên đầu
+                    .OrderBy(b => b.Status == BatchStatus.Active ? 0 : 1)
+                    // 2. Hạn Dùng: Expired → NearExpiry (gần nhất lên trên) → Valid → NoExpiry/Depleted
+                    .ThenBy(b =>
+                        b.QuantityRemaining <= 0 || b.Status == BatchStatus.Depleted ? 4
+                        : !b.ExpiryDate.HasValue ? 3
+                        : b.ExpiryDate.Value.Date < today ? 0
+                        : b.ExpiryDate.Value.Date <= nearExpiryLimit ? 1
+                        : 2)
+                    // Trong mỗi nhóm HSD: sắp xếp theo ngày hạn dùng tăng dần (sắp hết hạn nhất lên trên)
+                    .ThenBy(b => b.ExpiryDate.HasValue ? b.ExpiryDate.Value : DateTime.MaxValue)
+                    // 3. Ngày nhập xa nhất (cũ nhất) lên đầu
+                    .ThenBy(b => b.ReceivedDate)
                     .Skip((Math.Max(page, 1) - 1) * Math.Max(pageSize, 1))
                     .Take(Math.Max(pageSize, 1))
                     .Select(b => new BatchDetailDto
