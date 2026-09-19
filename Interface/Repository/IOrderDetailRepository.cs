@@ -15,6 +15,7 @@ namespace MenuGoBE.Interface.Repository
         Task<int> GetPendingQuantityAsync(long productId, long branchId);
         Task<List<OrderDetail>> GetPendingByProductIdAsync(long productId, long[] branchIds);
         Task<List<OrderDetail>> GetCancelledByBranchAsync(long branchId, DateTime? fromDate, DateTime? toDate);
+        Task<(Dictionary<long, int> direct, Dictionary<long, int> ingredient)> GetBulkPendingQuantitiesAsync(long branchId);
         Task SaveChangesAsync();
     }
 }
