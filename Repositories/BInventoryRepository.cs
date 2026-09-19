@@ -21,6 +21,13 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync(b => b.ProductId == productId && b.BranchId == branchId);
         }
 
+        public async Task<List<BInventory>> GetAllByBranchAsync(long branchId)
+        {
+            return await _context.BInventories
+                .Where(b => b.BranchId == branchId)
+                .ToListAsync();
+        }
+
         public async Task UpdateAsync(BInventory entity)
         {
             _context.BInventories.Update(entity);

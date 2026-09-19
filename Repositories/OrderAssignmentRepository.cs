@@ -235,6 +235,16 @@ namespace MenuGoBE.Repositories
             return hasWaiterTempRole;
         }
 
+        public async Task<List<OrderAssignment>> GetActivityLogAssignmentsAsync(long accountId, DateTime startTime, DateTime endTime)
+        {
+            return await _context.OrderAssignments
+                .Include(a => a.Order)
+                .ThenInclude(o => o.Table)
+                .Where(a => a.AccountId == accountId && a.AssignedAt >= startTime && a.AssignedAt <= endTime)
+                .OrderBy(a => a.AssignedAt)
+                .ToListAsync();
+        }
+
         public async Task SaveChangesAsync()
         {
             await _context.SaveChangesAsync();

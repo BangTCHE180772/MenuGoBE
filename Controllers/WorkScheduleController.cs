@@ -424,5 +424,21 @@ namespace MenuGoBE.Controllers
                 return BadRequest(new { message = ex.Message });
             }
         }
+
+
+        [HttpGet("{id}/activity-log")]
+        [Authorize(Roles = "Admin,Manager,Employee")]
+        public async Task<IActionResult> GetActivityLog(long id)
+        {
+            try
+            {
+                var logs = await _service.GetActivityLogAsync(id);
+                return Ok(logs);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
     }
 }
