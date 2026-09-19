@@ -131,6 +131,66 @@ namespace MenuGoBE.Service
             return result;
         }
 
+        public async Task<Dictionary<long, int>> GetBulkMenuAvailableQuantitiesAsync(long branchId)
+        {
+            var result = new Dictionary<long, int>();
+
+            var products = await _productRepo.GetAllAsync();
+            var bInvs = await _bInventoryRepo.GetAllByBranchAsync(branchId);
+            var pendingQuantities = await _detailRepo.GetBulkPendingQuantitiesAsync(branchId);
+            var recipes = await _recipesRepo.GetAllAsync();
+
+            var productDict = products.ToDictionary(p => p.Id);
+            var binvDict = bInvs.ToDictionary(b => b.ProductId);
+            var recipeDict = recipes.GroupBy(r => r.ParentProductId).ToDictionary(g => g.Key, g => g.ToList());
+            
+            var directPending = pendingQuantities.direct;
+            var ingredientPending = pendingQuantities.ingredient;
+
+            int CalculateAvailable(long pId)
+            {
+                if (!productDict.TryGetValue(pId, out var prod)) return 0;
+                
+                if (prod.Type == MenuGoBE.Models.Enums.ProductType.Processed)
+                {
+                    if (!recipeDict.TryGetValue(pId, out var prodRecipes) || !prodRecipes.Any())
+                    {
+                        if (binvDict.TryGetValue(pId, out var fallbackBinv) && !fallbackBinv.IsManageQuantity) return 999999;
+                        return 0;
+                    }
+
+                    int maxProcessable = int.MaxValue;
+                    bool hasValidRecipe = false;
+                    foreach (var recipe in prodRecipes)
+                    {
+                        if (recipe.Quantity > 0)
+                        {
+                            hasValidRecipe = true;
+                            int ingredientQty = CalculateAvailable(recipe.IngredientProductId);
+                            int possibleQty = (int)(ingredientQty / recipe.Quantity);
+                            if (possibleQty < maxProcessable) maxProcessable = possibleQty;
+                        }
+                    }
+                    return hasValidRecipe ? maxProcessable : 0;
+                }
+
+                if (!binvDict.TryGetValue(pId, out var binv)) return 0;
+                if (!binv.IsManageQuantity) return 999999;
+
+                int dPending = directPending.ContainsKey(pId) ? directPending[pId] : 0;
+                int iPending = ingredientPending.ContainsKey(pId) ? ingredientPending[pId] : 0;
+                
+                return (int)binv.Quantity - (dPending + iPending);
+            }
+
+            foreach (var p in products)
+            {
+                result[p.Id] = CalculateAvailable(p.Id);
+            }
+
+            return result;
+        }
+
         public async Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto)
         {
             var order = await _orderRepo.GetByIdAsync(dto.OrderId);

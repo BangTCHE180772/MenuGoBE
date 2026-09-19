@@ -8,6 +8,7 @@ namespace MenuGoBE.Interface.Services
         Task<OrderDetailViewDto?> GetByIdAsync(long id);
         Task<int> GetAvailableQuantityAsync(long productId, long branchId);
         Task<Dictionary<long, int>> GetAvailableQuantitiesAsync(long branchId, List<long> productIds);
+        Task<Dictionary<long, int>> GetBulkMenuAvailableQuantitiesAsync(long branchId);
         Task<OrderDetailViewDto> CreateAsync(OrderDetailCreateDto dto);
         Task<BulkOrderResultDto> CreateMultipleAsync(List<OrderDetailCreateDto> dtos);
         Task<bool> UpdateAsync(OrderDetailUpdateDto dto);
