@@ -80,8 +80,7 @@ namespace MenuGoBE.Repositories
                              && od.Order.Status != "Internal"
                              && (
                                  od.Status == "CustomerPending" || 
-                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting") ||
-                                 (od.Product.Type != MenuGoBE.Models.Enums.ProductType.Processed && (od.Status == "Confirmed" || od.Status == "Served" || od.Status == "RequestReturn"))
+                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")
                              ))
                 .SumAsync(od => (int?)od.Quantity) ?? 0;
 
@@ -154,8 +153,7 @@ namespace MenuGoBE.Repositories
                              && od.Order.Status != "Internal"
                              && (
                                  od.Status == "CustomerPending" || 
-                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting") ||
-                                 (od.Product.Type != MenuGoBE.Models.Enums.ProductType.Processed && (od.Status == "Confirmed" || od.Status == "Served" || od.Status == "RequestReturn"))
+                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")
                              ))
                 .GroupBy(od => od.ProductId)
                 .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(od => (int?)od.Quantity) ?? 0 })
