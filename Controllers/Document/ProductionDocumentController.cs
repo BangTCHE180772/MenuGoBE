@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -96,7 +96,10 @@ namespace MenuGoBE.Controllers.Document
                     UnitConversionId = d.UnitConversionId,
                     FatherId = d.FatherId,
                     Quantity = d.Quantity,
-                    Note = d.Note
+                    Note = d.Note,
+                    ManufactureDateSnapshot = d.ManufactureDate,
+                    ExpiryDateSnapshot = d.ExpiryDate,
+                    BatchCodeSnapshot = d.BatchCode
                 }).ToList()
             };
 
@@ -137,7 +140,10 @@ namespace MenuGoBE.Controllers.Document
                     UnitConversionId = d.UnitConversionId,
                     FatherId = d.FatherId,
                     Quantity = d.Quantity,
-                    Note = d.Note
+                    Note = d.Note,
+                    ManufactureDateSnapshot = d.ManufactureDate,
+                    ExpiryDateSnapshot = d.ExpiryDate,
+                    BatchCodeSnapshot = d.BatchCode
                 }).ToList()
             };
 
@@ -186,7 +192,10 @@ namespace MenuGoBE.Controllers.Document
                     UnitConversionId = d.UnitConversionId,
                     FatherId = d.FatherId,
                     Quantity = d.Quantity,
-                    Note = d.Note
+                    Note = d.Note,
+                    ManufactureDateSnapshot = d.ManufactureDate,
+                    ExpiryDateSnapshot = d.ExpiryDate,
+                    BatchCodeSnapshot = d.BatchCode
                 }).ToList()
             };
 

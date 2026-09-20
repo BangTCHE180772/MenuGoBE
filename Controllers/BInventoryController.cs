@@ -1540,6 +1540,7 @@ namespace MenuGoBE.Controllers
                 BatchAllocationType.TransferOut => "Chuyển Hàng",
                 BatchAllocationType.TransferReturn => "Hoàn trả chuyển kho (Từ chối)",
                 BatchAllocationType.ProductionConsumption => "Tiêu hao sản xuất",
+                BatchAllocationType.ProductionReceipt => "Sản xuất chuẩn bị sẵn",
                 BatchAllocationType.ReturnToSupplier => "Trả Hàng",
                 BatchAllocationType.CustomerReturn => "Khách trả hàng",
                 BatchAllocationType.StockCheck => "Cân đối kiểm kho",
