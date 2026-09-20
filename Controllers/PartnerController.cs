@@ -184,6 +184,27 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region Cập nhật hình ảnh hợp đồng cho đối tác
+        // 4b. Update Partner Contract Images
+        [HttpPut("{id}/images")]
+        public async Task<IActionResult> UpdateImages(long id, [FromBody] PartnerImagesUpdateDto dto)
+        {
+            if (!ValidateUserToken(out _, out var errorResult))
+            {
+                return errorResult!;
+            }
+            try
+            {
+                var result = await _partnerService.UpdatePartnerImagesAsync(id, dto?.ImageUrls);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        #endregion
+
         #region Xóa đối tác
         // 5. Delete By Id
         [HttpDelete("{id}")]

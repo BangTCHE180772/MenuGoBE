@@ -16,5 +16,7 @@ namespace MenuGoBE.Dtos.Partner
         [MaxLength(255)]
         [EmailAddress]
         public string? Email { get; set; }
+
+        public System.Collections.Generic.List<string>? ImageUrls { get; set; }
     }
 }

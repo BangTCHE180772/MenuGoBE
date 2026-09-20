@@ -122,6 +122,7 @@ namespace MenuGoBE.Service
                 AddressId = dto.AddressId,
                 Phone = dto.Phone,
                 Email = dto.Email,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 CreatedBy = createdBy,
                 CreatedAt = DateTime.UtcNow
             };
@@ -147,6 +148,29 @@ namespace MenuGoBE.Service
             partner.AddressId = dto.AddressId;
             partner.Phone = dto.Phone;
             partner.Email = dto.Email;
+            if (dto.ImageUrls != null)
+            {
+                partner.ImageUrls = dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null;
+            }
+
+            var updated = await _partnerRepo.UpdatePartnerAsync(partner);
+            return MapToViewDto(updated);
+        }
+        #endregion
+
+        #region Cập nhật hình ảnh hợp đồng đối tác
+        /// <summary>
+        /// Cập nhật danh sách hình ảnh hợp đồng cho đối tác/nhà cung cấp.
+        /// </summary>
+        public async Task<PartnerViewDto> UpdatePartnerImagesAsync(long id, List<string>? imageUrls)
+        {
+            var partner = await _partnerRepo.GetPartnerByIdAsync(id);
+            if (partner == null)
+            {
+                throw new Exception("Đối tác không tồn tại");
+            }
+
+            partner.ImageUrls = imageUrls != null && imageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(imageUrls) : null;
 
             var updated = await _partnerRepo.UpdatePartnerAsync(partner);
             return MapToViewDto(updated);
@@ -673,6 +697,19 @@ namespace MenuGoBE.Service
         #region Helper MapToViewDto
         private PartnerViewDto MapToViewDto(Partner partner)
         {
+            var imgs = new List<string>();
+            if (!string.IsNullOrWhiteSpace(partner.ImageUrls))
+            {
+                try
+                {
+                    imgs = System.Text.Json.JsonSerializer.Deserialize<List<string>>(partner.ImageUrls) ?? new List<string>();
+                }
+                catch
+                {
+                    imgs = new List<string> { partner.ImageUrls };
+                }
+            }
+
             return new PartnerViewDto
             {
                 Id = partner.Id,
@@ -682,6 +719,7 @@ namespace MenuGoBE.Service
                 AddressId = partner.AddressId,
                 Phone = partner.Phone,
                 Email = partner.Email,
+                ImageUrls = imgs,
                 CreatedBy = partner.CreatedBy,
                 CreatedAt = partner.CreatedAt
             };

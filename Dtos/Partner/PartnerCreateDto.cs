@@ -25,5 +25,7 @@ namespace MenuGoBE.Dtos.Partner
         [MaxLength(255)]
         [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
         public string Email { get; set; } = string.Empty;
+
+        public System.Collections.Generic.List<string>? ImageUrls { get; set; }
     }
 }
