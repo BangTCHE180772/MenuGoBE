@@ -253,6 +253,34 @@ namespace MenuGoBE.Controllers
                             unitName = uc.Unit != null ? uc.Unit.Name : string.Empty,
                             conversionPoint = uc.ConversionPoint,
                             isBaseUnit = uc.BaseId == null
+                        }).ToList(),
+                    recipeDetailes = b.Product.RecipeItems
+                        .Select(rd => new
+                        {
+                            id = rd.Id,
+                            productId = rd.ParentProductId,
+                            ingredientProductId = rd.IngredientProductId,
+                            ingredientId = rd.IngredientProductId,
+                            ingredientName = rd.IngredientProduct != null ? rd.IngredientProduct.Name : string.Empty,
+                            ingredientCode = rd.IngredientProduct != null ? rd.IngredientProduct.SKUCode : string.Empty,
+                            unitName = rd.IngredientProduct != null && rd.IngredientProduct.UnitConversions != null
+                                ? (rd.IngredientProduct.UnitConversions.Where(uc => uc.BaseId == null).Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty).FirstOrDefault() ?? "Đơn vị")
+                                : "Đơn vị",
+                            quantity = rd.Quantity
+                        }).ToList(),
+                    recipeItems = b.Product.RecipeItems
+                        .Select(rd => new
+                        {
+                            id = rd.Id,
+                            productId = rd.ParentProductId,
+                            ingredientProductId = rd.IngredientProductId,
+                            ingredientId = rd.IngredientProductId,
+                            ingredientName = rd.IngredientProduct != null ? rd.IngredientProduct.Name : string.Empty,
+                            ingredientCode = rd.IngredientProduct != null ? rd.IngredientProduct.SKUCode : string.Empty,
+                            unitName = rd.IngredientProduct != null && rd.IngredientProduct.UnitConversions != null
+                                ? (rd.IngredientProduct.UnitConversions.Where(uc => uc.BaseId == null).Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty).FirstOrDefault() ?? "Đơn vị")
+                                : "Đơn vị",
+                            quantity = rd.Quantity
                         }).ToList()
                 }).ToListAsync();
 
@@ -309,7 +337,9 @@ namespace MenuGoBE.Controllers
                                 item.imageUrl,
                                 item.imageId,
                                 item.createdAt,
-                                item.unitConversions
+                                item.unitConversions,
+                                item.recipeDetailes,
+                                item.recipeItems
                             };
                         }).ToList();
 
@@ -496,6 +526,9 @@ namespace MenuGoBE.Controllers
                                 ingredientId = rd.IngredientProductId,
                                 ingredientName = rd.IngredientProduct != null ? rd.IngredientProduct.Name : string.Empty,
                                 ingredientCode = rd.IngredientProduct != null ? rd.IngredientProduct.SKUCode : string.Empty,
+                                unitName = rd.IngredientProduct != null && rd.IngredientProduct.UnitConversions != null
+                                    ? (rd.IngredientProduct.UnitConversions.Where(uc => uc.BaseId == null).Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty).FirstOrDefault() ?? "Đơn vị")
+                                    : "Đơn vị",
                                 quantity = rd.Quantity
                             }).ToList()
                     })
@@ -558,7 +591,9 @@ namespace MenuGoBE.Controllers
                         quantity = runningQty,
                         stockQuantity = runningQty,
                         avg = runningAvgCost,
-                        purchasePrice = runningAvgCost > 0 ? runningAvgCost : (b.avg > 0 ? b.avg : b.sellPrice)
+                        purchasePrice = runningAvgCost > 0 ? runningAvgCost : (b.avg > 0 ? b.avg : b.sellPrice),
+                        recipeDetailes = b.recipeDetailes,
+                        recipeItems = b.recipeDetailes
                     };
                 }).ToList();
 
