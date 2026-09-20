@@ -24,6 +24,7 @@ namespace MenuGoBE.Service
         private readonly IHubContext<NotificationHub> _hubContext;
         private readonly AppDbContext _context;
         private readonly INotificationRepository _notificationRepo;
+        private readonly IOrderAssignmentRepository _orderAssignmentRepo;
 
         public WorkScheduleService(
             IWorkScheduleRepository repo,
@@ -33,7 +34,8 @@ namespace MenuGoBE.Service
             IAccountRepository accountRepo,
             IHubContext<NotificationHub> hubContext,
             AppDbContext context,
-            INotificationRepository notificationRepo)
+            INotificationRepository notificationRepo,
+            IOrderAssignmentRepository orderAssignmentRepo)
         {
             _repo = repo;
             _mapper = mapper;
@@ -43,6 +45,7 @@ namespace MenuGoBE.Service
             _hubContext = hubContext;
             _context = context;
             _notificationRepo = notificationRepo;
+            _orderAssignmentRepo = orderAssignmentRepo;
         }
 
 
@@ -1229,6 +1232,56 @@ namespace MenuGoBE.Service
             }
 
             return result;
+        }
+
+        public async Task<List<MenuGoBE.Dtos.WorkSchedule.WorkScheduleActivityLogDto>> GetActivityLogAsync(long workScheduleId)
+        {
+            var ws = await _repo.GetByIdWithDetailsAsync(workScheduleId);
+
+            if (ws == null || !ws.CheckInAt.HasValue)
+            {
+                return new List<MenuGoBE.Dtos.WorkSchedule.WorkScheduleActivityLogDto>();
+            }
+
+            // Chỉ hỗ trợ role Phục vụ (role = 6) - Mặc định cho chức năng này
+            var roles = await _accountRepo.GetActiveRoleIdsAsync(ws.AccountId);
+            var hasWaiterRole = roles.Contains(6);
+            if (!hasWaiterRole)
+            {
+                return new List<MenuGoBE.Dtos.WorkSchedule.WorkScheduleActivityLogDto>();
+            }
+
+            var startTime = ws.CheckInAt.Value;
+            // Tính toán EndTime: Nếu chưa CheckOut thì là min của hiện tại hoặc giờ kết thúc ca + 4 tiếng
+            var endTime = ws.CheckOutAt ?? DateTime.UtcNow;
+            if (!ws.CheckOutAt.HasValue && ws.Shift != null)
+            {
+                // Giả định ws.WorkDate là ngày của ca làm việc
+                var shiftEndTime = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
+                var maxEndTime = shiftEndTime.AddHours(4);
+                if (maxEndTime < DateTime.UtcNow)
+                {
+                    endTime = maxEndTime;
+                }
+            }
+
+            var assignments = await _orderAssignmentRepo.GetActivityLogAssignmentsAsync(ws.AccountId, startTime, endTime);
+
+            var logs = new List<MenuGoBE.Dtos.WorkSchedule.WorkScheduleActivityLogDto>();
+            foreach (var a in assignments)
+            {
+                string actionName = a.AssignmentType == "Primary" ? "Nhận bàn chính" : "Hỗ trợ bàn";
+                logs.Add(new MenuGoBE.Dtos.WorkSchedule.WorkScheduleActivityLogDto
+                {
+                    Timestamp = a.AssignedAt,
+                    Action = actionName,
+                    OrderCode = $"HD{a.OrderId}",
+                    TableName = a.Order?.Table?.Name ?? "Mang về",
+                    Details = $"{actionName} cho đơn hàng HD{a.OrderId} (Bàn: {a.Order?.Table?.Name ?? "Mang về"})"
+                });
+            }
+
+            return logs;
         }
     }
 }

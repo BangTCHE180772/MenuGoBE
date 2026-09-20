@@ -560,8 +560,20 @@ namespace MenuGoBE.Service
                 targetProduct.MinStorage = 0;
                 targetProduct.MaxStorage = 1000000000;
             }
-
             await _repo.UpdateAsync(targetProduct);
+
+            // Sync BInventory IsManageQuantity, MinStorage, MaxStorage
+            var relatedBInvs = await _context.BInventories.Where(b => b.ProductId == targetProduct.Id).ToListAsync();
+            if (relatedBInvs.Any())
+            {
+                foreach (var binv in relatedBInvs)
+                {
+                    binv.IsManageQuantity = targetProduct.IsManageQuantity;
+                    binv.MinStorage = targetProduct.MinStorage;
+                    binv.MaxStorage = targetProduct.MaxStorage;
+                }
+                _context.BInventories.UpdateRange(relatedBInvs);
+            }
 
             // Sync unit conversions if unit conversions array is provided in request
             if (dto.UnitConversions != null)

@@ -35,6 +35,9 @@ namespace MenuGoBE.Interface.Repository
         Task<List<long>> GetOnDutyStaffIdsAsync(long branchId, DateOnly today);
         Task<bool> IsWaiterAsync(long accountId);
 
+        // === Activity Log ===
+        Task<List<OrderAssignment>> GetActivityLogAssignmentsAsync(long accountId, DateTime startTime, DateTime endTime);
+
         Task SaveChangesAsync();
     }
 }

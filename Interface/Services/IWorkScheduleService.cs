@@ -29,5 +29,7 @@ namespace MenuGoBE.Interface.Services
 
         // Auto Work Schedule Assignment
         Task<WorkScheduleAutoAssignResultDto> AutoAssignAsync(WorkScheduleAutoAssignDto dto);
+
+        Task<List<WorkScheduleActivityLogDto>> GetActivityLogAsync(long workScheduleId);
     }
 }
