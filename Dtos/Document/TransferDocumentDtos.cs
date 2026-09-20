@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
@@ -11,11 +11,12 @@ namespace MenuGoBE.Dtos.Document
     /// </summary>
     public class TransferDocumentCreateDto
     {
-        [Required(ErrorMessage = "Mã chi nhánh gửi không được để trống.")]
         public long BranchId { get; set; }
 
         [Required(ErrorMessage = "Mã chi nhánh nhận không được để trống.")]
         public long ToBranchId { get; set; }
+
+        public string? Code { get; set; }
 
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
@@ -56,6 +57,8 @@ namespace MenuGoBE.Dtos.Document
     {
         [Required(ErrorMessage = "Mã chi nhánh nhận không được để trống.")]
         public long ToBranchId { get; set; }
+
+        public string? Code { get; set; }
 
         public DateTime OrderDate { get; set; }
 
@@ -118,3 +121,4 @@ namespace MenuGoBE.Dtos.Document
         public decimal ReceivedQuantity { get; set; }
     }
 }
+

@@ -12,6 +12,8 @@ namespace MenuGoBE.Dtos.Document
     /// </summary>
     public class ImportDocumentCreateDto
     {
+        public string? Code { get; set; }
+
         [Required(ErrorMessage = "Mã chi nhánh không được để trống.")]
         public long BranchId { get; set; }
 
