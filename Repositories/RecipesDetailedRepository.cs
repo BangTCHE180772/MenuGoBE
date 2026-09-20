@@ -21,4 +21,11 @@ public class RecipesDetailedRepository : IRecipesDetailedRepository
             .Where(r => r.ParentProductId == productId)
             .ToListAsync();
     }
+
+    public async Task<List<RecipesDetailed>> GetAllAsync()
+    {
+        return await _context.RecipesDetaileds
+            .Include(r => r.IngredientProduct)
+            .ToListAsync();
+    }
 }

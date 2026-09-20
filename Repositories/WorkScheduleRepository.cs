@@ -27,6 +27,14 @@ namespace MenuGoBE.Repositories
             return await _context.WorkSchedules.FindAsync(id);
         }
 
+        public async Task<WorkSchedule?> GetByIdWithDetailsAsync(long id)
+        {
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Include(ws => ws.Account)
+                .FirstOrDefaultAsync(ws => ws.Id == id);
+        }
+
         public async Task CreateAsync(WorkSchedule entity)
         {
             await _context.WorkSchedules.AddAsync(entity);

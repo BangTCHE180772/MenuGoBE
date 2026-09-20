@@ -8,6 +8,7 @@ namespace MenuGoBE.Interface.Repository
     {
         Task<List<WorkSchedule>> GetAllAsync();
         Task<WorkSchedule?> GetByIdAsync(long id);
+        Task<WorkSchedule?> GetByIdWithDetailsAsync(long id);
         Task CreateAsync(WorkSchedule entity);
         Task UpdateAsync(WorkSchedule entity);
         Task DeleteAsync(long id);

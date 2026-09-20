@@ -77,7 +77,11 @@ namespace MenuGoBE.Repositories
                 .ThenInclude(t => t.Area)
                 .Where(od => od.ProductId == productId 
                              && od.Order.Table.Area.BranchId == branchId
-                             && (od.Status == "CustomerPending" || (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
+                             && od.Order.Status != "Internal"
+                             && (
+                                 od.Status == "CustomerPending" || 
+                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")
+                             ))
                 .SumAsync(od => (int?)od.Quantity) ?? 0;
 
             var ingredientPending = await _context.OrderDetails
@@ -87,6 +91,7 @@ namespace MenuGoBE.Repositories
                 .ThenInclude(t => t.Area)
                 .Where(od => od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed 
                              && od.Order.Table.Area.BranchId == branchId
+                             && od.Order.Status != "Internal"
                              && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
                 .Join(_context.RecipesDetaileds.Where(r => r.IngredientProductId == productId),
                       od => od.ProductId,
@@ -135,6 +140,45 @@ namespace MenuGoBE.Repositories
                 query = query.Where(od => od.CreatedAt <= toDate.Value);
 
             return await query.OrderByDescending(od => od.CreatedAt).ToListAsync();
+        }
+
+        public async Task<(Dictionary<long, int> direct, Dictionary<long, int> ingredient)> GetBulkPendingQuantitiesAsync(long branchId)
+        {
+            var directPendingList = await _context.OrderDetails
+                .Include(od => od.Product)
+                .Include(od => od.Order)
+                .ThenInclude(o => o.Table)
+                .ThenInclude(t => t.Area)
+                .Where(od => od.Order.Table.Area.BranchId == branchId
+                             && od.Order.Status != "Internal"
+                             && (
+                                 od.Status == "CustomerPending" || 
+                                 (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")
+                             ))
+                .GroupBy(od => od.ProductId)
+                .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(od => (int?)od.Quantity) ?? 0 })
+                .ToListAsync();
+            var directPending = directPendingList.ToDictionary(x => x.ProductId, x => x.PendingQty);
+
+            var ingredientPendingList = await _context.OrderDetails
+                .Include(od => od.Product)
+                .Include(od => od.Order)
+                .ThenInclude(o => o.Table)
+                .ThenInclude(t => t.Area)
+                .Where(od => od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed
+                             && od.Order.Table.Area.BranchId == branchId
+                             && od.Order.Status != "Internal"
+                             && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
+                .Join(_context.RecipesDetaileds,
+                      od => od.ProductId,
+                      r => r.ParentProductId,
+                      (od, r) => new { r.IngredientProductId, od.Quantity, RecipeQuantity = r.Quantity })
+                .GroupBy(x => x.IngredientProductId)
+                .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(x => (int?)(x.Quantity * x.RecipeQuantity)) ?? 0 })
+                .ToListAsync();
+            var ingredientPending = ingredientPendingList.ToDictionary(x => x.ProductId, x => x.PendingQty);
+
+            return (directPending, ingredientPending);
         }
 
         public async Task SaveChangesAsync()
