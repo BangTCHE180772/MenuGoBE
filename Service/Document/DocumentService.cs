@@ -3822,6 +3822,9 @@ namespace MenuGoBE.Service.Document
             parentDetail.SnapshotAvgCost = tp_avg;
             parentDetail.UnitPrice = tpUnitCost;
 
+            // Gán giá trị phiếu Sản xuất bằng đúng tổng chi phí sản xuất thành phẩm
+            document.TotalAmount = totalProductionCost;
+
             // Bản ghi Sổ kho InventoryLedger cho Thành phẩm sản xuất
             var parentLedger = new InventoryLedger
             {

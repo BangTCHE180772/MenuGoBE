@@ -1462,11 +1462,71 @@ namespace MenuGoBE.Controllers
                     alloc.AllocationTypeName = GetAllocationTypeLabel(alloc.AllocationType, alloc.OrderId, alloc.DocumentCode);
                 }
 
+                #region Tìm phiếu nhập gốc ban đầu nếu có
+                long? initialImportDocId = null;
+                string? initialImportDocCode = null;
+
+                var searchBatchCode = currentBatch.BatchCode;
+                var searchInventoryId = currentBatch.BInventoryId;
+                if (currentBatch.SourceBatchId.HasValue && sourceBatch != null)
+                {
+                    searchBatchCode = sourceBatch.BatchCode;
+                    searchInventoryId = sourceBatch.BInventoryId;
+                }
+
+                var importDetail = await _context.DocumentDetails
+                    .AsNoTracking()
+                    .Include(dd => dd.Document)
+                        .ThenInclude(d => d.Partner)
+                    .Include(dd => dd.Document)
+                        .ThenInclude(d => d.Branch)
+                    .Where(dd => dd.BInventoryId == searchInventoryId
+                              && dd.BatchCodeSnapshot == searchBatchCode
+                              && dd.Document != null
+                              && dd.Document.Type == MenuGoBE.Models.Enums.DocumentType.Import)
+                    .OrderByDescending(dd => dd.Id)
+                    .FirstOrDefaultAsync();
+
+                if (importDetail != null && importDetail.Document != null)
+                {
+                    initialImportDocId = importDetail.Document.Id;
+                    initialImportDocCode = importDetail.Document.Code;
+
+                    // Nếu danh sách allocations chưa có bản ghi của phiếu nhập này, bổ sung vào đầu danh sách
+                    var hasImportAlloc = allocations.Any(a => a.DocumentId == importDetail.Document.Id);
+                    if (!hasImportAlloc)
+                    {
+                        allocations.Add(new BatchAllocationTraceDto
+                        {
+                            Id = 0,
+                            DocumentDetailId = importDetail.Id,
+                            BatchId = currentBatch.Id,
+                            BatchCode = currentBatch.BatchCode,
+                            AllocationType = (BatchAllocationType)0,
+                            AllocationTypeName = "Nhập hàng",
+                            QuantityAllocated = currentBatch.QuantityOriginal,
+                            UnitCost = currentBatch.UnitCost,
+                            CreatedAt = importDetail.Document.OrderDate != default ? importDetail.Document.OrderDate : importDetail.CreatedAt,
+                            DocumentId = importDetail.Document.Id,
+                            DocumentCode = importDetail.Document.Code,
+                            DocumentType = MenuGoBE.Models.Enums.DocumentType.Import,
+                            DocumentTypeName = "Import",
+                            DocumentPostedAt = importDetail.Document.OrderDate != default ? importDetail.Document.OrderDate : importDetail.CreatedAt,
+                            BranchName = importDetail.Document.Branch?.Name,
+                            PartnerName = importDetail.Document.SnapshotPartnerName ?? importDetail.Document.Partner?.Name,
+                            Note = importDetail.Document.Note
+                        });
+                    }
+                }
+                #endregion
+
                 return Ok(new BatchTraceabilityDto
                 {
                     CurrentBatch = currentBatch,
                     SourceBatch = sourceBatch,
-                    Allocations = allocations
+                    Allocations = allocations,
+                    InitialImportDocumentId = initialImportDocId,
+                    InitialImportDocumentCode = initialImportDocCode
                 });
             }
             catch (Exception ex)
@@ -1525,6 +1585,11 @@ namespace MenuGoBE.Controllers
         #region Helper: Chuyển đổi tên loại phân bổ tiếng Việt
         private static string GetAllocationTypeLabel(BatchAllocationType type, long? orderId = null, string? docCode = null)
         {
+            if ((int)type == 0)
+            {
+                return "Nhập hàng";
+            }
+
             if (type == BatchAllocationType.Sale)
             {
                 if ((orderId.HasValue && orderId.Value > 0) || (!string.IsNullOrEmpty(docCode) && (docCode.StartsWith("PXBH") || docCode.StartsWith("HD"))))
