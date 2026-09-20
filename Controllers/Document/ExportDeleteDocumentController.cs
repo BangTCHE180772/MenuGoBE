@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -90,6 +90,7 @@ namespace MenuGoBE.Controllers.Document
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 Type = DocumentType.ExportDelete,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 DocumentDetails = (dto.Details ?? new List<ExportDeleteDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
                     BInventoryId = d.BInventoryId,
@@ -130,6 +131,7 @@ namespace MenuGoBE.Controllers.Document
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 Type = DocumentType.ExportDelete,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 DocumentDetails = (dto.Details ?? new List<ExportDeleteDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
                     BInventoryId = d.BInventoryId,
@@ -177,6 +179,7 @@ namespace MenuGoBE.Controllers.Document
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 Type = DocumentType.ExportDelete,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 DocumentDetails = (dto.Details ?? new List<ExportDeleteDocumentDetailUpdateDto>()).Select(d => new Models.DocumentDetail
                 {
                     Id = d.Id ?? 0,
