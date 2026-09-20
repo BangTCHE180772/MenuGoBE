@@ -72,7 +72,12 @@ namespace MenuGoBE.Models.Enums
         /// <summary>
         /// Khách hàng trả lại món ăn còn nguyên vẹn qua POS.
         /// </summary>
-        CustomerReturn = 8
+        CustomerReturn = 8,
+
+        /// <summary>
+        /// Nhập Lô thành phẩm từ quy trình sản xuất đồ chuẩn bị sẵn.
+        /// </summary>
+        ProductionReceipt = 9
     }
     #endregion
 }

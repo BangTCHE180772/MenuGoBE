@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -38,6 +38,11 @@ namespace MenuGoBE.Dtos.Document
 
         [MaxLength(255)]
         public string? Note { get; set; }
+
+        public DateTime? ManufactureDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        [MaxLength(100)]
+        public string? BatchCode { get; set; }
     }
 
     /// <summary>
@@ -74,6 +79,11 @@ namespace MenuGoBE.Dtos.Document
 
         [MaxLength(255)]
         public string? Note { get; set; }
+
+        public DateTime? ManufactureDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        [MaxLength(100)]
+        public string? BatchCode { get; set; }
     }
 }
 

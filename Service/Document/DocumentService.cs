@@ -3851,12 +3851,16 @@ namespace MenuGoBE.Service.Document
                 ? parentDetail.BatchCodeSnapshot
                 : $"LOT-PRD-{document.Code}-{parentDetail.Id}";
 
-            DateTime? expiryDate = parentBinventory.Product.ShelfLifeDays.HasValue
-                ? DateTime.UtcNow.AddDays(parentBinventory.Product.ShelfLifeDays.Value)
-                : null;
+            DateTime manufactureDate = parentDetail.ManufactureDateSnapshot ?? (document.OrderDate != default ? document.OrderDate : DateTime.UtcNow);
+
+            DateTime? expiryDate = parentDetail.ExpiryDateSnapshot.HasValue
+                ? parentDetail.ExpiryDateSnapshot.Value
+                : (parentBinventory.Product.ShelfLifeDays.HasValue
+                    ? manufactureDate.AddDays(parentBinventory.Product.ShelfLifeDays.Value)
+                    : null);
 
             parentDetail.BatchCodeSnapshot = prdBatchCode;
-            parentDetail.ManufactureDateSnapshot = DateTime.UtcNow;
+            parentDetail.ManufactureDateSnapshot = manufactureDate;
             parentDetail.ExpiryDateSnapshot = expiryDate;
 
             var existingPrdBatch = await _repo.GetBatchByInventoryAndCodeAsync(parentBinventory.Id, prdBatchCode);
@@ -3868,7 +3872,20 @@ namespace MenuGoBE.Service.Document
                 {
                     existingPrdBatch.Status = BatchStatus.Active;
                 }
+                existingPrdBatch.ManufactureDate = manufactureDate;
+                if (expiryDate.HasValue) existingPrdBatch.ExpiryDate = expiryDate;
                 existingPrdBatch.UpdatedAt = DateTime.UtcNow;
+
+                var prdAlloc = new BatchAllocation
+                {
+                    DocumentDetail = parentDetail,
+                    Batch = existingPrdBatch,
+                    AllocationType = BatchAllocationType.ProductionReceipt,
+                    QuantityAllocated = producedQty,
+                    UnitCost = tpUnitCost,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _repo.AddBatchAllocationAsync(prdAlloc);
             }
             else
             {
@@ -3879,13 +3896,24 @@ namespace MenuGoBE.Service.Document
                     QuantityOriginal = producedQty,
                     QuantityRemaining = producedQty,
                     UnitCost = tpUnitCost,
-                    ManufactureDate = DateTime.UtcNow,
+                    ManufactureDate = manufactureDate,
                     ExpiryDate = expiryDate,
                     ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
                     Status = BatchStatus.Active,
                     CreatedAt = DateTime.UtcNow
                 };
                 await _repo.AddBatchAsync(newPrdBatch);
+
+                var prdAlloc = new BatchAllocation
+                {
+                    DocumentDetail = parentDetail,
+                    Batch = newPrdBatch,
+                    AllocationType = BatchAllocationType.ProductionReceipt,
+                    QuantityAllocated = producedQty,
+                    UnitCost = tpUnitCost,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _repo.AddBatchAllocationAsync(prdAlloc);
             }
         }
         #endregion
