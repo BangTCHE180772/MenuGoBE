@@ -110,6 +110,8 @@ namespace MenuGoBE.Dtos.Document
         public BatchDetailDto CurrentBatch { get; set; } = new BatchDetailDto();
         public BatchDetailDto? SourceBatch { get; set; }
         public List<BatchAllocationTraceDto> Allocations { get; set; } = new List<BatchAllocationTraceDto>();
+        public long? InitialImportDocumentId { get; set; }
+        public string? InitialImportDocumentCode { get; set; }
     }
     #endregion
 

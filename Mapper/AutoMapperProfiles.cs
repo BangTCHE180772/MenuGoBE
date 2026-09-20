@@ -296,14 +296,23 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.ImageUrls, opt => opt.MapFrom(src => !string.IsNullOrWhiteSpace(src.ImageUrls)
                     ? System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<string>>(src.ImageUrls, (System.Text.Json.JsonSerializerOptions?)null) ?? new System.Collections.Generic.List<string>()
                     : new System.Collections.Generic.List<string>()))
-                .ForMember(dest => dest.TotalQuantity, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity) : 0))
+                .ForMember(dest => dest.TotalQuantity, opt => opt.MapFrom(src => src.DocumentDetails != null
+                    ? (src.Type == DocumentType.Production
+                        ? src.DocumentDetails.Where(dt => !dt.IsDeleted && dt.FatherId == null).Sum(dt => dt.Quantity)
+                        : src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity))
+                    : 0))
                 .ForMember(dest => dest.TotalAmount, opt => opt.MapFrom(src => src.TotalAmount > 0
                     ? src.TotalAmount
                     : (src.DocumentDetails != null
-                        ? src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity * (dt.UnitPrice > 0
-                            ? dt.UnitPrice
-                            : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
-                        ))
+                        ? (src.Type == DocumentType.Production
+                            ? src.DocumentDetails.Where(dt => !dt.IsDeleted && dt.FatherId == null).Sum(dt => dt.Quantity * (dt.UnitPrice > 0
+                                ? dt.UnitPrice
+                                : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
+                            ))
+                            : src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity * (dt.UnitPrice > 0
+                                ? dt.UnitPrice
+                                : ((dt.SnapshotAvgCost > 0 ? dt.SnapshotAvgCost : (dt.BInventory != null ? dt.BInventory.Avg : 0m)) * (dt.ConversionRate > 0 ? dt.ConversionRate : 1m))
+                            )))
                         : 0m)));
 
             CreateMap<Models.CashFlow, Dtos.Document.CashFlowResponseDto>()
