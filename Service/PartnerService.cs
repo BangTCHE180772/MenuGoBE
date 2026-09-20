@@ -249,6 +249,8 @@ namespace MenuGoBE.Service
 
             // Dư Nợ = (Tổng tiền hàng Nhập - Tổng tiền hàng Trả) - (Tổng tiền mình Đã Chi - Tổng tiền mình Đã Thu)
             decimal remainingDebt = (totalImportAmount - totalReturnAmount) - (totalPaidAmount - totalReceivedAmount);
+            // Loại bỏ sai số lẻ dưới 1 đồng và làm tròn theo chuẩn VNĐ
+            remainingDebt = Math.Abs(remainingDebt) < 1m ? 0m : Math.Round(remainingDebt, 0, MidpointRounding.AwayFromZero);
 
             return new PartnerFinancialSummaryDto
             {
@@ -353,6 +355,8 @@ namespace MenuGoBE.Service
                 }
 
                 decimal debtAmount = Math.Max(0m, (effectivePayableAmount - debtDeduction) - d.AmountPaid);
+                // Loại bỏ sai số lẻ dưới 1 đồng và làm tròn
+                debtAmount = debtAmount < 1m ? 0m : Math.Round(debtAmount, 0, MidpointRounding.AwayFromZero);
                 decimal totalSettled = d.AmountPaid + debtDeduction;
 
                 string paymentStatus;
@@ -783,7 +787,9 @@ namespace MenuGoBE.Service
                 decimal totalReturn = pReturns.Sum(d => d.TotalAmount);
                 decimal totalRefund = pReturns.Sum(d => d.AmountPaid) + pCFs.Where(cf => (int)cf.Direction == 1).Sum(cf => cf.TotalAmount);
 
-                dto.RemainingDebt = (totalImport - totalReturn) - (totalPaid - totalRefund);
+                decimal remaining = (totalImport - totalReturn) - (totalPaid - totalRefund);
+                // Loại bỏ sai số lẻ dưới 1 đồng và làm tròn theo chuẩn VNĐ
+                dto.RemainingDebt = Math.Abs(remaining) < 1m ? 0m : Math.Round(remaining, 0, MidpointRounding.AwayFromZero);
                 return dto;
             }).ToList();
         }
