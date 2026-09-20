@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -91,6 +91,7 @@ namespace MenuGoBE.Controllers.Document
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 AmountPaid = dto.AmountPaid,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 Type = DocumentType.Import,
                 DocumentDetails = (dto.Details ?? new List<ImportDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
@@ -137,6 +138,7 @@ namespace MenuGoBE.Controllers.Document
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 AmountPaid = dto.AmountPaid,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 Type = DocumentType.Import,
                 DocumentDetails = (dto.Details ?? new List<ImportDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
@@ -190,6 +192,7 @@ namespace MenuGoBE.Controllers.Document
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
                 AmountPaid = dto.AmountPaid,
+                ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 Type = DocumentType.Import,
                 DocumentDetails = (dto.Details ?? new List<ImportDocumentDetailUpdateDto>()).Select(d => new Models.DocumentDetail
                 {

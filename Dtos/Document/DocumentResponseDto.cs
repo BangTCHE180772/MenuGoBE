@@ -58,6 +58,7 @@ namespace MenuGoBE.Dtos.Document
         public decimal AmountPaid { get; set; }
         public decimal? AmountDue { get; set; }
         public string? Note { get; set; }
+        public List<string> ImageUrls { get; set; } = new List<string>();
     }
     #endregion
 
@@ -160,6 +161,13 @@ namespace MenuGoBE.Dtos.Document
         /// Danh sách các bản ghi Sổ kho (InventoryLedgers) phát sinh từ chứng từ này
         /// </summary>
         public List<DocumentInventoryLedgerResponseDto> InventoryLedgers { get; set; } = new List<DocumentInventoryLedgerResponseDto>();
+        #endregion
+
+        #region Danh sách Hình ảnh Chứng từ
+        /// <summary>
+        /// Danh sách hình ảnh biên lai, hóa đơn, bằng chứng chất lượng hàng hóa khi nhận
+        /// </summary>
+        public List<string> ImageUrls { get; set; } = new List<string>();
         #endregion
     }
     #endregion
