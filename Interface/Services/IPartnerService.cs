@@ -10,6 +10,7 @@ namespace MenuGoBE.Interface.Services
         Task<List<PartnerViewDto>> GetPartnersByBranchAsync(long branchId, string? search = null, int? mode = null);
         Task<PartnerViewDto> CreatePartnerAsync(PartnerCreateDto dto, long? createdBy = null);
         Task<PartnerViewDto> UpdatePartnerAsync(long id, PartnerUpdateDto dto);
+        Task<PartnerViewDto> UpdatePartnerImagesAsync(long id, List<string>? imageUrls);
         Task<bool> DeletePartnerAsync(long id);
 
         Task<PartnerFinancialSummaryDto> GetPartnerFinancialSummaryAsync(long partnerId);

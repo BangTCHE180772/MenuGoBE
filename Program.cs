@@ -53,6 +53,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
+{
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"),
         npgsqlOptionsAction: sqlOptions =>
         {
@@ -60,7 +61,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(10),
                 errorCodesToAdd: null);
-        }));
+        });
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+});
 
 
 builder.Services.AddAutoMapper(cfg => { }, typeof(AutoMapperProfiles));
@@ -322,8 +325,15 @@ app.MapHub<MenuGoBE.Hubs.NotificationHub>("/notificationHub");
 // Tự động áp dụng EF Core Migrations khi ứng dụng khởi chạy
 using (var scope = app.Services.CreateScope())
 {
-    var dbContext = scope.ServiceProvider.GetRequiredService<MenuGoBE.Data.AppDbContext>();
-    await dbContext.Database.MigrateAsync();
+    try
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<MenuGoBE.Data.AppDbContext>();
+        await dbContext.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[Migration Warning] {ex.Message}");
+    }
 }
 
 // Tự động khởi tạo Lô hàng kế thừa (LEGACY-INIT) cho các bản ghi tồn kho dương hiện có

@@ -26,6 +26,8 @@ public class Partner
     [MaxLength(255)]
     public string? Email { get; set; }
 
+    public string? ImageUrls { get; set; }
+
     public long? CreatedBy { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
