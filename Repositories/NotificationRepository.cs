@@ -153,13 +153,50 @@ namespace MenuGoBE.Repositories
                 dbQuery = dbQuery.Where(n => n.CreatedAt <= query.ToDate.Value);
             }
 
-            if (!string.IsNullOrEmpty(query.Type))
+            if (!string.IsNullOrEmpty(query.Type) && !query.Type.Equals("All", StringComparison.OrdinalIgnoreCase))
             {
                 var type = query.Type.Trim().ToLower();
                 if (type == "attendance")
                 {
                     dbQuery = dbQuery.Where(n => n.Type.ToLower() == "attendance" ||
-                        (n.Type.ToLower() == "operational" && n.ReferenceType != null && n.ReferenceType.StartsWith("WorkSchedule")));
+                        (n.Type.ToLower() == "operational" && ((n.ReferenceType != null && n.ReferenceType.StartsWith("WorkSchedule")) || n.Title.ToLower().Contains("chấm công"))));
+                }
+                else if (type == "payroll")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "payroll" ||
+                        (n.Type.ToLower() == "operational" && (n.ReferenceType == "PayrollDeadline" || n.Title.ToLower().Contains("lương"))));
+                }
+                else if (type == "reservation")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "reservation" ||
+                        (n.ReferenceType != null && n.ReferenceType.ToLower() == "reservation") ||
+                        n.Title.ToLower().Contains("đặt bàn"));
+                }
+                else if (type == "shelflife")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "shelflife" ||
+                        n.Title.ToLower().Contains("hết hạn") ||
+                        n.Title.ToLower().Contains("hạn sử dụng"));
+                }
+                else if (type == "inventory")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "inventory" ||
+                        n.Title.ToLower().Contains("tồn kho") ||
+                        n.Title.ToLower().Contains("hết hàng"));
+                }
+                else if (type == "quality")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "quality" ||
+                        n.Title.ToLower().Contains("kiểm kê") ||
+                        n.Title.ToLower().Contains("hao hụt"));
+                }
+                else if (type == "order")
+                {
+                    dbQuery = dbQuery.Where(n => (n.Type.ToLower() == "order" || n.Title.ToLower().Contains("đơn hàng") || n.Title.ToLower().Contains("món ăn")) && !n.Title.ToLower().Contains("đặt bàn"));
+                }
+                else if (type == "chat")
+                {
+                    dbQuery = dbQuery.Where(n => n.Type.ToLower() == "chat" || n.Title.ToLower().Contains("tin nhắn"));
                 }
                 else
                 {
