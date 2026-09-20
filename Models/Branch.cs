@@ -44,6 +44,12 @@ public class Branch
     /// <summary>Ngày trả lương hàng tháng của chi nhánh (mặc định ngày 10 hàng tháng)</summary>
     public int PayrollPayday { get; set; } = 10;
 
+    /// <summary>Số ngày ngưỡng cảnh báo hạn sử dụng cấp bách (mặc định 7 ngày, tối thiểu 7 ngày)</summary>
+    public int BatchCriticalDays { get; set; } = 7;
+
+    /// <summary>Số ngày ngưỡng cảnh báo hạn sử dụng thông thường (mặc định 14 ngày, tối thiểu 14 ngày)</summary>
+    public int BatchWarningDays { get; set; } = 14;
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;
