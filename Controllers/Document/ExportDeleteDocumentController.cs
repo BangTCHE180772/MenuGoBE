@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -85,6 +85,7 @@ namespace MenuGoBE.Controllers.Document
 
             var document = new Models.Document
             {
+                Code = dto.Code,
                 BranchId = dto.BranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
@@ -124,6 +125,7 @@ namespace MenuGoBE.Controllers.Document
 
             var document = new Models.Document
             {
+                Code = dto.Code,
                 BranchId = dto.BranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
@@ -170,6 +172,7 @@ namespace MenuGoBE.Controllers.Document
             var document = new Models.Document
             {
                 Id = id,
+                Code = dto.Code,
                 BranchId = existingDoc.BranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,

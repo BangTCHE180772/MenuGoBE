@@ -11,6 +11,8 @@ namespace MenuGoBE.Dtos.Document
     /// </summary>
     public class ImportDocumentUpdateDto
     {
+        public string? Code { get; set; }
+
         public long? PartnerId { get; set; }
 
         public DateTime OrderDate { get; set; }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -9,8 +9,9 @@ namespace MenuGoBE.Dtos.Document
     /// </summary>
     public class ProductionDocumentCreateDto
     {
-        [Required(ErrorMessage = "Mã chi nhánh không được để trống.")]
         public long BranchId { get; set; }
+
+        public string? Code { get; set; }
 
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
 
@@ -44,6 +45,8 @@ namespace MenuGoBE.Dtos.Document
     /// </summary>
     public class ProductionDocumentUpdateDto
     {
+        public string? Code { get; set; }
+
         public DateTime OrderDate { get; set; }
 
         [MaxLength(255)]
@@ -73,3 +76,4 @@ namespace MenuGoBE.Dtos.Document
         public string? Note { get; set; }
     }
 }
+

@@ -160,7 +160,7 @@ namespace MenuGoBE.Service.Document
 
             if (string.IsNullOrWhiteSpace(document.Code))
             {
-                document.Code = string.Empty;
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
             }
 
             await _repo.AddAsync(document);
@@ -445,8 +445,9 @@ namespace MenuGoBE.Service.Document
         private async Task GenerateOrValidateImportCodeAsync(Models.Document document)
         {
             #region Quy tắc a6: Nếu user tự nhập -> check trùng. Nếu trống -> gen code NH + Id 6 chữ số
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -863,6 +864,11 @@ namespace MenuGoBE.Service.Document
             await ValidateImportBaseRulesAsync(document);
             ClearPendingSnapshots(document);
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -968,6 +974,11 @@ namespace MenuGoBE.Service.Document
             document.PostedAt = DateTime.UtcNow;
 
             await ValidateImportCompletedRulesAsync(document);
+
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
 
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
@@ -1155,16 +1166,29 @@ namespace MenuGoBE.Service.Document
             document.AmountDue = Math.Max(0, roundedReturnTotal - document.AmountPaid);
             #endregion
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
             #region Phát sinh Mã Chứng Từ TH (Nếu trống)
-            if (string.IsNullOrWhiteSpace(document.Code))
+            if (string.IsNullOrWhiteSpace(document.Code) || document.Code.StartsWith("TEMP_"))
             {
                 document.Code = $"TH{document.Id:D6}";
+                bool isExist = await _repo.IsCodeExistsAsync(document.Code, document.Id);
+                if (isExist)
+                {
+                    document.Code = $"TH{document.Id:D6}_{DateTime.UtcNow.Ticks % 1000}";
+                }
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
             }
             else
             {
+                document.Code = document.Code.Trim();
                 bool isExist = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExist)
                 {
@@ -1532,8 +1556,9 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         private async Task GenerateOrValidateSaleCodeAsync(Models.Document document)
         {
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -1820,6 +1845,11 @@ namespace MenuGoBE.Service.Document
 
             await ValidateSaleBaseRulesAsync(document);
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -1856,6 +1886,11 @@ namespace MenuGoBE.Service.Document
             document.PostedAt = DateTime.UtcNow;
 
             await ValidateSaleBaseRulesAsync(document);
+
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
 
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
@@ -2393,8 +2428,20 @@ namespace MenuGoBE.Service.Document
             document.PostedBy = userId;
             document.PostedAt = DateTime.UtcNow;
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
+
+            if (document.Code.StartsWith("TEMP_"))
+            {
+                document.Code = $"THK{document.Id:D6}";
+                _repo.Update(document);
+                await _repo.SaveChangesAsync();
+            }
             return document;
         }
         #endregion
@@ -2547,8 +2594,9 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         private async Task GenerateOrValidateTransferCodeAsync(Models.Document document)
         {
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -2930,6 +2978,11 @@ namespace MenuGoBE.Service.Document
 
             await ValidateTransferBaseRulesAsync(document);
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -3023,6 +3076,12 @@ namespace MenuGoBE.Service.Document
             document.PostedAt = DateTime.UtcNow;
 
             await ValidateExportDeleteBaseRulesAsync(document);
+
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -3205,8 +3264,9 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         private async Task GenerateOrValidateExportDeleteCodeAsync(Models.Document document)
         {
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -3401,6 +3461,11 @@ namespace MenuGoBE.Service.Document
 
             await ValidateExportDeleteBaseRulesAsync(document);
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -3572,8 +3637,9 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         private async Task GenerateOrValidateProductionCodeAsync(Models.Document document)
         {
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -3842,6 +3908,11 @@ namespace MenuGoBE.Service.Document
 
             await ValidateProductionBaseRulesAsync(document);
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -4026,8 +4097,9 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         private async Task GenerateOrValidateCheckCodeAsync(Models.Document document)
         {
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -4241,6 +4313,11 @@ namespace MenuGoBE.Service.Document
 
             await ValidateCheckBaseRulesAsync(document);
 
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
+
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
 
@@ -4410,8 +4487,9 @@ namespace MenuGoBE.Service.Document
         /// </summary>
         private async Task GenerateOrValidateCostAdjustmentCodeAsync(Models.Document document)
         {
-            if (!string.IsNullOrWhiteSpace(document.Code))
+            if (!string.IsNullOrWhiteSpace(document.Code) && !document.Code.StartsWith("TEMP_"))
             {
+                document.Code = document.Code.Trim();
                 bool isExists = await _repo.IsCodeExistsAsync(document.Code, document.Id);
                 if (isExists)
                 {
@@ -4530,6 +4608,11 @@ namespace MenuGoBE.Service.Document
             }
 
             await ValidateCostAdjustmentBaseRulesAsync(document);
+
+            if (string.IsNullOrWhiteSpace(document.Code))
+            {
+                document.Code = $"TEMP_{Guid.NewGuid():N}";
+            }
 
             await _repo.AddAsync(document);
             await _repo.SaveChangesAsync();
