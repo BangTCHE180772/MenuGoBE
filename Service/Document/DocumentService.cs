@@ -193,6 +193,7 @@ namespace MenuGoBE.Service.Document
             existing.TotalAmount = updatedDocument.TotalAmount;
             existing.AmountDue = updatedDocument.AmountDue;
             existing.AmountPaid = updatedDocument.AmountPaid;
+            existing.ImageUrls = updatedDocument.ImageUrls;
 
             if (updatedDocument.DocumentDetails != null && !ReferenceEquals(existing.DocumentDetails, updatedDocument.DocumentDetails))
             {

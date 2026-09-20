@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -17,6 +17,8 @@ namespace MenuGoBE.Dtos.Document
 
         [MaxLength(255)]
         public string? Note { get; set; }
+
+        public List<string>? ImageUrls { get; set; }
 
         [Required(ErrorMessage = "Danh sách chi tiết mặt hàng hủy không được để trống.")]
         public List<ExportDeleteDocumentDetailCreateDto> Details { get; set; } = new List<ExportDeleteDocumentDetailCreateDto>();
@@ -50,6 +52,8 @@ namespace MenuGoBE.Dtos.Document
 
         [MaxLength(255)]
         public string? Note { get; set; }
+
+        public List<string>? ImageUrls { get; set; }
 
         [Required(ErrorMessage = "Danh sách chi tiết mặt hàng hủy không được để trống.")]
         public List<ExportDeleteDocumentDetailUpdateDto> Details { get; set; } = new List<ExportDeleteDocumentDetailUpdateDto>();
