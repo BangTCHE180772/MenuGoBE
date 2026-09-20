@@ -29,6 +29,11 @@ namespace MenuGoBE.Dtos.Document
         public decimal DebtDeductionAmount { get; set; } = 0;
         #endregion
 
+        /// <summary>
+        /// Danh sách URL hình ảnh chứng từ/biên lai/bằng chứng nhận hàng
+        /// </summary>
+        public List<string>? ImageUrls { get; set; }
+
         [Required(ErrorMessage = "Danh sách chi tiết mặt hàng nhập kho không được để trống.")]
         public List<ImportDocumentDetailUpdateDto> Details { get; set; } = new List<ImportDocumentDetailUpdateDto>();
     }

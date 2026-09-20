@@ -285,11 +285,17 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.Partner, opt => opt.MapFrom(src => src.Partner))
                 .ForMember(dest => dest.CashFlows, opt => opt.MapFrom(src => src.CashFlows != null ? src.CashFlows.Where(cf => !cf.IsDeleted).ToList() : new System.Collections.Generic.List<CashFlow>()))
                 .ForMember(dest => dest.Details, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).ToList() : new System.Collections.Generic.List<DocumentDetail>()))
-                .ForMember(dest => dest.InventoryLedgers, opt => opt.MapFrom(src => src.InventoryLedgers != null ? src.InventoryLedgers.ToList() : new System.Collections.Generic.List<InventoryLedger>()));
+                .ForMember(dest => dest.InventoryLedgers, opt => opt.MapFrom(src => src.InventoryLedgers != null ? src.InventoryLedgers.ToList() : new System.Collections.Generic.List<InventoryLedger>()))
+                .ForMember(dest => dest.ImageUrls, opt => opt.MapFrom(src => !string.IsNullOrWhiteSpace(src.ImageUrls)
+                    ? System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<string>>(src.ImageUrls, (System.Text.Json.JsonSerializerOptions?)null) ?? new System.Collections.Generic.List<string>()
+                    : new System.Collections.Generic.List<string>()));
 
             CreateMap<Models.Document, DocumentListResponseDto>()
                 .ForMember(dest => dest.CurrentCreatedByName, opt => opt.MapFrom(src => src.Creator != null ? src.Creator.Name : null))
                 .ForMember(dest => dest.CurrentPartnerName, opt => opt.MapFrom(src => src.Partner != null ? src.Partner.Name : null))
+                .ForMember(dest => dest.ImageUrls, opt => opt.MapFrom(src => !string.IsNullOrWhiteSpace(src.ImageUrls)
+                    ? System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<string>>(src.ImageUrls, (System.Text.Json.JsonSerializerOptions?)null) ?? new System.Collections.Generic.List<string>()
+                    : new System.Collections.Generic.List<string>()))
                 .ForMember(dest => dest.TotalQuantity, opt => opt.MapFrom(src => src.DocumentDetails != null ? src.DocumentDetails.Where(dt => !dt.IsDeleted).Sum(dt => dt.Quantity) : 0))
                 .ForMember(dest => dest.TotalAmount, opt => opt.MapFrom(src => src.TotalAmount > 0
                     ? src.TotalAmount

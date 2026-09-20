@@ -101,6 +101,11 @@ public class Document
     [MaxLength(255)] public string? Note { get; set; }
     [MaxLength(255)] public string? DeleteNote { get; set; }
 
+    /// <summary>
+    /// Danh sách URL hình ảnh chứng từ/biên lai/bằng chứng nhận hàng (Lưu JSON string)
+    /// </summary>
+    public string? ImageUrls { get; set; }
+
     // Navigation
     [ForeignKey("BranchId")] public Branch Branch { get; set; } = null!;
     [ForeignKey("ToBranchId")] public Branch? ToBranch { get; set; }
