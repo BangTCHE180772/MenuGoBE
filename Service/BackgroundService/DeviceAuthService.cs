@@ -9,7 +9,7 @@ using MenuGoBE.Interface.Services;
 
 namespace MenuGoBE.Service
 {
-    public class DeviceAuthService : BackgroundService, IDeviceAuthService
+    public class DeviceAuthService : Microsoft.Extensions.Hosting.BackgroundService, IDeviceAuthService
     {
         private readonly ConcurrentDictionary<string, DeviceAuthChallengeStateDto> _challenges = new();
         private readonly ILogger<DeviceAuthService> _logger;

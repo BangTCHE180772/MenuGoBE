@@ -531,6 +531,12 @@ namespace MenuGoBE.Service.Document
                 // 7. Cập nhật lại BInventory
                 binventory.Avg = avg;
                 binventory.LeftOver = leftover;
+                
+                // Tự động bật lại cảnh báo tồn kho nếu đang tắt (do nhập thêm hàng)
+                if (!binventory.IsAlertEnabled)
+                {
+                    binventory.IsAlertEnabled = true;
+                }
 
                 // Snapshot Avg Cost vào chi tiết chứng từ
                 detail.SnapshotAvgCost = avg;

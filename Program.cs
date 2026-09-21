@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using MenuGoBE.Data;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -161,7 +161,7 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IVoucherService, VoucherService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddHostedService<AutoCheckoutService>();
-builder.Services.AddHostedService<MenuGoBE.Service.NotificationSyncWorker>();
+builder.Services.AddHostedService<MenuGoBE.Service.BackgroundService.NotificationSyncWorker>();
 builder.Services.AddScoped<IOrderAssignmentService, OrderAssignmentService>();
 builder.Services.AddHostedService<OrderAssignmentMonitorService>();
 builder.Services.AddHostedService<GuestChatCleanupService>();

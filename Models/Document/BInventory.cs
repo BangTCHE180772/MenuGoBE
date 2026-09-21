@@ -47,6 +47,9 @@ public class BInventory
     [Column(TypeName = "decimal(51,3)")]
     public decimal? CustomWarningThreshold { get; set; }
 
+    /// <summary>Cờ bật/tắt cảnh báo tồn kho đối với mặt hàng này</summary>
+    public bool IsAlertEnabled { get; set; } = true;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
