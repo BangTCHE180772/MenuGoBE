@@ -162,10 +162,11 @@ namespace MenuGoBE.Service
             {
                 entity.Code = $"WS-{dto.BranchId}-{dto.ShiftId}-{dto.AccountId}-{dto.WorkDate:yyyyMMdd}";
             }
-            if (string.IsNullOrWhiteSpace(entity.Status))
+            if (string.IsNullOrWhiteSpace(entity.Status) || entity.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
             {
-                entity.Status = "Pending";
+                entity.Status = "Approved";
             }
+            entity.ManagerApproved = true;
             entity.CreatedAt = DateTime.UtcNow;
 
             if (entity.IsHeadChef)
@@ -502,6 +503,12 @@ namespace MenuGoBE.Service
                     if (targetWs.Shift != null)
                     {
                         var shiftStartLocal = targetWs.WorkDate.ToDateTime(targetWs.Shift.StartTime);
+                        var shiftEndLocal = targetWs.WorkDate.ToDateTime(targetWs.Shift.EndTime);
+                        if (targetWs.Shift.EndTime < targetWs.Shift.StartTime)
+                        {
+                            shiftEndLocal = shiftEndLocal.AddDays(1);
+                        }
+
                         var earliestCheckIn = shiftStartLocal.AddMinutes(-30);
 
                         if (localNow < earliestCheckIn)
@@ -511,6 +518,16 @@ namespace MenuGoBE.Service
                             return (
                                 false,
                                 $"Chưa đến giờ điểm danh cho ca '{shiftName}' ({startTimeStr}). Bạn chỉ có thể điểm danh trước ca làm tối đa 30 phút (từ {earliestStr}).",
+                                ""
+                            );
+                        }
+
+                        if (localNow >= shiftEndLocal)
+                        {
+                            var endTimeStr = targetWs.Shift.EndTime.ToString("HH:mm");
+                            return (
+                                false,
+                                $"Ca làm '{shiftName}' đã kết thúc lúc {endTimeStr}. Quá giờ làm việc, bạn không thể chấm công vào ca nữa.",
                                 ""
                             );
                         }
@@ -583,15 +600,16 @@ namespace MenuGoBE.Service
                 var nextSchedule = schedules
                     .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
                     .OrderBy(s => s.Shift.StartTime)
-                    .FirstOrDefault(s => currentTimeOnly < s.Shift.EndTime);
-
-                if (nextSchedule == null)
-                {
-                    nextSchedule = schedules
-                        .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
-                        .OrderBy(s => s.Shift.StartTime)
-                        .LastOrDefault();
-                }
+                    .FirstOrDefault(s =>
+                    {
+                        if (s.Shift == null) return false;
+                        var shiftEndLocal = s.WorkDate.ToDateTime(s.Shift.EndTime);
+                        if (s.Shift.EndTime < s.Shift.StartTime)
+                        {
+                            shiftEndLocal = shiftEndLocal.AddDays(1);
+                        }
+                        return localNow < shiftEndLocal;
+                    });
 
                 if (nextSchedule != null)
                 {
@@ -635,6 +653,23 @@ namespace MenuGoBE.Service
                 }
                 else
                 {
+                    // Nếu có các ca chưa điểm danh hôm nay nhưng đã qua giờ kết thúc -> chuyển sang Absent
+                    var expiredUncheckedSchedules = schedules
+                        .Where(s => s.CheckInAt == null && (s.Status == "Scheduled" || s.Status == "Approved" || s.Status == "Pending"))
+                        .ToList();
+
+                    if (expiredUncheckedSchedules.Any())
+                    {
+                        foreach (var expired in expiredUncheckedSchedules)
+                        {
+                            expired.Status = "Absent";
+                            await _repo.UpdateAsync(expired);
+                        }
+                        await _repo.SaveChangesAsync();
+
+                        return (false, "Ca làm việc hôm nay của bạn đã kết thúc. Quá giờ làm việc, bạn không thể chấm công vào ca nữa.", "");
+                    }
+
                     var lastCompleted = schedules.LastOrDefault(s => s.Status == "Completed");
                     if (lastCompleted != null)
                     {
@@ -1200,6 +1235,7 @@ namespace MenuGoBE.Service
                                     WorkDate = date,
                                     Code = $"WS-{dto.BranchId}-{shift.Id}-{chosenContract.AccountId}-{date:yyyyMMdd}",
                                     Status = "Approved",
+                                    ManagerApproved = true,
                                     CreatedBy = dto.CreatedBy,
                                     CreatedAt = DateTime.UtcNow
                                 };

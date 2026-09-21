@@ -26,12 +26,7 @@ namespace MenuGoBE.Repositories
                 .Where(n => branchIds.Contains(n.BranchId));
 
             dbQuery = ApplyFilters(dbQuery, query);
-            dbQuery = ApplyRoleFilter(dbQuery, userRole);
-            
-            if (accountId > 0)
-            {
-                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
-            }
+            dbQuery = ApplyRoleFilter(dbQuery, userRole, accountId);
 
             return await dbQuery
                 .OrderByDescending(n => n.IsImportant)
@@ -45,11 +40,7 @@ namespace MenuGoBE.Repositories
         {
             var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId));
             dbQuery = ApplyFilters(dbQuery, query);
-            dbQuery = ApplyRoleFilter(dbQuery, userRole);
-            if (accountId > 0)
-            {
-                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
-            }
+            dbQuery = ApplyRoleFilter(dbQuery, userRole, accountId);
             return await dbQuery.CountAsync();
         }
 
@@ -62,11 +53,7 @@ namespace MenuGoBE.Repositories
                 .Include(n => n.Branch)
                 .Where(n => branchIds.Contains(n.BranchId) && !n.IsRead && n.CreatedAt >= startOfTodayUtc);
 
-            dbQuery = ApplyRoleFilter(dbQuery, userRole);
-            if (accountId > 0)
-            {
-                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
-            }
+            dbQuery = ApplyRoleFilter(dbQuery, userRole, accountId);
 
             return await dbQuery
                 .OrderByDescending(n => n.CreatedAt)
@@ -80,11 +67,7 @@ namespace MenuGoBE.Repositories
             var startOfTodayUtc = DateTime.SpecifyKind(todayLocal.AddHours(-7), DateTimeKind.Utc);
 
             var dbQuery = _context.Notifications.Where(n => branchIds.Contains(n.BranchId) && !n.IsRead && n.CreatedAt >= startOfTodayUtc);
-            dbQuery = ApplyRoleFilter(dbQuery, userRole);
-            if (accountId > 0)
-            {
-                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
-            }
+            dbQuery = ApplyRoleFilter(dbQuery, userRole, accountId);
 
             return await dbQuery.CountAsync();
         }
@@ -114,11 +97,7 @@ namespace MenuGoBE.Repositories
             {
                 dbQuery = dbQuery.Where(n => branchIds.Contains(n.BranchId));
             }
-            dbQuery = ApplyRoleFilter(dbQuery, userRole);
-            if (accountId > 0)
-            {
-                dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
-            }
+            dbQuery = ApplyRoleFilter(dbQuery, userRole, accountId);
 
             var unreadList = await dbQuery.ToListAsync();
             if (unreadList.Any())
@@ -218,34 +197,49 @@ namespace MenuGoBE.Repositories
             return dbQuery;
         }
 
-        private IQueryable<Notification> ApplyRoleFilter(IQueryable<Notification> dbQuery, string? userRole)
+        private IQueryable<Notification> ApplyRoleFilter(IQueryable<Notification> dbQuery, string? userRole, long accountId = 0)
         {
             if (string.IsNullOrEmpty(userRole))
             {
+                if (accountId > 0)
+                {
+                    dbQuery = dbQuery.Where(n => n.AccountId == null || n.AccountId == accountId);
+                }
                 return dbQuery;
             }
 
             var role = userRole.ToLower();
 
-            // Admin, Owner, Manager see all notifications
-            if (role == "admin" || role == "owner" || role == "manager" || role == "quản trị viên" || role == "chủ sở hữu" || role == "quản lý")
+            // Admin, Owner, Manager see all notifications for the branch
+            bool isManagement = role == "admin" || role == "owner" || role == "manager" || role == "quản trị viên" || role == "chủ sở hữu" || role == "quản lý";
+            if (isManagement)
             {
                 return dbQuery;
             }
 
-            // Chef, Kitchen see Inventory, Quality, ShelfLife
+            // Chef, Kitchen see Inventory, Quality, ShelfLife, WorkSchedule, Attendance
             if (role == "chef" || role == "kitchen" || role == "bếp")
             {
-                return dbQuery.Where(n => n.Type == "Inventory" || n.Type == "Quality" || n.Type == "ShelfLife");
+                dbQuery = dbQuery.Where(n => n.Type == "Inventory" || n.Type == "Quality" || n.Type == "ShelfLife" || n.Type == "WorkSchedule" || n.Type == "Attendance");
             }
-
-            // Cashier, Waiter see Operational, Attendance, Order
-            if (role == "cashier" || role == "waiter" || role == "thu ngân" || role == "phục vụ")
+            // Cashier, Waiter see Operational, Attendance, Order, WorkSchedule
+            else if (role == "cashier" || role == "waiter" || role == "thu ngân" || role == "phục vụ")
             {
-                return dbQuery.Where(n => n.Type == "Operational" || n.Type == "Attendance" || n.Type == "Order");
+                dbQuery = dbQuery.Where(n => n.Type == "Operational" || n.Type == "Attendance" || n.Type == "Order" || n.Type == "WorkSchedule");
             }
 
-            // Default fallback
+            // Staff (non-management):
+            // For WorkSchedule or Attendance notifications (or ReferenceType starting with WorkSchedule),
+            // staff MUST ONLY see notifications belonging to their own AccountId.
+            // For non-schedule notifications, they can see general branch alerts (n.AccountId == null) or targeted alerts.
+            if (accountId > 0)
+            {
+                dbQuery = dbQuery.Where(n =>
+                    (n.Type == "WorkSchedule" || n.Type == "Attendance" || (n.ReferenceType != null && n.ReferenceType.StartsWith("WorkSchedule")))
+                        ? n.AccountId == accountId
+                        : (n.AccountId == null || n.AccountId == accountId));
+            }
+
             return dbQuery;
         }
     }
