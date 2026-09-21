@@ -19,6 +19,7 @@ namespace MenuGoBE.Dtos.Document
         public long? SourceBatchId { get; set; }
         public string? SourceBatchCode { get; set; }
         public BatchStatus Status { get; set; }
+        public bool IsNotificationMuted { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }
@@ -125,6 +126,15 @@ namespace MenuGoBE.Dtos.Document
         public int CriticalBatches { get; set; }
         public int ValidBatches { get; set; }
         public int NoExpiryBatches { get; set; }
+    }
+    #endregion
+
+    #region DTO Cài đặt Thông báo Cảnh báo Hạn dùng Chi nhánh
+    public class BatchAlertSettingsDto
+    {
+        public long BranchId { get; set; }
+        public int CriticalDays { get; set; } = 7;
+        public int WarningDays { get; set; } = 14;
     }
     #endregion
 }

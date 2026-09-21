@@ -15,7 +15,7 @@ using MenuGoBE.Dtos.Reservation;
 
 namespace MenuGoBE.Service;
 
-public class ReservationMonitorService : BackgroundService
+public class ReservationMonitorService : Microsoft.Extensions.Hosting.BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly IHubContext<NotificationHub> _hubContext;

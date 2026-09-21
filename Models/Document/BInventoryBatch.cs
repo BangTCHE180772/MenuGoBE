@@ -86,6 +86,11 @@ namespace MenuGoBE.Models
         [Required]
         public BatchStatus Status { get; set; } = BatchStatus.Active;
 
+        /// <summary>
+        /// Cờ tắt thông báo cảnh báo hạn sử dụng đối với Lô này.
+        /// </summary>
+        public bool IsNotificationMuted { get; set; } = false;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }

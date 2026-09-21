@@ -13,7 +13,7 @@ namespace MenuGoBE.Service
     /// 2. Check waiter đã assign nhưng không thao tác (stale) → reminder/escalation
     /// 3. Check waiter đã checkout/offline mà còn assignment (orphaned) → auto-unassign
     /// </summary>
-    public class OrderAssignmentMonitorService : BackgroundService
+    public class OrderAssignmentMonitorService : Microsoft.Extensions.Hosting.BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IHubContext<NotificationHub> _hubContext;

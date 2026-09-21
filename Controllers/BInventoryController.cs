@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using MenuGoBE.Data;
 using MenuGoBE.Dtos;
 using MenuGoBE.Dtos.Document;
+using MenuGoBE.Models;
 using MenuGoBE.Models.Enums;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +65,8 @@ namespace MenuGoBE.Controllers
                         quantity = b.Quantity,
                         avg = b.Avg,
                         stockQuantity = b.Quantity,
+                        customCriticalThreshold = b.CustomCriticalThreshold,
+                        customWarningThreshold = b.CustomWarningThreshold,
                         imageLink = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
                         imageUrl = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
                         imageId = b.Product.ImageId,
@@ -241,6 +244,8 @@ namespace MenuGoBE.Controllers
                     quantity = b.Quantity,
                     avg = b.Avg,
                     stockQuantity = b.Quantity,
+                    customCriticalThreshold = b.CustomCriticalThreshold,
+                    customWarningThreshold = b.CustomWarningThreshold,
                     imageLink = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
                     imageUrl = b.Product.Image != null ? b.Product.Image.ImageLink : string.Empty,
                     imageId = b.Product.ImageId,
@@ -1065,6 +1070,7 @@ namespace MenuGoBE.Controllers
                         SourceBatchId = b.SourceBatchId,
                         SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
                         Status = b.Status,
+                        IsNotificationMuted = b.IsNotificationMuted,
                         CreatedAt = b.CreatedAt,
                         UpdatedAt = b.UpdatedAt,
                         ProductId = b.BInventory.ProductId,
@@ -1143,6 +1149,7 @@ namespace MenuGoBE.Controllers
                         SourceBatchId = b.SourceBatchId,
                         SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
                         Status = b.Status,
+                        IsNotificationMuted = b.IsNotificationMuted,
                         CreatedAt = b.CreatedAt,
                         UpdatedAt = b.UpdatedAt,
                         ProductId = b.BInventory.ProductId,
@@ -1210,6 +1217,7 @@ namespace MenuGoBE.Controllers
                         SourceBatchId = b.SourceBatchId,
                         SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
                         Status = b.Status,
+                        IsNotificationMuted = b.IsNotificationMuted,
                         CreatedAt = b.CreatedAt,
                         UpdatedAt = b.UpdatedAt,
                         ProductId = b.BInventory.ProductId,
@@ -1356,6 +1364,7 @@ namespace MenuGoBE.Controllers
                         SourceBatchId = b.SourceBatchId,
                         SourceBatchCode = b.SourceBatch != null ? b.SourceBatch.BatchCode : null,
                         Status = b.Status,
+                        IsNotificationMuted = b.IsNotificationMuted,
                         CreatedAt = b.CreatedAt,
                         UpdatedAt = b.UpdatedAt,
                         ProductId = b.BInventory.ProductId,
@@ -1407,6 +1416,7 @@ namespace MenuGoBE.Controllers
                             ExpiryDate = b.ExpiryDate,
                             ReceivedDate = b.ReceivedDate,
                             Status = b.Status,
+                            IsNotificationMuted = b.IsNotificationMuted,
                             CreatedAt = b.CreatedAt,
                             ProductId = b.BInventory.ProductId,
                             ProductName = b.BInventory.Product.Name,
@@ -1541,13 +1551,31 @@ namespace MenuGoBE.Controllers
         [HttpGet("/api/Batch/expiry-summary")]
         public async Task<IActionResult> GetBatchExpirySummary(
             [FromQuery] long? branchId,
-            [FromQuery] int nearExpiryDays = 7)
+            [FromQuery] int? nearExpiryDays = null)
         {
             try
             {
                 var today = DateTime.UtcNow.Date;
-                var nearLimit = today.AddDays(nearExpiryDays > 0 ? nearExpiryDays : 7);
-                var criticalLimit = today.AddDays(3);
+                int critDays = 7;
+                int warnDays = 14;
+
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    var branch = await _context.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == branchId.Value);
+                    if (branch != null)
+                    {
+                        critDays = branch.BatchCriticalDays >= 7 ? branch.BatchCriticalDays : 7;
+                        warnDays = branch.BatchWarningDays >= 14 ? branch.BatchWarningDays : 14;
+                    }
+                }
+
+                if (nearExpiryDays.HasValue && nearExpiryDays.Value > 0)
+                {
+                    warnDays = nearExpiryDays.Value;
+                }
+
+                var nearLimit = today.AddDays(warnDays);
+                var criticalLimit = today.AddDays(critDays);
 
                 var query = _context.BInventoryBatches.AsNoTracking().AsQueryable();
 
@@ -1578,6 +1606,301 @@ namespace MenuGoBE.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { message = "Lỗi khi tổng hợp hạn sử dụng Lô hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Lấy cấu hình ngưỡng cảnh báo hạn dùng (GET /api/BInventory/batches/alert-settings)
+        [HttpGet("batches/alert-settings")]
+        [HttpGet("/api/Batch/alert-settings")]
+        public async Task<IActionResult> GetBatchAlertSettings([FromQuery] long? branchId)
+        {
+            try
+            {
+                Branch? branch = null;
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    branch = await _context.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == branchId.Value);
+                }
+                else
+                {
+                    branch = await _context.Branches.AsNoTracking().FirstOrDefaultAsync();
+                }
+
+                return Ok(new BatchAlertSettingsDto
+                {
+                    BranchId = branch?.Id ?? (branchId ?? 0),
+                    CriticalDays = branch?.BatchCriticalDays >= 7 ? branch.BatchCriticalDays : 7,
+                    WarningDays = branch?.BatchWarningDays >= 14 ? branch.BatchWarningDays : 14
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy cấu hình cảnh báo hạn dùng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Cập nhật cấu hình ngưỡng cảnh báo hạn dùng (PUT /api/BInventory/batches/alert-settings)
+        [HttpPut("batches/alert-settings")]
+        [HttpPut("/api/Batch/alert-settings")]
+        public async Task<IActionResult> UpdateBatchAlertSettings([FromBody] BatchAlertSettingsDto dto)
+        {
+            try
+            {
+                // Kiểm tra ràng buộc tối thiểu và quan hệ giữa 2 ngưỡng
+                if (dto.CriticalDays < 7)
+                {
+                    return BadRequest(new { message = "Số ngày thông báo cấp bách tối thiểu là 7 ngày." });
+                }
+
+                if (dto.WarningDays < 14)
+                {
+                    return BadRequest(new { message = "Số ngày thông báo cảnh báo tối thiểu là 14 ngày." });
+                }
+
+                if (dto.WarningDays < dto.CriticalDays)
+                {
+                    return BadRequest(new { message = "Số ngày cảnh báo phải lớn hơn hoặc bằng số ngày cấp bách." });
+                }
+
+                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == dto.BranchId);
+                if (branch == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy chi nhánh với ID: {dto.BranchId}" });
+                }
+
+                // Cập nhật cấu hình ngưỡng cho chi nhánh
+                branch.BatchCriticalDays = dto.CriticalDays;
+                branch.BatchWarningDays = dto.WarningDays;
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Cập nhật cấu hình thông báo cảnh báo hạn dùng thành công.",
+                    data = new BatchAlertSettingsDto
+                    {
+                        BranchId = branch.Id,
+                        CriticalDays = branch.BatchCriticalDays,
+                        WarningDays = branch.BatchWarningDays
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi cập nhật cấu hình thông báo cảnh báo hạn dùng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Bật/Tắt chuông thông báo cho một Lô hàng (PUT /api/BInventory/batches/{id}/toggle-mute)
+        [HttpPut("batches/{id:long}/toggle-mute")]
+        [HttpPut("/api/Batch/{id:long}/toggle-mute")]
+        public async Task<IActionResult> ToggleBatchNotificationMute(long id)
+        {
+            try
+            {
+                var batch = await _context.BInventoryBatches.FirstOrDefaultAsync(b => b.Id == id);
+                if (batch == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy Lô hàng với ID: {id}" });
+                }
+
+                // Đảo ngược trạng thái tắt thông báo
+                batch.IsNotificationMuted = !batch.IsNotificationMuted;
+                batch.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
+                var statusText = batch.IsNotificationMuted ? "Đã tắt nhận thông báo cho Lô hàng này." : "Đã bật nhận thông báo cho Lô hàng này.";
+                return Ok(new
+                {
+                    message = statusText,
+                    batchId = batch.Id,
+                    isNotificationMuted = batch.IsNotificationMuted
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi cập nhật trạng thái thông báo của Lô hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Lấy cấu hình cảnh báo tồn kho chi nhánh (GET /api/BInventory/stock-alert-settings)
+        [HttpGet("stock-alert-settings")]
+        public async Task<IActionResult> GetStockAlertSettings([FromQuery] long? branchId)
+        {
+            try
+            {
+                Branch? branch = null;
+                if (branchId.HasValue && branchId.Value > 0)
+                {
+                    branch = await _context.Branches.AsNoTracking().FirstOrDefaultAsync(b => b.Id == branchId.Value);
+                }
+                else
+                {
+                    branch = await _context.Branches.AsNoTracking().FirstOrDefaultAsync();
+                }
+
+                return Ok(new StockAlertSettingsDto
+                {
+                    BranchId = branch?.Id ?? (branchId ?? 0),
+                    CriticalThreshold = branch != null && branch.StockCriticalThreshold > 0 ? branch.StockCriticalThreshold : 20,
+                    WarningThreshold = branch != null && branch.StockWarningThreshold > 0 ? branch.StockWarningThreshold : 40
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy cấu hình cảnh báo tồn kho.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Cập nhật cấu hình cảnh báo tồn kho chi nhánh (PUT /api/BInventory/stock-alert-settings)
+        [HttpPut("stock-alert-settings")]
+        public async Task<IActionResult> UpdateStockAlertSettings([FromBody] StockAlertSettingsDto dto)
+        {
+            try
+            {
+                // Kiểm tra ràng buộc lớn hơn 0
+                if (dto.CriticalThreshold <= 0)
+                {
+                    return BadRequest(new { message = "Số lượng cảnh báo cấp bách phải lớn hơn 0." });
+                }
+
+                if (dto.WarningThreshold <= 0)
+                {
+                    return BadRequest(new { message = "Số lượng cảnh báo phải lớn hơn 0." });
+                }
+
+                if (dto.WarningThreshold < dto.CriticalThreshold)
+                {
+                    return BadRequest(new { message = "Số lượng cảnh báo phải lớn hơn hoặc bằng số lượng cấp bách." });
+                }
+
+                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == dto.BranchId);
+                if (branch == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy chi nhánh với ID: {dto.BranchId}" });
+                }
+
+                // Cập nhật cấu hình ngưỡng tồn kho cho chi nhánh
+                branch.StockCriticalThreshold = dto.CriticalThreshold;
+                branch.StockWarningThreshold = dto.WarningThreshold;
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Cập nhật cấu hình cảnh báo tồn kho chi nhánh thành công.",
+                    data = new StockAlertSettingsDto
+                    {
+                        BranchId = branch.Id,
+                        CriticalThreshold = branch.StockCriticalThreshold,
+                        WarningThreshold = branch.StockWarningThreshold
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi cập nhật cấu hình cảnh báo tồn kho.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Lấy cấu hình cảnh báo tồn kho riêng của từng mặt hàng (GET /api/BInventory/{binventoryId}/alert-settings)
+        [HttpGet("{binventoryId:long}/alert-settings")]
+        public async Task<IActionResult> GetItemStockAlertSettings(long binventoryId)
+        {
+            try
+            {
+                var binv = await _context.BInventories
+                    .AsNoTracking()
+                    .Include(b => b.Product)
+                        .ThenInclude(p => p.UnitConversions)
+                            .ThenInclude(uc => uc.Unit)
+                    .Include(b => b.Branch)
+                    .FirstOrDefaultAsync(b => b.Id == binventoryId);
+
+                if (binv == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy bản ghi tồn kho với ID: {binventoryId}" });
+                }
+
+                var unitName = binv.Product?.UnitConversions
+                    ?.Where(uc => uc.BaseId == null)
+                    ?.Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                    ?.FirstOrDefault() ?? "Đơn vị";
+
+                var branchCrit = binv.Branch != null && binv.Branch.StockCriticalThreshold > 0 ? binv.Branch.StockCriticalThreshold : 20m;
+                var branchWarn = binv.Branch != null && binv.Branch.StockWarningThreshold > 0 ? binv.Branch.StockWarningThreshold : 40m;
+
+                return Ok(new ItemStockAlertSettingsDto
+                {
+                    BInventoryId = binv.Id,
+                    ProductId = binv.ProductId,
+                    ProductName = binv.Product?.Name ?? string.Empty,
+                    ProductCode = binv.Product?.SKUCode ?? $"SP{binv.ProductId}",
+                    UnitName = unitName,
+                    CurrentStock = binv.Quantity,
+                    CustomCriticalThreshold = binv.CustomCriticalThreshold,
+                    CustomWarningThreshold = binv.CustomWarningThreshold,
+                    BranchCriticalThreshold = branchCrit,
+                    BranchWarningThreshold = branchWarn,
+                    IsAlertEnabled = binv.IsAlertEnabled
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi lấy cấu hình cảnh báo mặt hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region API Cập nhật cấu hình cảnh báo tồn kho riêng của từng mặt hàng (PUT /api/BInventory/{binventoryId}/alert-settings)
+        [HttpPut("{binventoryId:long}/alert-settings")]
+        public async Task<IActionResult> UpdateItemStockAlertSettings(long binventoryId, [FromBody] UpdateItemStockAlertSettingsDto dto)
+        {
+            try
+            {
+                var binv = await _context.BInventories.FirstOrDefaultAsync(b => b.Id == binventoryId);
+                if (binv == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy bản ghi tồn kho với ID: {binventoryId}" });
+                }
+
+                // Kiểm tra nếu có nhập giá trị thì phải > 0
+                if (dto.CustomCriticalThreshold.HasValue && dto.CustomCriticalThreshold.Value <= 0)
+                {
+                    return BadRequest(new { message = "Số lượng cảnh báo cấp bách tùy chỉnh phải lớn hơn 0." });
+                }
+
+                if (dto.CustomWarningThreshold.HasValue && dto.CustomWarningThreshold.Value <= 0)
+                {
+                    return BadRequest(new { message = "Số lượng cảnh báo tùy chỉnh phải lớn hơn 0." });
+                }
+
+                if (dto.CustomCriticalThreshold.HasValue && dto.CustomWarningThreshold.HasValue && dto.CustomWarningThreshold.Value < dto.CustomCriticalThreshold.Value)
+                {
+                    return BadRequest(new { message = "Số lượng cảnh báo tùy chỉnh phải lớn hơn hoặc bằng số lượng cấp bách." });
+                }
+
+                // Cập nhật cấu hình riêng (null nghĩa là sử dụng theo thiết lập chung)
+                binv.CustomCriticalThreshold = dto.CustomCriticalThreshold;
+                binv.CustomWarningThreshold = dto.CustomWarningThreshold;
+                binv.IsAlertEnabled = dto.IsAlertEnabled;
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Cập nhật cấu hình cảnh báo mặt hàng thành công.",
+                    customCriticalThreshold = binv.CustomCriticalThreshold,
+                    customWarningThreshold = binv.CustomWarningThreshold,
+                    isAlertEnabled = binv.IsAlertEnabled
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi cập nhật cấu hình cảnh báo mặt hàng.", error = ex.Message });
             }
         }
         #endregion
