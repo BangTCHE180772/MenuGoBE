@@ -30,7 +30,7 @@ namespace MenuGoBE.Service
         /// </summary>
         public async Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0)
         {
-            await SyncBranchAlertsAsync(branchIds);
+            // await SyncBranchAlertsAsync(branchIds); // Moved to NotificationSyncWorker
 
             var notifications = await _repo.GetPagedNotificationsAsync(branchIds, query, userRole, accountId);
             var totalCount = await _repo.GetTotalCountAsync(branchIds, query, userRole, accountId);
@@ -53,7 +53,7 @@ namespace MenuGoBE.Service
         /// </summary>
         public async Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null, long accountId = 0)
         {
-            await SyncBranchAlertsAsync(branchIds);
+            // await SyncBranchAlertsAsync(branchIds); // Moved to NotificationSyncWorker
 
             var notifications = await _repo.GetRecentNotificationsAsync(branchIds, 15, userRole, accountId);
             return notifications.Select(MapToViewDto).ToList();
@@ -167,40 +167,91 @@ namespace MenuGoBE.Service
                 }
                 #endregion
 
-                var lowStockBInventories = await _context.BInventories
+                #region Cảnh báo Tồn kho mặt hàng theo ngưỡng thiết lập (Filter: Tồn kho - Hàng hết)
+                var branchForStock = await _context.Branches.FirstOrDefaultAsync(b => b.Id == branchId);
+                decimal defaultStockCrit = branchForStock != null && branchForStock.StockCriticalThreshold > 0 ? branchForStock.StockCriticalThreshold : 20m;
+                decimal defaultStockWarn = branchForStock != null && branchForStock.StockWarningThreshold > 0 ? branchForStock.StockWarningThreshold : 40m;
+
+                var managedBInventories = await _context.BInventories
                     .Include(bi => bi.Product)
-                    .Where(bi => bi.BranchId == branchId && bi.IsManageQuantity && bi.Quantity <= bi.MinStorage)
+                        .ThenInclude(p => p.UnitConversions)
+                            .ThenInclude(uc => uc.Unit)
+                    .Where(bi => bi.BranchId == branchId && bi.IsManageQuantity && bi.IsAlertEnabled)
                     .ToListAsync();
 
-                foreach (var bi in lowStockBInventories)
+                foreach (var bi in managedBInventories)
                 {
-                    var msg = $"Nguyên liệu \"{bi.Product.Name}\" hiện tại chỉ còn {bi.Quantity:N1}, dưới mức an toàn tối thiểu ({bi.MinStorage:N1}).";
-                    var exists = await _context.Notifications.AnyAsync(n =>
-                        n.BranchId == branchId &&
-                        n.Type == "Inventory" &&
-                        n.CreatedAt >= startUtc &&
-                        n.CreatedAt <= endUtc &&
-                        n.ReferenceType == "BInventory" &&
-                        n.ReferenceId == bi.Id);
+                    decimal crit = bi.CustomCriticalThreshold ?? defaultStockCrit;
+                    decimal warn = bi.CustomWarningThreshold ?? defaultStockWarn;
+                    if (crit <= 0) crit = 20m;
+                    if (warn <= 0) warn = 40m;
 
-                    if (!exists)
+                    bool shouldAlert = false;
+                    string title = "";
+                    string priority = "Warning";
+                    bool isImportant = false;
+                    string msg = "";
+
+                    var unitName = bi.Product?.UnitConversions
+                        ?.Where(uc => uc.BaseId == null)
+                        ?.Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
+                        ?.FirstOrDefault() ?? "Đơn vị";
+
+                    if (bi.Quantity <= 0)
                     {
-                        newNotifications.Add(new Notification
+                        shouldAlert = true;
+                        title = "Nguyên liệu hết tồn kho";
+                        priority = "Critical";
+                        isImportant = true;
+                        msg = $"Mặt hàng \"{bi.Product.Name}\" đã hết tồn kho (SL tồn: {bi.Quantity:N1} {unitName}). Cần nhập hàng ngay!";
+                    }
+                    else if (bi.Quantity <= crit)
+                    {
+                        shouldAlert = true;
+                        title = "Nguyên liệu tồn kho cấp bách";
+                        priority = "Critical";
+                        isImportant = true;
+                        msg = $"Mặt hàng \"{bi.Product.Name}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cấp bách ({crit:N1} {unitName}). Cần nhập bổ sung ngay!";
+                    }
+                    else if (bi.Quantity <= warn)
+                    {
+                        shouldAlert = true;
+                        title = "Cảnh báo tồn kho sắp hết";
+                        priority = "Warning";
+                        isImportant = false;
+                        msg = $"Mặt hàng \"{bi.Product.Name}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cảnh báo ({warn:N1} {unitName}).";
+                    }
+
+                    if (shouldAlert)
+                    {
+                        var exists = await _context.Notifications.AnyAsync(n =>
+                            n.BranchId == branchId &&
+                            n.Type == "Inventory" &&
+                            n.CreatedAt >= startUtc &&
+                            n.CreatedAt <= endUtc &&
+                            n.ReferenceType == "BInventory" &&
+                            n.ReferenceId == bi.Id);
+
+                        if (!exists)
                         {
-                            BranchId = branchId,
-                            Type = "Inventory",
-                            Title = "Nguyên liệu hết tồn kho",
-                            Message = msg,
-                            CreatedAt = DateTime.UtcNow,
-                            IsRead = false,
-                            IsImportant = false,
-                            Priority = "Warning",
-                            ReferenceType = "BInventory",
-                            ReferenceId = bi.Id,
-                            RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(bi.Product.Name)}&productId={bi.ProductId}&inventoryId={bi.Id}&expand=true"
-                        });
+                            newNotifications.Add(new Notification
+                            {
+                                BranchId = branchId,
+                                Type = "Inventory",
+                                Title = title,
+                                Message = msg,
+                                CreatedAt = DateTime.UtcNow,
+                                IsRead = false,
+                                IsImportant = isImportant,
+                                Priority = priority,
+                                ReferenceType = "BInventory",
+                                ReferenceId = bi.Id,
+                                RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(bi.Product.Name)}&productId={bi.ProductId}&inventoryId={bi.Id}&expand=true"
+                            });
+                        }
                     }
                 }
+                #endregion
 
                 var todayExpenses = await _context.CashFlows
                     .Where(cf => !cf.IsDeleted && cf.BranchId == branchId && (int)cf.Direction == 2 && cf.BusinessDate >= startUtc && cf.BusinessDate <= endUtc)
@@ -354,52 +405,104 @@ namespace MenuGoBE.Service
                     }
                 }
 
-                // 2. Cảnh báo Lô nguyên liệu sắp hết hạn / đã hết hạn sử dụng (FEFO Batch)
-                var nowUtc = DateTime.UtcNow;
-                var expiringBatches = await _context.BInventoryBatches
+                #region 2. Cảnh báo Lô nguyên liệu theo hạn dùng và thiết lập ngưỡng (Filter: ⏳ Hạn sử dụng)
+                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == branchId);
+                int criticalDays = branch?.BatchCriticalDays >= 7 ? branch.BatchCriticalDays : 7;
+                int warningDays = branch?.BatchWarningDays >= 14 ? branch.BatchWarningDays : 14;
+
+                // Chỉ quét các lô Đang hoạt động, còn tồn thực tế và không bị tắt chuông thông báo
+                var activeBatches = await _context.BInventoryBatches
                     .Include(b => b.BInventory)
                         .ThenInclude(bi => bi.Product)
-                    .Where(b => b.BInventory.BranchId == branchId && b.QuantityRemaining > 0 && b.ExpiryDate != null && b.ExpiryDate <= nowUtc.AddDays(3))
+                    .Where(b => b.BInventory.BranchId == branchId &&
+                                b.Status == BatchStatus.Active &&
+                                b.QuantityRemaining > 0 &&
+                                !b.IsNotificationMuted)
                     .ToListAsync();
 
-                foreach (var batch in expiringBatches)
+                foreach (var batch in activeBatches)
                 {
-                    bool isExpired = batch.ExpiryDate.Value <= nowUtc;
-                    var title = isExpired ? "Lô nguyên liệu đã hết hạn sử dụng" : "Lô nguyên liệu hết hạn";
-                    var priority = isExpired ? "Critical" : "Warning";
-                    var msg = isExpired
-                        ? $"Lô \"{batch.BatchCode}\" của nguyên liệu \"{batch.BInventory.Product.Name}\" (SL tồn: {batch.QuantityRemaining:N1}) đã hết hạn vào ngày {batch.ExpiryDate.Value.AddHours(7):dd/MM/yyyy}."
-                        : $"Lô \"{batch.BatchCode}\" của nguyên liệu \"{batch.BInventory.Product.Name}\" (SL tồn: {batch.QuantityRemaining:N1}) hết hạn vào ngày {batch.ExpiryDate.Value.AddHours(7):dd/MM/yyyy}.";
+                    bool shouldAlert = false;
+                    string title = "";
+                    string priority = "Warning";
+                    bool isImportant = false;
+                    string msg = "";
 
-                    var exists = await _context.Notifications.AnyAsync(n =>
-                        n.BranchId == branchId &&
-                        n.Type == "ShelfLife" &&
-                        n.CreatedAt >= startUtc &&
-                        n.CreatedAt <= endUtc &&
-                        n.ReferenceType == "BInventoryBatch" &&
-                        n.ReferenceId == batch.Id);
-
-                    if (!exists)
+                    if (!batch.ExpiryDate.HasValue)
                     {
-                        newNotifications.Add(new Notification
+                        // Lô không có date: Tạo thông báo cấp bách để kiểm tra mỗi ngày
+                        shouldAlert = true;
+                        title = "Lô nguyên liệu chưa có hạn sử dụng";
+                        priority = "Critical";
+                        isImportant = true;
+                        msg = $"Lô \"{batch.BatchCode}\" của nguyên liệu \"{batch.BInventory.Product.Name}\" (SL tồn: {batch.QuantityRemaining:N1}) chưa có ngày hết hạn. Vui lòng kiểm tra và cập nhật hạn sử dụng.";
+                    }
+                    else
+                    {
+                        var expDate = batch.ExpiryDate.Value.Date;
+                        int daysRemaining = (int)(expDate - todayUtc).TotalDays;
+
+                        if (daysRemaining <= 0)
                         {
-                            BranchId = branchId,
-                            Type = "ShelfLife",
-                            Title = title,
-                            Message = msg,
-                            CreatedAt = DateTime.UtcNow,
-                            IsRead = false,
-                            IsImportant = isExpired,
-                            Priority = priority,
-                            ReferenceType = "BInventoryBatch",
-                            ReferenceId = batch.Id,
-                            RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(batch.BInventory.Product.Name)}&productId={batch.BInventory.ProductId}&inventoryId={batch.BInventoryId}&batchId={batch.Id}&activeTab=batches&expand=true"
-                        });
+                            // Hết hạn hoặc còn 0 ngày: Thông báo Cấp bách
+                            shouldAlert = true;
+                            title = "Lô nguyên liệu đã hết hạn sử dụng";
+                            priority = "Critical";
+                            isImportant = true;
+                            msg = $"Lô \"{batch.BatchCode}\" của nguyên liệu \"{batch.BInventory.Product.Name}\" (SL tồn: {batch.QuantityRemaining:N1}) đã hết hạn vào ngày {batch.ExpiryDate.Value.AddHours(7):dd/MM/yyyy}. Cần xử lý xuất hủy ngay!";
+                        }
+                        else if (daysRemaining <= criticalDays)
+                        {
+                            // Cận date cấp bách: Thông báo Cấp bách
+                            shouldAlert = true;
+                            title = "Lô nguyên liệu cận date cấp bách";
+                            priority = "Critical";
+                            isImportant = true;
+                            msg = $"Lô \"{batch.BatchCode}\" của nguyên liệu \"{batch.BInventory.Product.Name}\" (SL tồn: {batch.QuantityRemaining:N1}) chỉ còn {daysRemaining} ngày là hết hạn ({batch.ExpiryDate.Value.AddHours(7):dd/MM/yyyy}). Cần ưu tiên dùng trước!";
+                        }
+                        else if (daysRemaining <= warningDays)
+                        {
+                            // Sắp hết hạn theo ngưỡng cảnh báo: Thông báo Cảnh báo
+                            shouldAlert = true;
+                            title = "Lô nguyên liệu sắp hết hạn";
+                            priority = "Warning";
+                            isImportant = false;
+                            msg = $"Lô \"{batch.BatchCode}\" của nguyên liệu \"{batch.BInventory.Product.Name}\" (SL tồn: {batch.QuantityRemaining:N1}) còn {daysRemaining} ngày nữa sẽ hết hạn ({batch.ExpiryDate.Value.AddHours(7):dd/MM/yyyy}).";
+                        }
+                    }
+
+                    if (shouldAlert)
+                    {
+                        var exists = await _context.Notifications.AnyAsync(n =>
+                            n.BranchId == branchId &&
+                            n.Type == "ShelfLife" &&
+                            n.CreatedAt >= startUtc &&
+                            n.CreatedAt <= endUtc &&
+                            n.ReferenceType == "BInventoryBatch" &&
+                            n.ReferenceId == batch.Id);
+
+                        if (!exists)
+                        {
+                            newNotifications.Add(new Notification
+                            {
+                                BranchId = branchId,
+                                Type = "ShelfLife",
+                                Title = title,
+                                Message = msg,
+                                CreatedAt = DateTime.UtcNow,
+                                IsRead = false,
+                                IsImportant = isImportant,
+                                Priority = priority,
+                                ReferenceType = "BInventoryBatch",
+                                ReferenceId = batch.Id,
+                                RedirectUrl = $"/inventory-management?tab=BatchExpiry&search={Uri.EscapeDataString(batch.BatchCode)}&batchId={batch.Id}"
+                            });
+                        }
                     }
                 }
+                #endregion
 
                 #region Cảnh báo Hạn chốt bảng lương dành cho Quản lý
-                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.Id == branchId);
                 if (branch != null)
                 {
                     int payday = branch.PayrollPayday > 0 ? branch.PayrollPayday : 10;

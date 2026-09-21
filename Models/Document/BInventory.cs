@@ -39,6 +39,17 @@ public class BInventory
     [Column(TypeName = "decimal(51,3)")]
     public decimal MaxStorage { get; set; } = 1000000000;
 
+    /// <summary>Ngưỡng cảnh báo tồn kho cấp bách tùy chỉnh riêng cho mặt hàng này (null = theo chi nhánh)</summary>
+    [Column(TypeName = "decimal(51,3)")]
+    public decimal? CustomCriticalThreshold { get; set; }
+
+    /// <summary>Ngưỡng cảnh báo tồn kho sắp hết tùy chỉnh riêng cho mặt hàng này (null = theo chi nhánh)</summary>
+    [Column(TypeName = "decimal(51,3)")]
+    public decimal? CustomWarningThreshold { get; set; }
+
+    /// <summary>Cờ bật/tắt cảnh báo tồn kho đối với mặt hàng này</summary>
+    public bool IsAlertEnabled { get; set; } = true;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

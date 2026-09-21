@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MenuGoBE.Service
 {
-    public class GuestChatCleanupService : BackgroundService
+    public class GuestChatCleanupService : Microsoft.Extensions.Hosting.BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<GuestChatCleanupService> _logger;
