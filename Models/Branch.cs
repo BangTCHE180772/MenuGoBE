@@ -50,6 +50,14 @@ public class Branch
     /// <summary>Số ngày ngưỡng cảnh báo hạn sử dụng thông thường (mặc định 14 ngày, tối thiểu 14 ngày)</summary>
     public int BatchWarningDays { get; set; } = 14;
 
+    /// <summary>Ngưỡng cảnh báo tồn kho cấp bách chung của chi nhánh (mặc định 20 đơn vị)</summary>
+    [Column(TypeName = "decimal(51,3)")]
+    public decimal StockCriticalThreshold { get; set; } = 20;
+
+    /// <summary>Ngưỡng cảnh báo tồn kho sắp hết chung của chi nhánh (mặc định 40 đơn vị)</summary>
+    [Column(TypeName = "decimal(51,3)")]
+    public decimal StockWarningThreshold { get; set; } = 40;
+
     // Navigation
     [ForeignKey("ChainId")]
     public Chain Chain { get; set; } = null!;
