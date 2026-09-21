@@ -204,6 +204,11 @@ namespace MenuGoBE.Repositories
                 }
             }
 
+            if (!string.IsNullOrEmpty(query.Priority) && !query.Priority.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                dbQuery = dbQuery.Where(n => n.Priority == query.Priority);
+            }
+
             if (query.IsRead.HasValue)
             {
                 dbQuery = dbQuery.Where(n => n.IsRead == query.IsRead.Value);
