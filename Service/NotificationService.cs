@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -30,7 +30,7 @@ namespace MenuGoBE.Service
         /// </summary>
         public async Task<PagedResult<NotificationViewDto>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0)
         {
-            await SyncBranchAlertsAsync(branchIds);
+            // await SyncBranchAlertsAsync(branchIds); // Moved to NotificationSyncWorker
 
             var notifications = await _repo.GetPagedNotificationsAsync(branchIds, query, userRole, accountId);
             var totalCount = await _repo.GetTotalCountAsync(branchIds, query, userRole, accountId);
@@ -53,7 +53,7 @@ namespace MenuGoBE.Service
         /// </summary>
         public async Task<List<NotificationViewDto>> GetRecentNotificationsAsync(long[] branchIds, string? userRole = null, long accountId = 0)
         {
-            await SyncBranchAlertsAsync(branchIds);
+            // await SyncBranchAlertsAsync(branchIds); // Moved to NotificationSyncWorker
 
             var notifications = await _repo.GetRecentNotificationsAsync(branchIds, 15, userRole, accountId);
             return notifications.Select(MapToViewDto).ToList();
