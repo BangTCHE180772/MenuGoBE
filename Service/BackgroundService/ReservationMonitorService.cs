@@ -256,14 +256,13 @@ public class ReservationMonitorService : Microsoft.Extensions.Hosting.Background
                                     var area = await db.Areas.FirstOrDefaultAsync(a => a.Id == table.AreaId, stoppingToken);
                                     long branchId = area?.BranchId ?? 0;
 
-                                    await _hubContext.Clients.All.SendAsync("TableConflictWarning", new
+                                    await _hubContext.Clients.All.SendAsync("ReceiveNotification", new
                                     {
-                                        ReservationId = warnRes.Id,
-                                        TableId = emptyTable.Id,
-                                        TableName = emptyTable.Name,
+                                        Type = "auto-transfer",
+                                        Title = "Hệ Thống Tự Xếp Bàn",
+                                        Message = $"{table.Name} đã có khách, hệ thống tự động dời đơn đặt bàn lúc {warnRes.ReservationTime:HH:mm} sang bàn {emptyTable.Name}.",
                                         BranchId = branchId,
-                                        ReservationTime = warnRes.ReservationTime,
-                                        Message = $"Hệ thống tự động dời bàn: Bàn {table.Name} đã có khách. Một phần của đơn đặt bàn lúc {warnRes.ReservationTime:HH:mm} được chuyển sang bàn {emptyTable.Name}."
+                                        CreatedAt = DateTime.UtcNow
                                     });
                                 }
                                 else
@@ -281,7 +280,7 @@ public class ReservationMonitorService : Microsoft.Extensions.Hosting.Background
                                             TableName = table.Name,
                                             BranchId = branchId,
                                             ReservationTime = warnRes.ReservationTime,
-                                            Message = $"KHẨN CẤP: Bàn {table.Name} (thuộc đơn {warnRes.TableCount} bàn) đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi và KHÔNG còn bàn trống để đổi! Vui lòng sắp xếp ngay."
+                                            Message = $"KHẨN CẤP: {table.Name} (thuộc đơn {warnRes.TableCount} bàn) đã được đặt lúc {warnRes.ReservationTime:HH:mm} nhưng hiện vẫn đang có khách ngồi và KHÔNG còn bàn trống để đổi! Vui lòng tự sắp xếp."
                                         });
                                         _warnedReservationIds.Add(warnRes.Id);
                                     }
