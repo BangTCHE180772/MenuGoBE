@@ -24,6 +24,7 @@ namespace MenuGoBE.Dtos.Document
         public decimal? CustomWarningThreshold { get; set; }
         public decimal BranchCriticalThreshold { get; set; }
         public decimal BranchWarningThreshold { get; set; }
+        public bool IsAlertEnabled { get; set; }
         public bool HasCustomSettings => CustomCriticalThreshold.HasValue || CustomWarningThreshold.HasValue;
     }
 
@@ -31,6 +32,7 @@ namespace MenuGoBE.Dtos.Document
     {
         public decimal? CustomCriticalThreshold { get; set; }
         public decimal? CustomWarningThreshold { get; set; }
+        public bool IsAlertEnabled { get; set; }
     }
     #endregion
 }

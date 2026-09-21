@@ -165,6 +165,15 @@ namespace MenuGoBE.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<decimal?>("CustomCriticalThreshold")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal?>("CustomWarningThreshold")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<bool>("IsAlertEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsManageQuantity")
                         .HasColumnType("boolean");
 
@@ -217,6 +226,9 @@ namespace MenuGoBE.Migrations
 
                     b.Property<DateTime?>("ExpiryDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsNotificationMuted")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("ManufactureDate")
                         .HasColumnType("timestamp with time zone");
@@ -305,6 +317,12 @@ namespace MenuGoBE.Migrations
                     b.Property<int>("AnonymousChatRetentionMinutes")
                         .HasColumnType("integer");
 
+                    b.Property<int>("BatchCriticalDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BatchWarningDays")
+                        .HasColumnType("integer");
+
                     b.Property<long>("ChainId")
                         .HasColumnType("bigint");
 
@@ -342,6 +360,12 @@ namespace MenuGoBE.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal>("StockCriticalThreshold")
+                        .HasColumnType("decimal(51,3)");
+
+                    b.Property<decimal>("StockWarningThreshold")
+                        .HasColumnType("decimal(51,3)");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -820,14 +844,14 @@ namespace MenuGoBE.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
-                    b.Property<string>("ImageUrls")
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("DeletedBy")
                         .HasColumnType("bigint");
+
+                    b.Property<string>("ImageUrls")
+                        .HasColumnType("text");
 
                     b.Property<string>("Note")
                         .HasMaxLength(255)
@@ -1813,6 +1837,9 @@ namespace MenuGoBE.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
+
+                    b.Property<string>("ImageUrls")
+                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()

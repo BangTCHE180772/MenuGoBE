@@ -8,7 +8,7 @@ using MenuGoBE.Models;
 
 namespace MenuGoBE.Service
 {
-    public class AutoCheckoutService : BackgroundService
+    public class AutoCheckoutService : Microsoft.Extensions.Hosting.BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AutoCheckoutService> _logger;

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MenuGoBE.Service;
 
-public class ReservationNotificationWorker : BackgroundService
+public class ReservationNotificationWorker : Microsoft.Extensions.Hosting.BackgroundService
 {
     private readonly IReservationNotificationQueue _queue;
     private readonly IServiceProvider _serviceProvider;

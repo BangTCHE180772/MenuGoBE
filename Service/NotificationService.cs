@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -176,7 +176,7 @@ namespace MenuGoBE.Service
                     .Include(bi => bi.Product)
                         .ThenInclude(p => p.UnitConversions)
                             .ThenInclude(uc => uc.Unit)
-                    .Where(bi => bi.BranchId == branchId && bi.IsManageQuantity)
+                    .Where(bi => bi.BranchId == branchId && bi.IsManageQuantity && bi.IsAlertEnabled)
                     .ToListAsync();
 
                 foreach (var bi in managedBInventories)

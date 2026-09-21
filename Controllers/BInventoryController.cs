@@ -1845,7 +1845,8 @@ namespace MenuGoBE.Controllers
                     CustomCriticalThreshold = binv.CustomCriticalThreshold,
                     CustomWarningThreshold = binv.CustomWarningThreshold,
                     BranchCriticalThreshold = branchCrit,
-                    BranchWarningThreshold = branchWarn
+                    BranchWarningThreshold = branchWarn,
+                    IsAlertEnabled = binv.IsAlertEnabled
                 });
             }
             catch (Exception ex)
@@ -1886,13 +1887,15 @@ namespace MenuGoBE.Controllers
                 // Cập nhật cấu hình riêng (null nghĩa là sử dụng theo thiết lập chung)
                 binv.CustomCriticalThreshold = dto.CustomCriticalThreshold;
                 binv.CustomWarningThreshold = dto.CustomWarningThreshold;
+                binv.IsAlertEnabled = dto.IsAlertEnabled;
                 await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
                     message = "Cập nhật cấu hình cảnh báo mặt hàng thành công.",
                     customCriticalThreshold = binv.CustomCriticalThreshold,
-                    customWarningThreshold = binv.CustomWarningThreshold
+                    customWarningThreshold = binv.CustomWarningThreshold,
+                    isAlertEnabled = binv.IsAlertEnabled
                 });
             }
             catch (Exception ex)
