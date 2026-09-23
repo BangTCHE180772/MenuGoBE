@@ -311,9 +311,9 @@ public class ReservationService : IReservationService
             }
         }
 
-        // Apply current occupancy logic if the reservation is within 14 minutes
+        // Apply current occupancy logic if the reservation is within 30 minutes
         var minutesToRes = (reservationTime - DateTime.UtcNow).TotalMinutes;
-        if (minutesToRes <= 14)
+        if (minutesToRes <= 30)
         {
             foreach (var t in validTables)
             {
@@ -632,7 +632,7 @@ public class ReservationService : IReservationService
 
         if (overlap15Tables.Any())
         {
-            throw new InvalidOperationException($"Không thể xếp bàn. Bàn [{string.Join(", ", overlap15Tables.Distinct())}] đang có khách hoặc bị trùng thời gian đặt.");
+            throw new InvalidOperationException($"Khoảng thời gian giữa 2 đơn đặt bàn tại bàn [{string.Join(", ", overlap15Tables.Distinct())}] quá sát nhau (dưới 15 phút). Vui lòng chọn bàn khác để đảm bảo dịch vụ.");
         }
         // For AssignTablesToReservationAsync, it's called from Assign Modal. The Assign Modal does NOT have IgnoreWarning checkbox.
         // Wait, the UI for Assign Modal doesn't have a way to pass "ignoreWarning". 
