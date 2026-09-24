@@ -91,8 +91,8 @@ namespace MenuGoBE.Service
             }
 
             var branchIds = activeContracts
-                .Where(c => c.BranchId != null && c.BranchId > 0)
-                .Select(c => (long)c.BranchId!)
+                .Where(c => c.BranchId > 0)
+                .Select(c => c.BranchId)
                 .Distinct()
                 .ToList();
 

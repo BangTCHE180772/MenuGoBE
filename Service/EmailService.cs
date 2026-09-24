@@ -55,7 +55,9 @@ namespace MenuGoBE.Service
 
                 int port = int.TryParse(portStr, out var p) ? p : 587;
 
+#pragma warning disable SYSLIB0014
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
+#pragma warning restore SYSLIB0014
 
                 using var message = new MailMessage();
                 message.From = new MailAddress(senderEmail, senderName);
