@@ -24,6 +24,7 @@ namespace MenuGoBE.Repositories
         public async Task<List<BInventory>> GetAllByBranchAsync(long branchId)
         {
             return await _context.BInventories
+                .AsNoTracking()
                 .Where(b => b.BranchId == branchId)
                 .ToListAsync();
         }

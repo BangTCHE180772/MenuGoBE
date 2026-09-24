@@ -861,9 +861,9 @@ namespace MenuGoBE.Service
             return _mapper.Map<List<OrderViewDto>>(orders);
         }
 
-        public async Task<List<OrderViewDto>> GetPaidOrdersByBranchAsync(long branchId)
+        public async Task<List<OrderViewDto>> GetPaidOrdersByBranchAsync(long branchId, DateTime? startDate = null, DateTime? endDate = null)
         {
-            var orders = await _repo.GetPaidOrdersByBranchAsync(branchId);
+            var orders = await _repo.GetPaidOrdersByBranchAsync(branchId, startDate, endDate);
             var dtos = _mapper.Map<List<OrderViewDto>>(orders);
 
             var creatorIds = orders.Where(o => o.CreatedBy.HasValue).Select(o => o.CreatedBy!.Value).Distinct().ToList();

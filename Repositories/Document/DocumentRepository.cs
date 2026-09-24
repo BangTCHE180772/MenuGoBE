@@ -352,6 +352,7 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.CashFlows)
                 .Include(d => d.ParentDocument)
                 .Include(d => d.Creator)
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId);
 
             if (type.HasValue)
@@ -391,6 +392,7 @@ namespace MenuGoBE.Repositories.Document
                     .ThenInclude(p => p.Address)
                 .Include(d => d.CashFlows)
                 .Include(d => d.Creator)
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.Import)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -408,6 +410,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetReturnDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.Return)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -442,6 +445,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetSaleDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.Sale)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -459,6 +463,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetCustomerReturnDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.CustomerReturn)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -487,6 +492,7 @@ namespace MenuGoBE.Repositories.Document
                 .Include(d => d.Branch)
                 .Include(d => d.ToBranch)
                 .Include(d => d.Creator)
+                .AsNoTracking()
                 .Where(d => d.Type == DocumentType.Transfer && (d.BranchId == branchId || (d.ToBranchId == branchId && d.Status == DocumentStatus.Completed)))
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -504,6 +510,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetExportDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.Export)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -521,6 +528,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetExportDeleteDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.ExportDelete)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -538,6 +546,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetProductionDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.Production)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -555,6 +564,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetCheckDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.Check)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -572,6 +582,7 @@ namespace MenuGoBE.Repositories.Document
         public async Task<IEnumerable<Models.Document>> GetCostAdjustmentDocumentsAsync(long branchId)
         {
             return await _context.Documents
+                .AsNoTracking()
                 .Where(d => d.BranchId == branchId && d.Type == DocumentType.CostAdjustment)
                 .OrderByDescending(d => d.CreatedAt)
                 .ToListAsync();
@@ -581,3 +592,4 @@ namespace MenuGoBE.Repositories.Document
         #endregion
     }
 }
+

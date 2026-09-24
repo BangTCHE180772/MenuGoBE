@@ -37,12 +37,6 @@ namespace MenuGoBE.Repositories
                 .AsNoTracking()
                 .Include(p => p.Group)
                 .Include(p => p.Image)
-                .Include(p => p.UnitConversions)
-                    .ThenInclude(uc => uc.Unit)
-                .Include(p => p.RecipeItems)
-                    .ThenInclude(ri => ri.IngredientProduct)
-                .Include(p => p.MenuProducts)
-                    .ThenInclude(mp => mp.Menu)
                 .AsQueryable();
 
             if (type.HasValue)
@@ -50,7 +44,7 @@ namespace MenuGoBE.Repositories
                 query = query.Where(p => p.Type == type.Value);
             }
 
-            return await query.ToListAsync();
+            return await query.Take(200).ToListAsync();
         }
 
         public async Task<List<Product>> GetByTypeAsync(string type)
