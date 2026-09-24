@@ -23,6 +23,7 @@ namespace MenuGoBE.Repositories
                 .Include(c => c.Account)
                 .Include(c => c.Role)
                 .Include(c => c.Branch)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -33,6 +34,7 @@ namespace MenuGoBE.Repositories
                 .Include(c => c.Account)
                 .Include(c => c.Role)
                 .Include(c => c.Branch)
+                .AsNoTracking()
                 .Where(c => branchIds.Contains(c.BranchId))
                 .ToListAsync();
         }
@@ -44,6 +46,7 @@ namespace MenuGoBE.Repositories
                 .Include(c => c.Account)
                 .Include(c => c.Role)
                 .Include(c => c.Branch)
+                .AsNoTracking()
                 .Where(c => roleIds.Contains(c.RoleId));
 
             if (branchId.HasValue)
@@ -65,6 +68,7 @@ namespace MenuGoBE.Repositories
                 .Include(c => c.Account)
                 .Include(c => c.Role)
                 .Include(c => c.Branch)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
@@ -75,6 +79,7 @@ namespace MenuGoBE.Repositories
                 .Include(c => c.Account)
                 .Include(c => c.Role)
                 .Include(c => c.Branch)
+                .AsNoTracking()
                 .Where(c => c.AccountId == accountId)
                 .ToListAsync();
         }
