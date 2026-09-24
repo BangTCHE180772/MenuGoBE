@@ -11,11 +11,12 @@ namespace MenuGoBE.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<DateTime>(
-                name: "DeletedAt",
-                table: "Documents",
-                type: "timestamp with time zone",
-                nullable: true);
+            // Commented out to fix "column already exists" error during migration
+            // migrationBuilder.AddColumn<DateTime>(
+            //     name: "DeletedAt",
+            //     table: "Documents",
+            //     type: "timestamp with time zone",
+            //     nullable: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "IsDeleted",
@@ -23,11 +24,12 @@ namespace MenuGoBE.Migrations
                 type: "boolean",
                 defaultValue: false);
 
-            migrationBuilder.AddColumn<long?>(
-                name: "DeletedBy",
-                table: "Documents",
-                type: "bigint",
-                nullable: true);
+            // Commented out to fix "column already exists" error during migration
+            // migrationBuilder.AddColumn<long?>(
+            //     name: "DeletedBy",
+            //     table: "Documents",
+            //     type: "bigint",
+            //     nullable: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "IsDeleted",
@@ -36,10 +38,10 @@ namespace MenuGoBE.Migrations
                 nullable: false,
                 defaultValue: false);
 
-            migrationBuilder.CreateIndex(
-                name: "IX_Documents_DeletedBy",
-                table: "Documents",
-                column: "DeletedBy");
+            // migrationBuilder.CreateIndex(
+            //     name: "IX_Documents_DeletedBy",
+            //     table: "Documents",
+            //     column: "DeletedBy");
         }
 
         /// <inheritdoc />

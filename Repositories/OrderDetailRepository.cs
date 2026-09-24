@@ -68,7 +68,7 @@ namespace MenuGoBE.Repositories
             return true;
         }
 
-        public async Task<int> GetPendingQuantityAsync(long productId, long branchId)
+        public async Task<int> GetPendingQuantityAsync(long productId, long branchId, long? excludeOrderDetailId = null)
         {
             var directPending = await _context.OrderDetails
                 .Include(od => od.Product)
@@ -76,6 +76,7 @@ namespace MenuGoBE.Repositories
                 .ThenInclude(o => o.Table)
                 .ThenInclude(t => t.Area)
                 .Where(od => od.ProductId == productId 
+                             && (!excludeOrderDetailId.HasValue || od.Id != excludeOrderDetailId.Value)
                              && od.Order.Table.Area.BranchId == branchId
                              && od.Order.Status != "Internal"
                              && (
@@ -90,6 +91,7 @@ namespace MenuGoBE.Repositories
                 .ThenInclude(o => o.Table)
                 .ThenInclude(t => t.Area)
                 .Where(od => od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed 
+                             && (!excludeOrderDetailId.HasValue || od.Id != excludeOrderDetailId.Value)
                              && od.Order.Table.Area.BranchId == branchId
                              && od.Order.Status != "Internal"
                              && (od.Status == "CustomerPending" || (od.Status == "Confirmed" && od.CookingStatus == "Waiting")))
