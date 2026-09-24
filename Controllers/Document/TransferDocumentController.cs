@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -85,11 +85,11 @@ namespace MenuGoBE.Controllers.Document
 
             var document = new Models.Document
             {
-                Code = dto.Code,
+                Code = dto.Code ?? string.Empty,
                 BranchId = dto.BranchId,
                 ToBranchId = dto.ToBranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
-                Note = dto.Note,
+                Note = dto.Note ?? string.Empty,
                 Type = DocumentType.Transfer,
                 DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
@@ -127,11 +127,11 @@ namespace MenuGoBE.Controllers.Document
 
             var document = new Models.Document
             {
-                Code = dto.Code,
+                Code = dto.Code ?? string.Empty,
                 BranchId = dto.BranchId,
                 ToBranchId = dto.ToBranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
-                Note = dto.Note,
+                Note = dto.Note ?? string.Empty,
                 Type = DocumentType.Transfer,
                 DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
@@ -176,11 +176,11 @@ namespace MenuGoBE.Controllers.Document
             var document = new Models.Document
             {
                 Id = id,
-                Code = dto.Code,
+                Code = dto.Code ?? string.Empty,
                 BranchId = existingDoc.BranchId,
                 ToBranchId = dto.ToBranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
-                Note = dto.Note,
+                Note = dto.Note ?? string.Empty,
                 Type = DocumentType.Transfer,
                 DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailUpdateDto>()).Select(d => new Models.DocumentDetail
                 {

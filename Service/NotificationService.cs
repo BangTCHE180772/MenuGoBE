@@ -192,6 +192,8 @@ namespace MenuGoBE.Service
                     bool isImportant = false;
                     string msg = "";
 
+                    var productName = bi.Product?.Name ?? "Nguyên liệu";
+
                     var unitName = bi.Product?.UnitConversions
                         ?.Where(uc => uc.BaseId == null)
                         ?.Select(uc => uc.Unit != null ? uc.Unit.Name : string.Empty)
@@ -203,7 +205,7 @@ namespace MenuGoBE.Service
                         title = "Nguyên liệu hết tồn kho";
                         priority = "Critical";
                         isImportant = true;
-                        msg = $"Mặt hàng \"{bi.Product.Name}\" đã hết tồn kho (SL tồn: {bi.Quantity:N1} {unitName}). Cần nhập hàng ngay!";
+                        msg = $"Mặt hàng \"{productName}\" đã hết tồn kho (SL tồn: {bi.Quantity:N1} {unitName}). Cần nhập hàng ngay!";
                     }
                     else if (bi.Quantity <= crit)
                     {
@@ -211,7 +213,7 @@ namespace MenuGoBE.Service
                         title = "Nguyên liệu tồn kho cấp bách";
                         priority = "Critical";
                         isImportant = true;
-                        msg = $"Mặt hàng \"{bi.Product.Name}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cấp bách ({crit:N1} {unitName}). Cần nhập bổ sung ngay!";
+                        msg = $"Mặt hàng \"{productName}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cấp bách ({crit:N1} {unitName}). Cần nhập bổ sung ngay!";
                     }
                     else if (bi.Quantity <= warn)
                     {
@@ -219,7 +221,7 @@ namespace MenuGoBE.Service
                         title = "Cảnh báo tồn kho sắp hết";
                         priority = "Warning";
                         isImportant = false;
-                        msg = $"Mặt hàng \"{bi.Product.Name}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cảnh báo ({warn:N1} {unitName}).";
+                        msg = $"Mặt hàng \"{productName}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cảnh báo ({warn:N1} {unitName}).";
                     }
 
                     if (shouldAlert)
@@ -246,7 +248,7 @@ namespace MenuGoBE.Service
                                 Priority = priority,
                                 ReferenceType = "BInventory",
                                 ReferenceId = bi.Id,
-                                RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(bi.Product.Name)}&productId={bi.ProductId}&inventoryId={bi.Id}&expand=true"
+                                RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(productName)}&productId={bi.ProductId}&inventoryId={bi.Id}&expand=true"
                             });
                         }
                     }
