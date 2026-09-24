@@ -101,7 +101,7 @@ namespace MenuGoBE.Controllers
 
             if (isAdmin)
             {
-                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+                return StatusCode(403, new { message = "Chủ sở hữu chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
             }
             if (!isManager)
             {
@@ -137,7 +137,7 @@ namespace MenuGoBE.Controllers
 
             if (isAdmin)
             {
-                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+                return StatusCode(403, new { message = "Chủ sở hữu chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
             }
             if (!isManager)
             {
@@ -173,7 +173,7 @@ namespace MenuGoBE.Controllers
 
             if (isAdmin)
             {
-                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+                return StatusCode(403, new { message = "Chủ sở hữu chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
             }
             if (!isManager)
             {
@@ -255,7 +255,7 @@ namespace MenuGoBE.Controllers
 
             if (isAdmin)
             {
-                return StatusCode(403, new { message = "Chủ sở hữu / Quản trị viên chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
+                return StatusCode(403, new { message = "Chủ sở hữu chỉ có quyền xem lịch làm việc, việc xếp lịch thuộc về Quản lý chi nhánh." });
             }
             if (!isManager)
             {
