@@ -72,7 +72,7 @@ namespace MenuGoBE.Service
             return _mapper.Map<OrderDetailViewDto>(data);
         }
 
-        public async Task<int> GetAvailableQuantityAsync(long productId, long branchId)
+        public async Task<int> GetAvailableQuantityAsync(long productId, long branchId, long? excludeOrderDetailId = null)
         {
             var productType = await _productRepo.GetProductTypeAsync(productId);
             if (productType == "Processed")
@@ -92,7 +92,7 @@ namespace MenuGoBE.Service
                     if (recipe.Quantity > 0)
                     {
                         hasValidRecipe = true;
-                        int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId);
+                        int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId, excludeOrderDetailId);
                         int possibleQty = (int)(ingredientQty / recipe.Quantity);
                         if (possibleQty < maxProcessable)
                         {
@@ -114,7 +114,7 @@ namespace MenuGoBE.Service
                 return 999999; // Món không quản lý số lượng (Unlimited)
             }
 
-            var pendingQty = await _detailRepo.GetPendingQuantityAsync(productId, branchId);
+            var pendingQty = await _detailRepo.GetPendingQuantityAsync(productId, branchId, excludeOrderDetailId);
             return (int)binv.Quantity - pendingQty;
         }
 
@@ -515,7 +515,7 @@ namespace MenuGoBE.Service
 
                             if (!isInternalManufactured)
                             {
-                                int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId);
+                                int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId, dto.Id);
                                 if (quantityDiff > availableQty)
                                 {
                                     throw new InvalidOperationException($"Số lượng khả dụng không đủ. Chỉ còn {availableQty} phần.");
@@ -631,13 +631,6 @@ namespace MenuGoBE.Service
             // Ngăn chặn trừ kho nhiều lần do click đúp (Race Condition)
             if (detail.Status == "Confirmed") return true;
 
-            if (finalQuantity.HasValue && finalQuantity.Value > 0)
-            {
-                detail.Quantity = finalQuantity.Value;
-                await _detailRepo.UpdateAsync(detail);
-                await _detailRepo.SaveChangesAsync();
-            }
-
             var productType = await _productRepo.GetProductTypeAsync(detail.ProductId);
             var order = await _orderRepo.GetByIdAsync(detail.OrderId);
 
@@ -650,14 +643,25 @@ namespace MenuGoBE.Service
                     if (area != null)
                     {
                         long branchId = area.BranchId;
-                        int availableQty = await GetAvailableQuantityAsync(detail.ProductId, branchId);
-                        // Khi confirm, món này ĐÃ NẰM trong pendingQty (nếu là CustomerPending). 
-                        // Do đó availableQty hiện tại đã bị trừ đi số lượng của chính detail này.
-                        // Nếu finalQuantity lớn hơn detail.Quantity ban đầu, ta phải kiểm tra phần chênh lệch.
-                        // Hệ thống sử dụng GetPendingQuantityAsync để giữ hàng ảo, 
-                        // và chỉ trừ thật sự khi trạng thái là Served.
+                        int availableQty = await GetAvailableQuantityAsync(detail.ProductId, branchId, detail.Id);
+                        
+                        if (finalQuantity.HasValue && finalQuantity.Value > detail.Quantity)
+                        {
+                            int diff = finalQuantity.Value - detail.Quantity;
+                            if (diff > availableQty)
+                            {
+                                throw new InvalidOperationException($"Số lượng không đủ. Chỉ còn {availableQty} phần.");
+                            }
+                        }
                     }
                 }
+            }
+
+            if (finalQuantity.HasValue && finalQuantity.Value > 0)
+            {
+                detail.Quantity = finalQuantity.Value;
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.SaveChangesAsync();
             }
 
             if (productType == "Regular" || productType == "Manufactured")
@@ -959,12 +963,12 @@ namespace MenuGoBE.Service
                                 if (area != null)
                                 {
                                     long branchId = area.BranchId;
-                                    var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                                    if (binv != null && binv.IsManageQuantity)
+                                    var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                    if (product != null)
                                     {
-                                        binv.Quantity += entity.Quantity;
-                                        await _bInventoryRepo.UpdateAsync(binv);
-                                        await _bInventoryRepo.SaveChangesAsync();
+                                        long confirmedByUserId = order.CreatedBy ?? 1;
+                                        var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
+                                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, entity.Quantity, true, "Huỷ món đã xác nhận", entity.Id, confirmedByUserId);
                                     }
                                 }
                             }

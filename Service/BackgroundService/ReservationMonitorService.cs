@@ -37,6 +37,7 @@ public class ReservationMonitorService : Microsoft.Extensions.Hosting.Background
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Delay(TimeSpan.FromSeconds(25), stoppingToken);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
