@@ -20,7 +20,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<(decimal Revenue, decimal Expenses, decimal Profit, int CompletedBills, int TotalItemsSold, decimal AvgOrderValue, List<DashboardPaymentMethodDto> PaymentMethods, List<DashboardHourSlotDto> HourSlots, List<DashboardDishDto> TopDishes, List<DashboardDishDto> LeastDishes)> GetFinancialStatsAsync(DateTime startDate, DateTime endDate, long? branchId)
         {
-            var paymentsQuery = _context.Payments
+            var paymentsQuery = _context.Payments.AsNoTracking()
                 .Where(p => p.Status == "Success" && p.CreatedAt >= startDate && p.CreatedAt <= endDate);
 
             if (branchId.HasValue)
@@ -37,7 +37,7 @@ namespace MenuGoBE.Repositories
                 .Where(od => paidOrderIds.Contains(od.OrderId))
                 .SumAsync(od => od.Quantity);
 
-            var expensesQuery = _context.CashFlows
+            var expensesQuery = _context.CashFlows.AsNoTracking()
                 .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate);
 
             if (branchId.HasValue)
@@ -98,7 +98,7 @@ namespace MenuGoBE.Repositories
                 }
             }
 
-            var productsQuery = _context.Products.AsQueryable();
+            var productsQuery = _context.Products.AsNoTracking().AsQueryable();
             List<string> allProducts;
             if (chainId.HasValue && chainId.Value > 0)
             {
@@ -143,7 +143,7 @@ namespace MenuGoBE.Repositories
             var startUtc = DateTime.SpecifyKind(todayLocal.AddHours(-7), DateTimeKind.Utc);
             var endUtc = DateTime.SpecifyKind(todayLocal.AddDays(1).AddHours(-7).AddTicks(-1), DateTimeKind.Utc);
 
-            var todayOrdersQuery = _context.Orders.Where(o => o.CreatedAt >= startUtc && o.CreatedAt <= endUtc);
+            var todayOrdersQuery = _context.Orders.AsNoTracking().Where(o => o.CreatedAt >= startUtc && o.CreatedAt <= endUtc);
             if (branchId.HasValue)
             {
                 todayOrdersQuery = todayOrdersQuery.Where(o => o.Table.Area.BranchId == branchId.Value);
@@ -225,7 +225,7 @@ namespace MenuGoBE.Repositories
             }
 
             // 1. Query Payments today
-            var paymentsQuery = _context.Payments
+            var paymentsQuery = _context.Payments.AsNoTracking()
                 .Where(p => p.Status == "Success" && p.CreatedAt >= startUtc && p.CreatedAt <= endUtc);
             if (branchId.HasValue)
             {
@@ -234,7 +234,7 @@ namespace MenuGoBE.Repositories
             var paymentsToday = await paymentsQuery.ToListAsync();
 
             // 2. Query CashFlows today
-            var cashFlowsTodayQuery = _context.CashFlows
+            var cashFlowsTodayQuery = _context.CashFlows.AsNoTracking()
                 .Where(cf => !cf.IsDeleted && cf.BusinessDate >= startUtc && cf.BusinessDate <= endUtc);
             if (branchId.HasValue)
             {
@@ -290,7 +290,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<DashboardChartPointDto>> GetDailyBreakdownAsync(DateTime startDate, DateTime endDate, long? branchId)
         {
-            var paymentsQuery = _context.Payments
+            var paymentsQuery = _context.Payments.AsNoTracking()
                 .Where(p => p.Status == "Success" && p.CreatedAt >= startDate && p.CreatedAt <= endDate);
 
             if (branchId.HasValue)
@@ -306,7 +306,7 @@ namespace MenuGoBE.Repositories
                 .Select(g => new { Date = g.Key, Revenue = g.Sum(p => p.Amount) })
                 .ToList();
 
-            var expensesQuery = _context.CashFlows
+            var expensesQuery = _context.CashFlows.AsNoTracking()
                 .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate);
 
             if (branchId.HasValue)
@@ -346,7 +346,7 @@ namespace MenuGoBE.Repositories
             var yearStart = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             var yearEnd = new DateTime(year, 12, 31, 23, 59, 59, DateTimeKind.Utc);
 
-            var paymentsQuery = _context.Payments
+            var paymentsQuery = _context.Payments.AsNoTracking()
                 .Where(p => p.Status == "Success" && p.CreatedAt >= yearStart && p.CreatedAt <= yearEnd);
 
             if (branchId.HasValue)
@@ -361,7 +361,7 @@ namespace MenuGoBE.Repositories
                 .Select(g => new { Month = g.Key, Revenue = g.Sum(p => p.Amount) })
                 .ToList();
 
-            var expensesQuery = _context.CashFlows
+            var expensesQuery = _context.CashFlows.AsNoTracking()
                 .Where(cf => !cf.IsDeleted && (int)cf.Direction == 2 && cf.BusinessDate >= yearStart && cf.BusinessDate <= yearEnd);
 
             if (branchId.HasValue)
@@ -398,7 +398,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<DashboardCashFlowDto>> GetCashFlowListAsync(DateTime startDate, DateTime endDate, long? branchId)
         {
-            var paymentsQuery = _context.Payments
+            var paymentsQuery = _context.Payments.AsNoTracking()
                 .Where(p => p.Status == "Success" && p.CreatedAt >= startDate && p.CreatedAt <= endDate);
 
             if (branchId.HasValue)
@@ -408,7 +408,7 @@ namespace MenuGoBE.Repositories
 
             var payments = await paymentsQuery.ToListAsync();
 
-            var expensesQuery = _context.CashFlows
+            var expensesQuery = _context.CashFlows.AsNoTracking()
                 .Where(cf => !cf.IsDeleted && cf.BusinessDate >= startDate && cf.BusinessDate <= endDate);
 
             if (branchId.HasValue)
