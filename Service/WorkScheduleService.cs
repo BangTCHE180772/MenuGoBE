@@ -373,7 +373,7 @@ namespace MenuGoBE.Service
 
             if (entity.Shift == null && entity.ShiftId > 0)
             {
-                entity.Shift = await _shiftRepo.GetByIdAsync(entity.ShiftId);
+                entity.Shift = (await _shiftRepo.GetByIdAsync(entity.ShiftId))!;
             }
 
             if (entity.CheckInAt.HasValue && entity.CheckOutAt.HasValue)
@@ -495,7 +495,7 @@ namespace MenuGoBE.Service
                     // Check-in ca này -> Kiểm tra quy tắc 30 phút
                     if (targetWs.Shift == null && targetWs.ShiftId > 0)
                     {
-                        targetWs.Shift = await _shiftRepo.GetByIdAsync(targetWs.ShiftId);
+                        targetWs.Shift = (await _shiftRepo.GetByIdAsync(targetWs.ShiftId))!;
                     }
 
                     var shiftName = targetWs.Shift?.Name ?? "ca làm";

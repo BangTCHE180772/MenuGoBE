@@ -49,7 +49,7 @@ namespace MenuGoBE.Controllers
             if (!isAdmin && !isManager)
                 return StatusCode(403, new { message = "Bạn không có quyền quản lý bảng lương." });
 
-            List<long> allowedRoleIds;
+            List<long>? allowedRoleIds;
             long? targetBranchId = branchId;
 
             if (isAdmin)

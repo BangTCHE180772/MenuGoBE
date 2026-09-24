@@ -17,11 +17,12 @@ public class HolidayConfigService : IHolidayConfigService
 
     public async Task<List<HolidayConfigViewDto>> GetAllAsync(long? branchId = null)
     {
-        var allBranches = await _context.Branches.ToDictionaryAsync(b => b.Id, b => b.Name);
+        var allBranches = await _context.Branches.AsNoTracking().ToDictionaryAsync(b => b.Id, b => b.Name);
 
         var items = await _context.HolidayConfigs
             .Include(h => h.Branch)
             .Include(h => h.Creator)
+            .AsNoTracking()
             .OrderByDescending(h => h.FromDate)
             .ToListAsync();
 
@@ -64,6 +65,7 @@ public class HolidayConfigService : IHolidayConfigService
         var h = await _context.HolidayConfigs
             .Include(x => x.Branch)
             .Include(x => x.Creator)
+            .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
 
         if (h == null) return null;

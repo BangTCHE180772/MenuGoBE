@@ -153,9 +153,13 @@ namespace MenuGoBE.Service
                 if (entity.SalaryDetails != null && entity.SalaryDetails.Any())
                 {
                     _context.SalaryDetails.RemoveRange(entity.SalaryDetails);
+                    entity.SalaryDetails.Clear();
+                }
+                else
+                {
+                    entity.SalaryDetails = new List<SalaryDetail>();
                 }
 
-                entity.SalaryDetails.Clear();
                 foreach (var item in dto.SalaryDetails)
                 {
                     entity.SalaryDetails.Add(new SalaryDetail
@@ -376,7 +380,7 @@ namespace MenuGoBE.Service
                 throw new InvalidOperationException($"Nhân viên {account.Name} không có hợp đồng hợp lệ trong tháng {dto.Month}/{dto.Year}.");
             }
 
-            long branchId = (contract != null && contract.BranchId > 0) ? contract.BranchId : (dto.BranchId > 0 ? dto.BranchId : 1);
+            long branchId = contract.BranchId > 0 ? contract.BranchId : (dto.BranchId > 0 ? dto.BranchId : 1);
 
             // Fetch active holiday configurations for date range
             var holidayConfigs = await _context.HolidayConfigs

@@ -21,6 +21,7 @@ namespace MenuGoBE.Repositories
             return await _context.Shifts
                 .Include(s => s.RoleRequirements)
                 .ThenInclude(rr => rr.Role)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -29,6 +30,7 @@ namespace MenuGoBE.Repositories
             return await _context.Shifts
                 .Include(s => s.RoleRequirements)
                 .ThenInclude(rr => rr.Role)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == id);
         }
 
@@ -37,6 +39,7 @@ namespace MenuGoBE.Repositories
             return await _context.Shifts
                 .Include(s => s.RoleRequirements)
                 .ThenInclude(rr => rr.Role)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.StartTime == startTime && s.EndTime == endTime);
         }
 
