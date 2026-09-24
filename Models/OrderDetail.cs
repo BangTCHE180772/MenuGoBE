@@ -1,9 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace MenuGoBE.Models;
 
 [Table("OrderDetails")]
+[Index(nameof(OrderId))]
+[Index(nameof(ProductId))]
+[Index(nameof(Status))]
+[Index(nameof(CookingStatus))]
 public class OrderDetail
 {
     [Key]

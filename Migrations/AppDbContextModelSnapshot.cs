@@ -1678,9 +1678,13 @@ namespace MenuGoBE.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("FatherId");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("TableId");
 
@@ -1801,9 +1805,15 @@ namespace MenuGoBE.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CookingStatus");
+
                     b.HasIndex("OrderId");
 
+                    b.HasIndex("ProductId");
+
                     b.HasIndex("PromotionId");
+
+                    b.HasIndex("Status");
 
                     b.HasIndex("ProductId", "Status", "CookingStatus")
                         .HasDatabaseName("IX_OrderDetail_ProductId_Status_CookingStatus");
@@ -1909,7 +1919,11 @@ namespace MenuGoBE.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedAt");
+
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("Status");
 
                     b.ToTable("Payments");
                 });
@@ -2426,6 +2440,10 @@ namespace MenuGoBE.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("ReservationTime");
+
+                    b.HasIndex("Status");
 
                     b.ToTable("Reservations");
                 });
@@ -3032,7 +3050,11 @@ namespace MenuGoBE.Migrations
 
                     b.HasIndex("BranchId");
 
+                    b.HasIndex("CheckInAt");
+
                     b.HasIndex("ShiftId");
+
+                    b.HasIndex("WorkDate");
 
                     b.ToTable("WorkSchedules");
                 });
