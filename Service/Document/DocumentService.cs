@@ -3878,7 +3878,7 @@ namespace MenuGoBE.Service.Document
 
             DateTime? expiryDate = parentDetail.ExpiryDateSnapshot.HasValue
                 ? parentDetail.ExpiryDateSnapshot.Value
-                : (parentBinventory.Product.ShelfLifeDays.HasValue
+                : (parentBinventory.Product?.ShelfLifeDays.HasValue == true
                     ? manufactureDate.AddDays(parentBinventory.Product.ShelfLifeDays.Value)
                     : null);
 

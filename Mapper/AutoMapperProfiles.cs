@@ -110,7 +110,7 @@ namespace MenuGoBE.Mapper
                 .ForMember(dest => dest.AreaName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? src.Table.Area.Name : null))
                 .ForMember(dest => dest.BranchId, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null ? (long?)src.Table.Area.BranchId : (long?)null))
                 .ForMember(dest => dest.BranchName, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null ? src.Table.Area.Branch.Name : null))
-                .ForMember(dest => dest.BranchAddress, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null && src.Table.Area.Branch.Address != null ? (src.Table.Area.Branch.Address.NewWard != null ? src.Table.Area.Branch.Address.NewWard.Name + ", " + src.Table.Area.Branch.Address.NewWard.NewProvince.Name : (src.Table.Area.Branch.Address.OldWard != null ? src.Table.Area.Branch.Address.OldWard.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict.OldProvince.Name : null)) : null))
+                .ForMember(dest => dest.BranchAddress, opt => opt.MapFrom(src => src.Table != null && src.Table.Area != null && src.Table.Area.Branch != null && src.Table.Area.Branch.Address != null ? (src.Table.Area.Branch.Address.NewWard != null ? src.Table.Area.Branch.Address.NewWard.Name + ", " + src.Table.Area.Branch.Address.NewWard.NewProvince?.Name : (src.Table.Area.Branch.Address.OldWard != null ? src.Table.Area.Branch.Address.OldWard.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict?.Name + ", " + src.Table.Area.Branch.Address.OldWard.OldDistrict?.OldProvince?.Name : null)) : null))
                 .ForMember(dest => dest.CustomerName, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Name : null))
                 .ForMember(dest => dest.CustomerPhone, opt => opt.MapFrom(src => src.Customer != null ? src.Customer.Phone : null))
                 .ForMember(dest => dest.VoucherCode, opt => opt.MapFrom(src => src.Voucher != null ? src.Voucher.Code : null))
@@ -244,8 +244,8 @@ namespace MenuGoBE.Mapper
             CreateMap<Partner, DocumentPartnerResponseDto>()
                 .ForMember(dest => dest.Address, opt => opt.MapFrom(src => src.Address != null
                     ? (src.Address.NewWard != null
-                        ? $"{src.Address.NewWard.Name}, {src.Address.NewWard.NewProvince.Name}"
-                        : $"{src.Address.OldWard.Name}, {src.Address.OldWard.OldDistrict.Name}, {src.Address.OldWard.OldDistrict.OldProvince.Name}")
+                        ? $"{src.Address.NewWard.Name}, {src.Address.NewWard.NewProvince?.Name}"
+                        : $"{src.Address.OldWard?.Name}, {src.Address.OldWard?.OldDistrict?.Name}, {src.Address.OldWard?.OldDistrict?.OldProvince?.Name}")
                     : null));
 
             CreateMap<CashFlow, DocumentCashFlowResponseDto>();
