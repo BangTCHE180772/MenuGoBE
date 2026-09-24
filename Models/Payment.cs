@@ -1,9 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace MenuGoBE.Models;
 
 [Table("Payments")]
+[Index(nameof(OrderId))]
+[Index(nameof(Status))]
+[Index(nameof(CreatedAt))]
 public class Payment
 {
     [Key]
