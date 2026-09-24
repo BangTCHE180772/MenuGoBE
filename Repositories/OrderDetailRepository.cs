@@ -68,7 +68,7 @@ namespace MenuGoBE.Repositories
             return true;
         }
 
-        public async Task<int> GetPendingQuantityAsync(long productId, long branchId, long? excludeOrderDetailId = null)
+        public async Task<decimal> GetPendingQuantityAsync(long productId, long branchId, long? excludeOrderDetailId = null)
         {
             var directPending = await _context.OrderDetails
                 .Include(od => od.Product)
@@ -83,7 +83,7 @@ namespace MenuGoBE.Repositories
                                  od.Status == "CustomerPending" || 
                                  (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")
                              ))
-                .SumAsync(od => (int?)od.Quantity) ?? 0;
+                .SumAsync(od => (decimal?)od.Quantity) ?? 0m;
 
             var ingredientPending = await _context.OrderDetails
                 .Include(od => od.Product)
@@ -99,7 +99,7 @@ namespace MenuGoBE.Repositories
                       od => od.ProductId,
                       r => r.ParentProductId,
                       (od, r) => new { od.Quantity, RecipeQuantity = r.Quantity })
-                .SumAsync(x => (int?)(x.Quantity * x.RecipeQuantity)) ?? 0;
+                .SumAsync(x => (decimal?)(x.Quantity * x.RecipeQuantity)) ?? 0m;
 
             return directPending + ingredientPending;
         }
@@ -144,7 +144,7 @@ namespace MenuGoBE.Repositories
             return await query.OrderByDescending(od => od.CreatedAt).ToListAsync();
         }
 
-        public async Task<(Dictionary<long, int> direct, Dictionary<long, int> ingredient)> GetBulkPendingQuantitiesAsync(long branchId)
+        public async Task<(Dictionary<long, decimal> direct, Dictionary<long, decimal> ingredient)> GetBulkPendingQuantitiesAsync(long branchId)
         {
             var directPendingList = await _context.OrderDetails
                 .Include(od => od.Product)
@@ -158,7 +158,7 @@ namespace MenuGoBE.Repositories
                                  (od.Product.Type == MenuGoBE.Models.Enums.ProductType.Processed && od.Status == "Confirmed" && od.CookingStatus == "Waiting")
                              ))
                 .GroupBy(od => od.ProductId)
-                .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(od => (int?)od.Quantity) ?? 0 })
+                .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(od => (decimal?)od.Quantity) ?? 0m })
                 .ToListAsync();
             var directPending = directPendingList.ToDictionary(x => x.ProductId, x => x.PendingQty);
 
@@ -176,7 +176,7 @@ namespace MenuGoBE.Repositories
                       r => r.ParentProductId,
                       (od, r) => new { r.IngredientProductId, od.Quantity, RecipeQuantity = r.Quantity })
                 .GroupBy(x => x.IngredientProductId)
-                .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(x => (int?)(x.Quantity * x.RecipeQuantity)) ?? 0 })
+                .Select(g => new { ProductId = g.Key, PendingQty = g.Sum(x => (decimal?)(x.Quantity * x.RecipeQuantity)) ?? 0m })
                 .ToListAsync();
             var ingredientPending = ingredientPendingList.ToDictionary(x => x.ProductId, x => x.PendingQty);
 
