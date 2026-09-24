@@ -17,6 +17,7 @@ public class RecipesDetailedRepository : IRecipesDetailedRepository
     public async Task<List<RecipesDetailed>> GetRecipesByProductIdAsync(long productId)
     {
         return await _context.RecipesDetaileds
+            .AsNoTracking()
             .Include(r => r.IngredientProduct)
             .Where(r => r.ParentProductId == productId)
             .ToListAsync();
@@ -25,6 +26,7 @@ public class RecipesDetailedRepository : IRecipesDetailedRepository
     public async Task<List<RecipesDetailed>> GetAllAsync()
     {
         return await _context.RecipesDetaileds
+            .AsNoTracking()
             .Include(r => r.IngredientProduct)
             .ToListAsync();
     }
