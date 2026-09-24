@@ -16,7 +16,7 @@ namespace MenuGoBE.Repositories.Document
         {
             _context = context;
         }
-        public async Task<IEnumerable<CashFlow>> GetByBranchIdAsync(long? branchId)
+        public async Task<IEnumerable<CashFlow>> GetByBranchIdAsync(long? branchId, DateTime? startDate = null, DateTime? endDate = null)
         {
             var query = _context.CashFlows
                 .AsNoTracking()

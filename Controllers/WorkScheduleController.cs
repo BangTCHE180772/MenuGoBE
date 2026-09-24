@@ -296,6 +296,21 @@ namespace MenuGoBE.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Trả về thông tin phiên làm việc hiện tại (ca đang Working) của nhân viên đang đăng nhập.
+        /// Frontend gọi 1 API duy nhất thay vì gọi /mine + /Shift rồi tự lọc.
+        /// </summary>
+        [HttpGet("current-session")]
+        public async Task<IActionResult> GetCurrentShiftSession()
+        {
+            var currentUserId = GetCurrentAccountId();
+            if (!currentUserId.HasValue)
+                return Unauthorized(new { message = "Không xác định được tài khoản đăng nhập." });
+
+            var result = await _service.GetCurrentShiftSessionAsync(currentUserId.Value);
+            return Ok(result);
+        }
+
         [HttpPost("leave-request")]
         public async Task<IActionResult> RequestLeave([FromBody] LeaveRequestDto dto)
         {

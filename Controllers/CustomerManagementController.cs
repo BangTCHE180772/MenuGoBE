@@ -300,7 +300,7 @@ namespace MenuGoBE.Controllers
             }
 
             // Lấy danh sách đơn hàng đã thanh toán hoặc hoàn thành của khách
-            var orders = await _context.Orders
+            var orders = await _context.Orders.AsNoTracking()
                 .Where(o => o.CustomerId == id && o.Status != "Cancelled")
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
@@ -308,7 +308,7 @@ namespace MenuGoBE.Controllers
             var orderIds = orders.Select(o => o.Id).ToList();
 
             // Lấy các giao dịch tích điểm thực tế tương ứng với từng hóa đơn
-            var earnPointTransactions = await _context.CustomerPointTransactions
+            var earnPointTransactions = await _context.CustomerPointTransactions.AsNoTracking()
                 .Where(t => t.CustomerId == id
                          && t.OrderId.HasValue
                          && orderIds.Contains(t.OrderId.Value)
@@ -359,7 +359,7 @@ namespace MenuGoBE.Controllers
             }
 
             // 1. Lấy tất cả giao dịch điểm đã lưu trong bảng CustomerPointTransactions
-            var savedTransactions = await _context.CustomerPointTransactions
+            var savedTransactions = await _context.CustomerPointTransactions.AsNoTracking()
                 .Where(t => t.CustomerId == id)
                 .OrderByDescending(t => t.CreatedAt)
                 .Select(t => new CustomerPointTransactionDto
@@ -388,7 +388,7 @@ namespace MenuGoBE.Controllers
                 .Select(t => t.OrderId!.Value)
                 .ToHashSet();
 
-            var historicalOrders = await _context.Orders
+            var historicalOrders = await _context.Orders.AsNoTracking()
                 .Where(o => o.CustomerId == id && (o.Status == "Paid" || o.Status == "Completed"))
                 .OrderBy(o => o.CreatedAt)
                 .ToListAsync();

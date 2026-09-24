@@ -31,7 +31,8 @@ namespace MenuGoBE.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("OrderAssignmentMonitorService started.");
+            _logger.LogInformation("OrderAssignmentMonitorService started. Waiting 15s before first run.");
+            await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -40,7 +41,7 @@ namespace MenuGoBE.Service
                     await CheckUnattendedOrdersAsync();
                     await CheckStaleAssignmentsAsync();
                     await CheckOrphanedAssignmentsAsync();
-                    await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {

@@ -31,5 +31,8 @@ namespace MenuGoBE.Interface.Services
         Task<WorkScheduleAutoAssignResultDto> AutoAssignAsync(WorkScheduleAutoAssignDto dto);
 
         Task<List<WorkScheduleActivityLogDto>> GetActivityLogAsync(long workScheduleId);
+
+        // Current Shift Session (cho useShiftSession hook)
+        Task<CurrentShiftSessionDto> GetCurrentShiftSessionAsync(long accountId);
     }
 }

@@ -72,7 +72,7 @@ namespace MenuGoBE.Service
             return _mapper.Map<OrderDetailViewDto>(data);
         }
 
-        public async Task<int> GetAvailableQuantityAsync(long productId, long branchId)
+        private async Task<decimal> GetAvailableQuantityDecimalAsync(long productId, long branchId, long? excludeOrderDetailId = null)
         {
             var productType = await _productRepo.GetProductTypeAsync(productId);
             if (productType == "Processed")
@@ -81,41 +81,47 @@ namespace MenuGoBE.Service
                 if (recipes == null || !recipes.Any())
                 {
                     var fallbackBinv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
-                    if (fallbackBinv != null && !fallbackBinv.IsManageQuantity) return 999999;
-                    return 0;
+                    if (fallbackBinv != null && !fallbackBinv.IsManageQuantity) return 999999m;
+                    return 0m;
                 }
 
-                int maxProcessable = int.MaxValue;
+                decimal maxProcessable = decimal.MaxValue;
                 bool hasValidRecipe = false;
                 foreach (var recipe in recipes)
                 {
                     if (recipe.Quantity > 0)
                     {
                         hasValidRecipe = true;
-                        int ingredientQty = await GetAvailableQuantityAsync(recipe.IngredientProductId, branchId);
-                        int possibleQty = (int)(ingredientQty / recipe.Quantity);
+                        decimal ingredientQty = await GetAvailableQuantityDecimalAsync(recipe.IngredientProductId, branchId, excludeOrderDetailId);
+                        decimal possibleQty = ingredientQty / recipe.Quantity;
                         if (possibleQty < maxProcessable)
                         {
                             maxProcessable = possibleQty;
                         }
                     }
                 }
-                return hasValidRecipe ? maxProcessable : 0;
+                return hasValidRecipe ? maxProcessable : 0m;
             }
 
             var binv = await _bInventoryRepo.GetByProductAndBranchAsync(productId, branchId);
             if (binv == null)
             {
-                return 0; // Chưa có thông tin kho, coi như hết hàng
+                return 0m; // Chưa có thông tin kho, coi như hết hàng
             }
 
             if (!binv.IsManageQuantity)
             {
-                return 999999; // Món không quản lý số lượng (Unlimited)
+                return 999999m; // Món không quản lý số lượng (Unlimited)
             }
 
-            var pendingQty = await _detailRepo.GetPendingQuantityAsync(productId, branchId);
-            return (int)binv.Quantity - pendingQty;
+            var pendingQty = await _detailRepo.GetPendingQuantityAsync(productId, branchId, excludeOrderDetailId);
+            return binv.Quantity - pendingQty;
+        }
+
+        public async Task<int> GetAvailableQuantityAsync(long productId, long branchId, long? excludeOrderDetailId = null)
+        {
+            var decimalAvailable = await GetAvailableQuantityDecimalAsync(productId, branchId, excludeOrderDetailId);
+            return decimalAvailable > 999999m ? 999999 : (int)Math.Floor(decimalAvailable);
         }
 
         public async Task<Dictionary<long, int>> GetAvailableQuantitiesAsync(long branchId, List<long> productIds)
@@ -147,45 +153,46 @@ namespace MenuGoBE.Service
             var directPending = pendingQuantities.direct;
             var ingredientPending = pendingQuantities.ingredient;
 
-            int CalculateAvailable(long pId)
+            decimal CalculateAvailableDecimal(long pId)
             {
-                if (!productDict.TryGetValue(pId, out var prod)) return 0;
+                if (!productDict.TryGetValue(pId, out var prod)) return 0m;
                 
                 if (prod.Type == MenuGoBE.Models.Enums.ProductType.Processed)
                 {
                     if (!recipeDict.TryGetValue(pId, out var prodRecipes) || !prodRecipes.Any())
                     {
-                        if (binvDict.TryGetValue(pId, out var fallbackBinv) && !fallbackBinv.IsManageQuantity) return 999999;
-                        return 0;
+                        if (binvDict.TryGetValue(pId, out var fallbackBinv) && !fallbackBinv.IsManageQuantity) return 999999m;
+                        return 0m;
                     }
 
-                    int maxProcessable = int.MaxValue;
+                    decimal maxProcessable = decimal.MaxValue;
                     bool hasValidRecipe = false;
                     foreach (var recipe in prodRecipes)
                     {
                         if (recipe.Quantity > 0)
                         {
                             hasValidRecipe = true;
-                            int ingredientQty = CalculateAvailable(recipe.IngredientProductId);
-                            int possibleQty = (int)(ingredientQty / recipe.Quantity);
+                            decimal ingredientQty = CalculateAvailableDecimal(recipe.IngredientProductId);
+                            decimal possibleQty = ingredientQty / recipe.Quantity;
                             if (possibleQty < maxProcessable) maxProcessable = possibleQty;
                         }
                     }
-                    return hasValidRecipe ? maxProcessable : 0;
+                    return hasValidRecipe ? maxProcessable : 0m;
                 }
 
-                if (!binvDict.TryGetValue(pId, out var binv)) return 0;
-                if (!binv.IsManageQuantity) return 999999;
+                if (!binvDict.TryGetValue(pId, out var binv)) return 0m;
+                if (!binv.IsManageQuantity) return 999999m;
 
-                int dPending = directPending.ContainsKey(pId) ? directPending[pId] : 0;
-                int iPending = ingredientPending.ContainsKey(pId) ? ingredientPending[pId] : 0;
+                decimal dPending = directPending.ContainsKey(pId) ? directPending[pId] : 0m;
+                decimal iPending = ingredientPending.ContainsKey(pId) ? ingredientPending[pId] : 0m;
                 
-                return (int)binv.Quantity - (dPending + iPending);
+                return binv.Quantity - (dPending + iPending);
             }
 
             foreach (var p in products)
             {
-                result[p.Id] = CalculateAvailable(p.Id);
+                var availableDec = CalculateAvailableDecimal(p.Id);
+                result[p.Id] = availableDec > 999999m ? 999999 : (int)Math.Floor(availableDec);
             }
 
             return result;
@@ -515,7 +522,7 @@ namespace MenuGoBE.Service
 
                             if (!isInternalManufactured)
                             {
-                                int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId);
+                                int availableQty = await GetAvailableQuantityAsync(entity.ProductId, branchId, dto.Id);
                                 if (quantityDiff > availableQty)
                                 {
                                     throw new InvalidOperationException($"Số lượng khả dụng không đủ. Chỉ còn {availableQty} phần.");
@@ -631,13 +638,6 @@ namespace MenuGoBE.Service
             // Ngăn chặn trừ kho nhiều lần do click đúp (Race Condition)
             if (detail.Status == "Confirmed") return true;
 
-            if (finalQuantity.HasValue && finalQuantity.Value > 0)
-            {
-                detail.Quantity = finalQuantity.Value;
-                await _detailRepo.UpdateAsync(detail);
-                await _detailRepo.SaveChangesAsync();
-            }
-
             var productType = await _productRepo.GetProductTypeAsync(detail.ProductId);
             var order = await _orderRepo.GetByIdAsync(detail.OrderId);
 
@@ -650,14 +650,25 @@ namespace MenuGoBE.Service
                     if (area != null)
                     {
                         long branchId = area.BranchId;
-                        int availableQty = await GetAvailableQuantityAsync(detail.ProductId, branchId);
-                        // Khi confirm, món này ĐÃ NẰM trong pendingQty (nếu là CustomerPending). 
-                        // Do đó availableQty hiện tại đã bị trừ đi số lượng của chính detail này.
-                        // Nếu finalQuantity lớn hơn detail.Quantity ban đầu, ta phải kiểm tra phần chênh lệch.
-                        // Hệ thống sử dụng GetPendingQuantityAsync để giữ hàng ảo, 
-                        // và chỉ trừ thật sự khi trạng thái là Served.
+                        int availableQty = await GetAvailableQuantityAsync(detail.ProductId, branchId, detail.Id);
+                        
+                        if (finalQuantity.HasValue && finalQuantity.Value > detail.Quantity)
+                        {
+                            int diff = finalQuantity.Value - detail.Quantity;
+                            if (diff > availableQty)
+                            {
+                                throw new InvalidOperationException($"Số lượng không đủ. Chỉ còn {availableQty} phần.");
+                            }
+                        }
                     }
                 }
+            }
+
+            if (finalQuantity.HasValue && finalQuantity.Value > 0)
+            {
+                detail.Quantity = finalQuantity.Value;
+                await _detailRepo.UpdateAsync(detail);
+                await _detailRepo.SaveChangesAsync();
             }
 
             if (productType == "Regular" || productType == "Manufactured")
@@ -959,12 +970,12 @@ namespace MenuGoBE.Service
                                 if (area != null)
                                 {
                                     long branchId = area.BranchId;
-                                    var binv = await _bInventoryRepo.GetByProductAndBranchAsync(entity.ProductId, branchId);
-                                    if (binv != null && binv.IsManageQuantity)
+                                    var product = await _productRepo.GetByIdAsync(entity.ProductId);
+                                    if (product != null)
                                     {
-                                        binv.Quantity += entity.Quantity;
-                                        await _bInventoryRepo.UpdateAsync(binv);
-                                        await _bInventoryRepo.SaveChangesAsync();
+                                        long confirmedByUserId = order.CreatedBy ?? 1;
+                                        var returnDoc = await _documentService.GetOrCreatePendingDocumentAsync(branchId, order.Id, MenuGoBE.Models.Enums.DocumentType.CustomerReturn, confirmedByUserId);
+                                        await _documentService.AppendItemToReturnDocumentAsync(returnDoc.Id, product, entity.Quantity, true, "Huỷ món đã xác nhận", entity.Id, confirmedByUserId);
                                     }
                                 }
                             }

@@ -1319,5 +1319,100 @@ namespace MenuGoBE.Service
 
             return logs;
         }
+
+        /// <summary>
+        /// Trả về thông tin phiên làm việc hiện tại của nhân viên.
+        /// Frontend chỉ cần gọi 1 API này thay vì gọi 2 API rồi tự lọc.
+        /// </summary>
+        public async Task<CurrentShiftSessionDto> GetCurrentShiftSessionAsync(long accountId)
+        {
+            var localNow = DateTime.UtcNow.AddHours(7);
+            var today = DateOnly.FromDateTime(localNow);
+            var currentTime = TimeOnly.FromDateTime(localNow);
+
+            // Tìm trên tất cả các chi nhánh của nhân viên này
+            var allBranchSchedules = await _repo.GetTodaySchedulesByAccountAsync(accountId, today);
+
+            if (allBranchSchedules == null || !allBranchSchedules.Any())
+            {
+                return new CurrentShiftSessionDto
+                {
+                    Authorized = false,
+                    DenyReason = "Bạn chưa thực hiện điểm danh (Check-in) ca làm việc hôm nay."
+                };
+            }
+
+            // Tìm ca đang Working — ưu tiên ca đang trong khung giờ hiện tại
+            var workingSchedules = allBranchSchedules.Where(s => s.Status == "Working").ToList();
+            WorkSchedule? activeSchedule = null;
+
+            if (workingSchedules.Count > 0)
+            {
+                // Nếu có nhiều ca Working (quên check-out ca trước), chọn ca đang trong khung giờ
+                activeSchedule = workingSchedules.FirstOrDefault(ws =>
+                {
+                    if (ws.Shift == null) return false;
+                    var shiftEnd = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
+                    if (ws.Shift.EndTime < ws.Shift.StartTime)
+                        shiftEnd = shiftEnd.AddDays(1);
+                    var extendedEnd = shiftEnd.AddMinutes(30);
+                    var shiftStart = ws.WorkDate.ToDateTime(ws.Shift.StartTime).AddMinutes(-30);
+                    return localNow >= shiftStart && localNow <= extendedEnd;
+                });
+
+                // Fallback: lấy ca Working cuối cùng
+                if (activeSchedule == null)
+                    activeSchedule = workingSchedules.Last();
+            }
+
+            // Fallback: ca đã check-in nhưng chưa hoàn thành/vắng mặt
+            if (activeSchedule == null)
+            {
+                activeSchedule = allBranchSchedules
+                    .Where(s => s.CheckInAt != null && s.Status != "Completed" && s.Status != "Absent")
+                    .LastOrDefault();
+            }
+
+            if (activeSchedule == null)
+            {
+                return new CurrentShiftSessionDto
+                {
+                    Authorized = false,
+                    DenyReason = "Bạn chưa thực hiện điểm danh (Check-in) ca làm việc hôm nay."
+                };
+            }
+
+            // Tính thời gian kết thúc & ngắt kết nối
+            var shift = activeSchedule.Shift;
+            if (shift == null)
+            {
+                return new CurrentShiftSessionDto
+                {
+                    Authorized = false,
+                    DenyReason = "Không thể xác định thông tin ca làm việc."
+                };
+            }
+
+            var shiftEndLocal = activeSchedule.WorkDate.ToDateTime(shift.EndTime);
+            if (shift.EndTime < shift.StartTime)
+            {
+                shiftEndLocal = shiftEndLocal.AddDays(1); // Ca đêm
+            }
+
+            var disconnectLocal = shiftEndLocal.AddMinutes(30);
+
+            // Đã ẩn ngắt kết nối tự động để hỗ trợ nhân viên làm Overtime (OT).
+            // Nhân viên sẽ được duy trì phiên làm việc cho đến khi họ bấm Check-out.
+
+            return new CurrentShiftSessionDto
+            {
+                Authorized = true,
+                ShiftName = shift.Name,
+                ShiftTime = $"{shift.StartTime:HH\\:mm} - {shift.EndTime:HH\\:mm}",
+                ShiftEndTime = DateTime.SpecifyKind(shiftEndLocal, DateTimeKind.Unspecified),
+                DisconnectTime = DateTime.SpecifyKind(disconnectLocal, DateTimeKind.Unspecified),
+                BranchId = activeSchedule.BranchId
+            };
+        }
     }
 }
