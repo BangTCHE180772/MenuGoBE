@@ -12,7 +12,7 @@ namespace MenuGoBE.Interface.Repository
         Task DeleteAsync(long id);
         Task<bool> UpdateStatusAsync(long id, string status);
         Task<bool> UpdateCookingStatusAsync(long id, string cookingStatus);
-        Task<int> GetPendingQuantityAsync(long productId, long branchId);
+        Task<int> GetPendingQuantityAsync(long productId, long branchId, long? excludeOrderDetailId = null);
         Task<List<OrderDetail>> GetPendingByProductIdAsync(long productId, long[] branchIds);
         Task<List<OrderDetail>> GetCancelledByBranchAsync(long branchId, DateTime? fromDate, DateTime? toDate);
         Task<(Dictionary<long, int> direct, Dictionary<long, int> ingredient)> GetBulkPendingQuantitiesAsync(long branchId);

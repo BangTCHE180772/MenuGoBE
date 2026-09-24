@@ -2077,6 +2077,7 @@ namespace MenuGoBE.Service.Document
             if (binventory != null)
             {
                 string note = returnReason; // Lưu lý do thực tế khách/nhân viên chọn
+                List<BatchAllocation>? childDetail_BatchAllocations = null;
                 
                 // Logic kiểm tra Regular/Manufactured và IsIntact: Chỉ cộng lại kho nếu là món Thường/Đóng gói và còn nguyên vẹn
                 if ((product.Type == MenuGoBE.Models.Enums.ProductType.Regular || product.Type == MenuGoBE.Models.Enums.ProductType.Manufactured) && isIntact)
@@ -2110,6 +2111,33 @@ namespace MenuGoBE.Service.Document
                     };
                     await _repo.AddInventoryLedgerAsync(ledger);
                     note += " (Đã cộng tồn kho)";
+
+                    // Hoàn trả số lượng vào Lô hàng (Lô Active gần nhất hoặc Lô kế thừa)
+                    var batches = await _repo.GetBatchesByInventoryIdAsync(binventory.Id);
+                    var targetBatch = batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault(b => b.Status == BatchStatus.Active) 
+                                   ?? batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault();
+                    
+                    if (targetBatch != null)
+                    {
+                        targetBatch.QuantityRemaining += baseQuantity;
+                        if (targetBatch.Status == BatchStatus.Depleted)
+                        {
+                            targetBatch.Status = BatchStatus.Active;
+                        }
+                        targetBatch.UpdatedAt = DateTime.UtcNow;
+
+                        var returnAlloc = new BatchAllocation
+                        {
+                            // Sẽ update DocumentDetail Id sau khi lưu childDetail ở dưới
+                            BatchId = targetBatch.Id,
+                            AllocationType = BatchAllocationType.CustomerReturn,
+                            QuantityAllocated = baseQuantity,
+                            UnitCost = targetBatch.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        // Tạm thời lưu lại để link với childDetail
+                        childDetail_BatchAllocations = new List<BatchAllocation> { returnAlloc };
+                    }
                 }
                 else
                 {
@@ -2131,33 +2159,17 @@ namespace MenuGoBE.Service.Document
                     SnapshotAvgCost = binventory.Avg,
                     Note = note
                 };
-                document.DocumentDetails.Add(childDetail);
 
-                // Hoàn trả số lượng vào Lô hàng (Lô Active gần nhất hoặc Lô kế thừa)
-                var batches = await _repo.GetBatchesByInventoryIdAsync(binventory.Id);
-                var targetBatch = batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault(b => b.Status == BatchStatus.Active) 
-                               ?? batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault();
-                
-                if (targetBatch != null)
+                if (childDetail_BatchAllocations != null)
                 {
-                    targetBatch.QuantityRemaining += baseQuantity;
-                    if (targetBatch.Status == BatchStatus.Depleted)
+                    foreach (var alloc in childDetail_BatchAllocations)
                     {
-                        targetBatch.Status = BatchStatus.Active;
+                        alloc.DocumentDetail = childDetail;
+                        await _repo.AddBatchAllocationAsync(alloc);
                     }
-                    targetBatch.UpdatedAt = DateTime.UtcNow;
-
-                    var returnAlloc = new BatchAllocation
-                    {
-                        DocumentDetail = childDetail,
-                        BatchId = targetBatch.Id,
-                        AllocationType = BatchAllocationType.CustomerReturn,
-                        QuantityAllocated = baseQuantity,
-                        UnitCost = targetBatch.UnitCost,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    await _repo.AddBatchAllocationAsync(returnAlloc);
                 }
+
+                document.DocumentDetails.Add(childDetail);
             }
             
             _repo.Update(document);
