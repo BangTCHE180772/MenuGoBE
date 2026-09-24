@@ -17,6 +17,7 @@ public class ReservationRepository : IReservationRepository
     public async Task<List<Reservation>> GetAllWithDetailsAsync()
     {
         return await _context.Reservations
+            .AsNoTracking()
             .Include(r => r.Customer)
             .Include(r => r.Branch)
             .Include(r => r.Order)
@@ -88,6 +89,7 @@ public class ReservationRepository : IReservationRepository
     public async Task<List<Reservation>> GetOverlappingReservationsAsync(DateTime startTime, DateTime endTime)
     {
         return await _context.Reservations
+            .AsNoTracking()
             .Include(r => r.Order)
             .Where(r => r.Status == "Pending" || r.Status == "Confirmed")
             .Where(r => r.ReservationTime >= startTime && r.ReservationTime <= endTime)

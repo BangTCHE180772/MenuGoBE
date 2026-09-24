@@ -126,6 +126,7 @@ namespace MenuGoBE.Repositories
         public async Task<List<OrderDetail>> GetCancelledByBranchAsync(long branchId, DateTime? fromDate, DateTime? toDate)
         {
             var query = _context.OrderDetails
+                .AsNoTracking()
                 .Include(od => od.Product)
                 .Include(od => od.Order)
                     .ThenInclude(o => o.Table)
