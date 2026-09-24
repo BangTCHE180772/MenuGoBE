@@ -66,7 +66,7 @@ namespace MenuGoBE.Controllers
 
             var (isAdmin, _, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
             if (!isAdmin)
-                return StatusCode(403, new { message = "Chỉ Chủ sở hữu / Quản trị viên mới được tạo ca làm việc." });
+                return StatusCode(403, new { message = "Chỉ Chủ sở hữu mới được tạo ca làm việc." });
 
             var result = await _service.CreateAsync(dto);
             return Ok(result);
@@ -81,7 +81,7 @@ namespace MenuGoBE.Controllers
 
             var (isAdmin, _, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
             if (!isAdmin)
-                return StatusCode(403, new { message = "Chỉ Chủ sở hữu / Quản trị viên mới được sửa ca làm việc." });
+                return StatusCode(403, new { message = "Chỉ Chủ sở hữu mới được sửa ca làm việc." });
 
             var result = await _service.UpdateAsync(dto);
             if (!result)
@@ -99,7 +99,7 @@ namespace MenuGoBE.Controllers
 
             var (isAdmin, _, _) = await _accountService.GetAccountPermissionsAsync(currentUserId.Value);
             if (!isAdmin)
-                return StatusCode(403, new { message = "Chỉ Chủ sở hữu / Quản trị viên mới được xóa ca làm việc." });
+                return StatusCode(403, new { message = "Chỉ Chủ sở hữu mới được xóa ca làm việc." });
 
             var result = await _service.DeleteAsync(id);
             if (!result)

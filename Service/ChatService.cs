@@ -458,7 +458,7 @@ namespace MenuGoBE.Service
 
             if (!isAdminOrOwner && !isManager)
             {
-                throw new UnauthorizedAccessException("Chỉ Quản lý hoặc Quản trị viên mới được thay đổi cấu hình này.");
+                throw new UnauthorizedAccessException("Chỉ Quản lý hoặc Chủ sở hữu mới được thay đổi cấu hình này.");
             }
 
             var branch = await _context.Branches.FindAsync(branchId);

@@ -108,12 +108,12 @@ public class GlobalExceptionHandler : IExceptionHandler
             {
                 Status = StatusCodes.Status500InternalServerError,
                 Title = "Lỗi hệ thống",
-                Detail = !string.IsNullOrWhiteSpace(exception.Message) ? exception.Message : "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ quản trị viên.",
+                Detail = !string.IsNullOrWhiteSpace(exception.Message) ? exception.Message : "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ chủ sở hữu.",
                 Instance = httpContext.Request.Path
             };
             problemDetails.Extensions["code"] = 5000;
             problemDetails.Extensions["errorCode"] = 5000;
-            problemDetails.Extensions["message"] = !string.IsNullOrWhiteSpace(exception.Message) ? exception.Message : "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ quản trị viên.";
+            problemDetails.Extensions["message"] = !string.IsNullOrWhiteSpace(exception.Message) ? exception.Message : "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ chủ sở hữu.";
         }
 
         httpContext.Response.StatusCode = problemDetails.Status ?? StatusCodes.Status500InternalServerError;
