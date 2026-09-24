@@ -215,7 +215,7 @@ namespace MenuGoBE.Controllers
             try
             {
                 var customerId = GetCustomerId();
-                var details = await _chatService.GetConversationDetailsAsync(customerId, id, null, false, isCustomer: true);
+                var details = await _chatService.GetConversationDetailsAsync(customerId, id, [], false, isCustomer: true);
                 return Ok(details);
             }
             catch (UnauthorizedAccessException ex)

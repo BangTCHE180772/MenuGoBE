@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,7 +11,7 @@ using MenuGoBE.Models.Enums;
 namespace MenuGoBE.Controllers.Document
 {
     /// <summary>
-    /// Controller chuyên biệt quản lý nghiệp vụ Chứng từ Kiểm kho (Inventory Check Document).
+    /// Controller chuyển đổi quản lý nhập về Chứng từ Kiểm kho (Inventory Check Document).
     /// Chuẩn hóa sử dụng DTO yêu cầu (CheckDocumentCreateDto, CheckDocumentUpdateDto) và DTO phản hồi (DocumentResponseDto).
     /// </summary>
     [ApiController]
@@ -85,7 +85,7 @@ namespace MenuGoBE.Controllers.Document
 
             var document = new Models.Document
             {
-                Code = dto.Code,
+                Code = dto.Code ?? "",
                 BranchId = dto.BranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
@@ -129,7 +129,7 @@ namespace MenuGoBE.Controllers.Document
 
             var document = new Models.Document
             {
-                Code = dto.Code,
+                Code = dto.Code ?? "",
                 BranchId = dto.BranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,
@@ -180,7 +180,7 @@ namespace MenuGoBE.Controllers.Document
             var document = new Models.Document
             {
                 Id = id,
-                Code = dto.Code,
+                Code = dto.Code ?? "",
                 BranchId = existingDoc.BranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
                 Note = dto.Note,

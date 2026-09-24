@@ -84,12 +84,13 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<WorkSchedule>> GetTodaySchedulesAsync(long accountId, long branchId, DateOnly date)
         {
+            var yesterday = date.AddDays(-1);
             return await _context.WorkSchedules
                 .Include(ws => ws.Shift)
-                .Where(ws => ws.AccountId == accountId 
-                          && ws.BranchId == branchId 
-                          && ws.WorkDate == date)
-                .OrderBy(ws => ws.Shift.StartTime)
+                .Where(ws => ws.AccountId == accountId && ws.BranchId == branchId &&
+                             (ws.WorkDate == date || 
+                              (ws.WorkDate == yesterday && ws.Shift.StartTime > ws.Shift.EndTime)))
+                .OrderBy(ws => ws.WorkDate).ThenBy(ws => ws.Shift.StartTime)
                 .ToListAsync();
         }
         public async Task<List<WorkSchedule>> GetOpenSchedulesAsync()
@@ -119,6 +120,18 @@ namespace MenuGoBE.Repositories
                           && ws.Status != "Absent"
                           && ws.Status != "Completed"
                           && !ws.Status.StartsWith("LEAVE_APPROVED"))
+                .ToListAsync();
+        }
+
+        public async Task<List<WorkSchedule>> GetTodaySchedulesByAccountAsync(long accountId, DateOnly date)
+        {
+            var yesterday = date.AddDays(-1);
+            return await _context.WorkSchedules
+                .Include(ws => ws.Shift)
+                .Where(ws => ws.AccountId == accountId && 
+                             (ws.WorkDate == date || 
+                              (ws.WorkDate == yesterday && ws.Shift.StartTime > ws.Shift.EndTime)))
+                .OrderBy(ws => ws.WorkDate).ThenBy(ws => ws.Shift.StartTime)
                 .ToListAsync();
         }
     }

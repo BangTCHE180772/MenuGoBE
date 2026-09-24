@@ -132,7 +132,7 @@ namespace MenuGoBE.Controllers
         }
 
         [HttpGet("invoices")]
-        public async Task<IActionResult> GetInvoices([FromQuery] long branchId)
+        public async Task<IActionResult> GetInvoices([FromQuery] long branchId, [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
         {
             if (User != null && User.Identity != null && User.Identity.IsAuthenticated)
             {
@@ -152,7 +152,7 @@ namespace MenuGoBE.Controllers
                 }
             }
 
-            var result = await _service.GetPaidOrdersByBranchAsync(branchId);
+            var result = await _service.GetPaidOrdersByBranchAsync(branchId, startDate, endDate);
             return Ok(result);
         }
 

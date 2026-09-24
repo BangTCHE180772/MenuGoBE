@@ -23,7 +23,8 @@ namespace MenuGoBE.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("AutoCheckoutService started.");
+            _logger.LogInformation("AutoCheckoutService started. Waiting 10s before first run.");
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
