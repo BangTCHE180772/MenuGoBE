@@ -1920,6 +1920,8 @@ namespace MenuGoBE.Service.Document
             var existingDoc = await _repo.GetPendingDocumentByOrderIdAsync(orderId, type);
             if (existingDoc != null) return existingDoc;
 
+            var order = await _repo.GetOrderWithDetailsAsync(orderId);
+
             var newDoc = new Models.Document
             {
                 BranchId = branchId,
@@ -1930,7 +1932,7 @@ namespace MenuGoBE.Service.Document
                 CreatedAt = DateTime.UtcNow,
                 OrderDate = DateTime.UtcNow,
                 PostedAt = DateTime.UtcNow,
-                Code = $"{(type == DocumentType.Sale ? "PXBH" : "PTH")}-{orderId}-{DateTime.UtcNow.ToString("HHmmssfff")}"
+                Code = $"{ (type == DocumentType.Sale ? "PXBH" : "PTH") }-{ order?.Code ?? orderId.ToString() }-{ DateTime.UtcNow.ToString("HHmmss") }"
             };
 
             await _repo.AddAsync(newDoc);
@@ -2178,7 +2180,7 @@ namespace MenuGoBE.Service.Document
                 {
                     BranchId = branchId,
                     OrderId = orderId,
-                    Code = $"PXBH-{orderId}",
+                    Code = $"PXBH-{order?.Code ?? orderId.ToString()}-{DateTime.UtcNow.ToString("HHmmss")}",
                     Type = DocumentType.Sale,
                     Status = DocumentStatus.Completed,
                     PartnerId = partnerId,
