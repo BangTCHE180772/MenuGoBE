@@ -28,6 +28,7 @@ namespace MenuGoBE.Service
         #region BACKGROUND SERVICE Vòng lặp định kỳ dọn dẹp các phiên chat ẩn danh quá hạn
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await Task.Delay(TimeSpan.FromSeconds(20), stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
