@@ -89,7 +89,7 @@ namespace MenuGoBE.Controllers.Document
                 BranchId = dto.BranchId,
                 ToBranchId = dto.ToBranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
-                Note = dto.Note,
+                Note = dto.Note ?? string.Empty,
                 Type = DocumentType.Transfer,
                 DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
@@ -131,7 +131,7 @@ namespace MenuGoBE.Controllers.Document
                 BranchId = dto.BranchId,
                 ToBranchId = dto.ToBranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
-                Note = dto.Note,
+                Note = dto.Note ?? string.Empty,
                 Type = DocumentType.Transfer,
                 DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailCreateDto>()).Select(d => new Models.DocumentDetail
                 {
@@ -180,7 +180,7 @@ namespace MenuGoBE.Controllers.Document
                 BranchId = existingDoc.BranchId,
                 ToBranchId = dto.ToBranchId,
                 OrderDate = dto.OrderDate == default ? DateTime.UtcNow : dto.OrderDate,
-                Note = dto.Note,
+                Note = dto.Note ?? string.Empty,
                 Type = DocumentType.Transfer,
                 DocumentDetails = (dto.Details ?? new List<TransferDocumentDetailUpdateDto>()).Select(d => new Models.DocumentDetail
                 {

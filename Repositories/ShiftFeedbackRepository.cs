@@ -22,7 +22,8 @@ public class ShiftFeedbackRepository : IShiftFeedbackRepository
             .Include(f => f.Branch)
             .Include(f => f.WorkSchedule)
                 .ThenInclude(ws => ws.Shift)
-            .Include(f => f.Resolver);
+            .Include(f => f.Resolver)
+            .AsNoTracking();
     }
 
     public async Task<WorkScheduleFeedback?> GetByIdAsync(long id)
