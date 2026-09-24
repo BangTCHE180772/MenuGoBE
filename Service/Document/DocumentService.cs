@@ -1932,7 +1932,7 @@ namespace MenuGoBE.Service.Document
                 CreatedAt = DateTime.UtcNow,
                 OrderDate = DateTime.UtcNow,
                 PostedAt = DateTime.UtcNow,
-                Code = $"{ (type == DocumentType.Sale ? "PXBH" : "PTH") }-{ order?.Code ?? orderId.ToString() }-{ DateTime.UtcNow.ToString("HHmmss") }"
+                Code = $"{ (type == DocumentType.Sale ? "PXBH" : "PTH") }-{ orderId }-{ DateTime.UtcNow.ToString("HHmmss") }"
             };
 
             await _repo.AddAsync(newDoc);
@@ -2192,7 +2192,7 @@ namespace MenuGoBE.Service.Document
                 {
                     BranchId = branchId,
                     OrderId = orderId,
-                    Code = $"PXBH-{order?.Code ?? orderId.ToString()}-{DateTime.UtcNow.ToString("HHmmss")}",
+                    Code = $"PXBH-{orderId}-{DateTime.UtcNow.ToString("HHmmss")}",
                     Type = DocumentType.Sale,
                     Status = DocumentStatus.Completed,
                     PartnerId = partnerId,
