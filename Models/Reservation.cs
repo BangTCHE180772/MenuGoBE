@@ -1,9 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace MenuGoBE.Models;
 
 [Table("Reservations")]
+[Index(nameof(Status))]
+[Index(nameof(ReservationTime))]
+[Index(nameof(BranchId))]
 public class Reservation
 {
     [Key]

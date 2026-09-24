@@ -129,9 +129,11 @@ namespace MenuGoBE.Service
             var result = new Dictionary<long, int>();
             if (productIds == null || !productIds.Any()) return result;
 
+            var bulkQuantities = await GetBulkMenuAvailableQuantitiesAsync(branchId);
+
             foreach (var productId in productIds.Distinct())
             {
-                result[productId] = await GetAvailableQuantityAsync(productId, branchId);
+                result[productId] = bulkQuantities.TryGetValue(productId, out int qty) ? qty : 0;
             }
 
             return result;
@@ -349,9 +351,11 @@ namespace MenuGoBE.Service
                                           .Select(g => new { ProductId = g.Key, TotalQuantity = g.Sum(d => d.Quantity) })
                                           .ToList();
 
+                var bulkQuantities = await GetBulkMenuAvailableQuantitiesAsync(branchId);
+
                 foreach (var item in groupedProducts)
                 {
-                    int availableQty = await GetAvailableQuantityAsync(item.ProductId, branchId);
+                    int availableQty = bulkQuantities.TryGetValue(item.ProductId, out int qty) ? qty : 0;
                     if (item.TotalQuantity > availableQty)
                     {
                         var product = await _productRepo.GetByIdAsync(item.ProductId);

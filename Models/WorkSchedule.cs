@@ -1,9 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace MenuGoBE.Models;
 
 [Table("WorkSchedules")]
+[Index(nameof(AccountId))]
+[Index(nameof(BranchId))]
+[Index(nameof(WorkDate))]
+[Index(nameof(CheckInAt))]
 public class WorkSchedule
 {
     [Key]
