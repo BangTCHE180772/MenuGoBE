@@ -78,7 +78,7 @@ namespace MenuGoBE.Controllers
             var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
             var now = DateTime.UtcNow.AddHours(7);
 
-            var query = _context.WorkSchedules
+            var query = _context.WorkSchedules.AsNoTracking()
                 .Include(ws => ws.Shift)
                 .Where(ws => ws.AccountId == userId && ws.WorkDate == today && ws.CheckInAt != null && ws.CheckOutAt == null);
 

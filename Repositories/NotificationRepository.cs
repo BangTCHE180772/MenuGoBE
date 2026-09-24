@@ -21,7 +21,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<List<Notification>> GetPagedNotificationsAsync(long[] branchIds, NotificationQueryDto query, string? userRole = null, long accountId = 0)
         {
-            var dbQuery = _context.Notifications
+            var dbQuery = _context.Notifications.AsNoTracking()
                 .Include(n => n.Branch)
                 .Where(n => branchIds.Contains(n.BranchId));
 
@@ -49,7 +49,7 @@ namespace MenuGoBE.Repositories
             var todayLocal = DateTime.UtcNow.AddHours(7).Date;
             var startOfTodayUtc = DateTime.SpecifyKind(todayLocal.AddHours(-7), DateTimeKind.Utc);
 
-            var dbQuery = _context.Notifications
+            var dbQuery = _context.Notifications.AsNoTracking()
                 .Include(n => n.Branch)
                 .Where(n => branchIds.Contains(n.BranchId) && !n.IsRead && n.CreatedAt >= startOfTodayUtc);
 
@@ -74,7 +74,7 @@ namespace MenuGoBE.Repositories
 
         public async Task<Notification?> GetByIdAsync(long id)
         {
-            return await _context.Notifications
+            return await _context.Notifications.AsNoTracking()
                 .Include(n => n.Branch)
                 .FirstOrDefaultAsync(n => n.Id == id);
         }
