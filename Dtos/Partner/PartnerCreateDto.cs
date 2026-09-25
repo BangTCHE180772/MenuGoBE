@@ -21,10 +21,8 @@ namespace MenuGoBE.Dtos.Partner
         [MaxLength(50)]
         public string Phone { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Email là bắt buộc.")]
         [MaxLength(255)]
-        [EmailAddress(ErrorMessage = "Email không hợp lệ.")]
-        public string Email { get; set; } = string.Empty;
+        public string? Email { get; set; }
 
         public System.Collections.Generic.List<string>? ImageUrls { get; set; }
     }

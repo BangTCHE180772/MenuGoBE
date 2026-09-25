@@ -114,14 +114,19 @@ namespace MenuGoBE.Service
                 throw new MenuGoException(ErrorCodes.DocumentBranchNotFound);
             }
 
+            if (dto.Type == PartnerType.Customer)
+            {
+                throw new Exception("Không được phép tạo đối tác với phân loại là Khách hàng.");
+            }
+
             var partner = new Partner
             {
                 BranchId = dto.BranchId,
                 Type = dto.Type,
-                Name = dto.Name,
+                Name = dto.Name.Trim(),
                 AddressId = dto.AddressId,
-                Phone = dto.Phone,
-                Email = dto.Email,
+                Phone = !string.IsNullOrWhiteSpace(dto.Phone) ? dto.Phone.Trim() : null,
+                Email = !string.IsNullOrWhiteSpace(dto.Email) ? dto.Email.Trim() : null,
                 ImageUrls = dto.ImageUrls != null && dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null,
                 CreatedBy = createdBy,
                 CreatedAt = DateTime.UtcNow
@@ -144,10 +149,36 @@ namespace MenuGoBE.Service
                 throw new Exception("Đối tác không tồn tại");
             }
 
-            partner.Name = dto.Name;
+            partner.Name = dto.Name.Trim();
             partner.AddressId = dto.AddressId;
-            partner.Phone = dto.Phone;
-            partner.Email = dto.Email;
+            partner.Phone = !string.IsNullOrWhiteSpace(dto.Phone) ? dto.Phone.Trim() : null;
+
+            // Xử lý email an toàn
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+            {
+                var emailVal = dto.Email.Trim();
+                var emailChecker = new System.ComponentModel.DataAnnotations.EmailAddressAttribute();
+                if (!emailChecker.IsValid(emailVal))
+                {
+                    throw new Exception("Email đối tác không đúng định dạng.");
+                }
+                partner.Email = emailVal;
+            }
+            else
+            {
+                partner.Email = null;
+            }
+
+            // Cập nhật phân loại đối tác nếu có (không cho phép sửa thành Khách hàng)
+            if (dto.Type.HasValue)
+            {
+                if (dto.Type.Value == PartnerType.Customer)
+                {
+                    throw new Exception("Không được phép cập nhật phân loại đối tác thành Khách hàng.");
+                }
+                partner.Type = dto.Type.Value;
+            }
+
             if (dto.ImageUrls != null)
             {
                 partner.ImageUrls = dto.ImageUrls.Count > 0 ? System.Text.Json.JsonSerializer.Serialize(dto.ImageUrls) : null;
