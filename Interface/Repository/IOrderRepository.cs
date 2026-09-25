@@ -21,5 +21,6 @@ namespace MenuGoBE.Interface.Repository
         Task SaveChangesAsync();
         Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync();
         Microsoft.EntityFrameworkCore.Storage.IExecutionStrategy CreateExecutionStrategy();
+        void ClearChangeTracker();
     }
 }
