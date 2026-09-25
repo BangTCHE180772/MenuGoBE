@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- Ẩn cảnh báo null-safety (CS8600/8601/8602/8604) và using trùng (CS0105) cho đỡ nhiễu log build -->
+    <NoWarn>$(NoWarn);CS8600;CS8601;CS8602;CS8604;CS0105</NoWarn>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>e5c471d0-3ecc-4ea9-ab31-d5e9f0fa03aa</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
