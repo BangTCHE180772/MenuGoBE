@@ -778,13 +778,18 @@ namespace MenuGoBE.Controllers
                         .Where(l => l.DocumentType == DocumentType.Production && l.QuantityDelta < 0)
                         .Sum(l => Math.Abs(l.QuantityDelta));
 
+                    // 6f. Thành phẩm sản xuất (Production In)
+                    decimal productionIn = periodLedgers
+                        .Where(l => l.DocumentType == DocumentType.Production && l.QuantityDelta > 0)
+                        .Sum(l => l.QuantityDelta);
+
                     // 6d. Trả hàng nhà cung cấp (Return to Vendor)
                     decimal returnVendor = periodLedgers
                         .Where(l => l.DocumentType == DocumentType.Return)
                         .Sum(l => Math.Abs(l.QuantityDelta));
 
                     // 7. Tồn lý thuyết (Theoretical Stock)
-                    decimal theoreticalStock = openingStock + import + transferIn - transferOut - expectedConsumption - destruction - production - returnVendor;
+                    decimal theoreticalStock = openingStock + import + transferIn - transferOut - expectedConsumption - destruction - production - returnVendor + productionIn;
 
                     // 8. Chênh lệch (Variance) = Tồn cuối - Tồn lý thuyết
                     decimal variance = closingStock - theoreticalStock;
@@ -801,7 +806,7 @@ namespace MenuGoBE.Controllers
                     }
 
                     // Tiêu hao thực tế ghi nhận
-                    decimal systemConsumption = openingStock + import + transferIn - transferOut + customerReturn - destruction - production - returnVendor - closingStock;
+                    decimal systemConsumption = openingStock + import + transferIn - transferOut + customerReturn - destruction - production - returnVendor + productionIn - closingStock;
                     if (systemConsumption < 0) systemConsumption = 0;
 
                     var unitName = bInv.Product.UnitConversions
@@ -1722,6 +1727,51 @@ namespace MenuGoBE.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { message = "Lỗi khi cập nhật trạng thái thông báo của Lô hàng.", error = ex.Message });
+            }
+        }
+        #endregion
+
+        #region Cập nhật Ngày sản xuất và Hạn sử dụng của Lô hàng (PUT /api/BInventory/batches/{id}/dates)
+        [HttpPut("batches/{id:long}/dates")]
+        [HttpPut("/api/Batch/{id:long}/dates")]
+        public async Task<IActionResult> UpdateBatchDates(long id, [FromBody] UpdateBatchDatesDto dto)
+        {
+            try
+            {
+                if (dto == null)
+                {
+                    return BadRequest(new { message = "Dữ liệu yêu cầu không hợp lệ." });
+                }
+
+                if (dto.ManufactureDate.HasValue && dto.ExpiryDate.HasValue && dto.ExpiryDate.Value.Date < dto.ManufactureDate.Value.Date)
+                {
+                    return BadRequest(new { message = "Hạn sử dụng không được nhỏ hơn ngày sản xuất." });
+                }
+
+                var batch = await _context.BInventoryBatches.FirstOrDefaultAsync(b => b.Id == id);
+                if (batch == null)
+                {
+                    return NotFound(new { message = $"Không tìm thấy Lô hàng với ID: {id}" });
+                }
+
+                // Cập nhật ngày sản xuất và ngày hết hạn
+                batch.ManufactureDate = dto.ManufactureDate.HasValue ? DateTime.SpecifyKind(dto.ManufactureDate.Value, DateTimeKind.Utc) : null;
+                batch.ExpiryDate = dto.ExpiryDate.HasValue ? DateTime.SpecifyKind(dto.ExpiryDate.Value, DateTimeKind.Utc) : null;
+                batch.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    message = "Cập nhật ngày sản xuất và hạn sử dụng thành công.",
+                    batchId = batch.Id,
+                    manufactureDate = batch.ManufactureDate,
+                    expiryDate = batch.ExpiryDate
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = "Lỗi khi cập nhật ngày của Lô hàng.", error = ex.Message });
             }
         }
         #endregion

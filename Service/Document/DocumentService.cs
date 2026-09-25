@@ -4132,7 +4132,18 @@ namespace MenuGoBE.Service.Document
                 #endregion
 
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
-                detail.SystemQuantity = binventory.Quantity;
+                if (!detail.SystemQuantity.HasValue)
+                {
+                    if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
+                    {
+                        var targetBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, detail.BatchCodeSnapshot.Trim());
+                        detail.SystemQuantity = targetBatch?.QuantityRemaining ?? 0m;
+                    }
+                    else
+                    {
+                        detail.SystemQuantity = binventory.Quantity;
+                    }
+                }
                 detail.ActualQuantity = detail.BaseQuantity;
                 detail.SnapshotAvgCost = binventory.Avg;
                 detail.UnitPrice = binventory.Avg * detail.ConversionRate;
@@ -4207,28 +4218,196 @@ namespace MenuGoBE.Service.Document
 
                 detail.BaseQuantity = detail.Quantity * detail.ConversionRate;
                 detail.ActualQuantity = detail.BaseQuantity;
-                detail.SystemQuantity = detail.SystemQuantity ?? binventory.Quantity;
-                detail.SnapshotAvgCost = binventory.Avg;
-                detail.UnitPrice = binventory.Avg * detail.ConversionRate;
+
+                // Xác định thông tin lô hàng nếu có
+                BInventoryBatch? targetBatch = null;
+                if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
+                {
+                    targetBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, detail.BatchCodeSnapshot.Trim());
+                }
+
+                if (!detail.SystemQuantity.HasValue)
+                {
+                    if (targetBatch != null)
+                    {
+                        detail.SystemQuantity = targetBatch.QuantityRemaining;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
+                    {
+                        detail.SystemQuantity = 0m;
+                    }
+                    else
+                    {
+                        detail.SystemQuantity = binventory.Quantity;
+                    }
+                }
+
+                detail.SnapshotAvgCost = (targetBatch != null && targetBatch.UnitCost > 0) ? targetBatch.UnitCost : binventory.Avg;
+                detail.UnitPrice = detail.SnapshotAvgCost * detail.ConversionRate;
 
                 decimal actual_q = detail.BaseQuantity;
                 decimal system_q = detail.SystemQuantity.Value;
                 decimal q_delta = actual_q - system_q;
-
-                decimal leftover_old = binventory.LeftOver;
                 decimal val_delta;
 
-                if (actual_q == 0)
+                // TH1: Kiểm kê theo Lô hàng cụ thể
+                if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
                 {
-                    // Tồn kho thực tế về 0 -> Triệt tiêu toàn bộ LeftOver cũ
-                    val_delta = -((system_q * binventory.Avg) + leftover_old);
-                    binventory.Quantity = 0;
-                    binventory.LeftOver = 0;
+                    val_delta = q_delta * detail.SnapshotAvgCost;
+                    binventory.Quantity = Math.Max(0, binventory.Quantity + q_delta);
+
+                    if (targetBatch != null)
+                    {
+                        targetBatch.QuantityRemaining = Math.Max(0, targetBatch.QuantityRemaining + q_delta);
+                        if (targetBatch.QuantityRemaining == 0)
+                        {
+                            targetBatch.Status = BatchStatus.Depleted;
+                        }
+                        else if (targetBatch.Status == BatchStatus.Depleted)
+                        {
+                            targetBatch.Status = BatchStatus.Active;
+                        }
+                        targetBatch.UpdatedAt = DateTime.UtcNow;
+
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = targetBatch.Id,
+                            AllocationType = BatchAllocationType.StockCheck,
+                            QuantityAllocated = q_delta,
+                            UnitCost = targetBatch.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
+                    else if (actual_q > 0)
+                    {
+                        // Phát hiện Lô mới khi kiểm kho
+                        var newBatch = new BInventoryBatch
+                        {
+                            BInventoryId = binventory.Id,
+                            BatchCode = detail.BatchCodeSnapshot.Trim(),
+                            QuantityOriginal = actual_q,
+                            QuantityRemaining = actual_q,
+                            UnitCost = binventory.Avg,
+                            ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
+                            ManufactureDate = detail.ManufactureDateSnapshot,
+                            ExpiryDate = detail.ExpiryDateSnapshot,
+                            Status = BatchStatus.Active,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAsync(newBatch);
+
+                        var batchAlloc = new BatchAllocation
+                        {
+                            DocumentDetailId = detail.Id,
+                            BatchId = newBatch.Id,
+                            AllocationType = BatchAllocationType.StockCheck,
+                            QuantityAllocated = actual_q,
+                            UnitCost = newBatch.UnitCost,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAllocationAsync(batchAlloc);
+                    }
                 }
+                // TH2: Kiểm kê theo Tổng kho (không chỉ định Lô)
                 else
                 {
-                    binventory.Quantity = actual_q;
-                    val_delta = q_delta * binventory.Avg;
+                    decimal leftover_old = binventory.LeftOver;
+                    if (actual_q == 0)
+                    {
+                        // Tồn kho thực tế về 0 -> Triệt tiêu toàn bộ LeftOver cũ
+                        val_delta = -((system_q * binventory.Avg) + leftover_old);
+                        binventory.Quantity = 0;
+                        binventory.LeftOver = 0;
+                    }
+                    else
+                    {
+                        binventory.Quantity = actual_q;
+                        val_delta = q_delta * binventory.Avg;
+                    }
+
+                    var batches = (await _repo.GetBatchesByInventoryIdAsync(binventory.Id)) ?? new List<BInventoryBatch>();
+                    if (!batches.Any() && actual_q > 0)
+                    {
+                        var initBatch = new BInventoryBatch
+                        {
+                            BInventoryId = binventory.Id,
+                            BatchCode = "LEGACY-INIT",
+                            QuantityOriginal = actual_q,
+                            QuantityRemaining = actual_q,
+                            UnitCost = binventory.Avg,
+                            ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
+                            Status = BatchStatus.Active,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _repo.AddBatchAsync(initBatch);
+                    }
+                    else if (batches.Any())
+                    {
+                        decimal currentTotalBatch = batches.Sum(b => b.QuantityRemaining);
+                        decimal diff = actual_q - currentTotalBatch;
+                        if (diff < 0)
+                        {
+                            // Giảm trừ dần theo nguyên tắc FEFO / FIFO
+                            decimal needToReduce = Math.Abs(diff);
+                            var activeBatches = batches
+                                .Where(b => b.QuantityRemaining > 0)
+                                .OrderBy(b => b.ExpiryDate.HasValue ? b.ExpiryDate.Value : DateTime.MaxValue)
+                                .ThenBy(b => b.ReceivedDate)
+                                .ThenBy(b => b.Id)
+                                .ToList();
+
+                            foreach (var b in activeBatches)
+                            {
+                                if (needToReduce <= 0) break;
+                                decimal deduct = Math.Min(b.QuantityRemaining, needToReduce);
+                                b.QuantityRemaining -= deduct;
+                                if (b.QuantityRemaining == 0)
+                                {
+                                    b.Status = BatchStatus.Depleted;
+                                }
+                                b.UpdatedAt = DateTime.UtcNow;
+
+                                var batchAlloc = new BatchAllocation
+                                {
+                                    DocumentDetailId = detail.Id,
+                                    BatchId = b.Id,
+                                    AllocationType = BatchAllocationType.StockCheck,
+                                    QuantityAllocated = -deduct,
+                                    UnitCost = b.UnitCost,
+                                    CreatedAt = DateTime.UtcNow
+                                };
+                                await _repo.AddBatchAllocationAsync(batchAlloc);
+
+                                needToReduce -= deduct;
+                            }
+                        }
+                        else if (diff > 0)
+                        {
+                            // Tăng thêm số lượng dôi dư vào Lô mới nhất
+                            var latestBatch = batches.OrderByDescending(b => b.ReceivedDate).ThenByDescending(b => b.Id).FirstOrDefault(b => b.Status == BatchStatus.Active)
+                                           ?? batches.OrderByDescending(b => b.ReceivedDate).ThenByDescending(b => b.Id).First();
+
+                            latestBatch.QuantityRemaining += diff;
+                            if (latestBatch.Status == BatchStatus.Depleted && latestBatch.QuantityRemaining > 0)
+                            {
+                                latestBatch.Status = BatchStatus.Active;
+                            }
+                            latestBatch.UpdatedAt = DateTime.UtcNow;
+
+                            var batchAlloc = new BatchAllocation
+                            {
+                                DocumentDetailId = detail.Id,
+                                BatchId = latestBatch.Id,
+                                AllocationType = BatchAllocationType.StockCheck,
+                                QuantityAllocated = diff,
+                                UnitCost = latestBatch.UnitCost,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _repo.AddBatchAllocationAsync(batchAlloc);
+                        }
+                    }
                 }
 
                 // Bản ghi Sổ kho InventoryLedger
@@ -4254,87 +4433,6 @@ namespace MenuGoBE.Service.Document
                 };
 
                 await _repo.AddInventoryLedgerAsync(ledger);
-
-                // Xử lý cập nhật Lô hàng (BInventoryBatch) và ghi nhận phân bổ Kiểm kho (StockCheck)
-                if (!string.IsNullOrWhiteSpace(detail.BatchCodeSnapshot))
-                {
-                    var targetBatch = await _repo.GetBatchByInventoryAndCodeAsync(binventory.Id, detail.BatchCodeSnapshot);
-                    if (targetBatch != null)
-                    {
-                        targetBatch.QuantityRemaining = actual_q;
-                        if (actual_q == 0)
-                        {
-                            targetBatch.Status = BatchStatus.Depleted;
-                        }
-                        else if (targetBatch.Status == BatchStatus.Depleted)
-                        {
-                            targetBatch.Status = BatchStatus.Active;
-                        }
-                        targetBatch.UpdatedAt = DateTime.UtcNow;
-
-                        var batchAlloc = new BatchAllocation
-                        {
-                            DocumentDetailId = detail.Id,
-                            BatchId = targetBatch.Id,
-                            AllocationType = BatchAllocationType.StockCheck,
-                            QuantityAllocated = q_delta,
-                            UnitCost = targetBatch.UnitCost,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        await _repo.AddBatchAllocationAsync(batchAlloc);
-                    }
-                }
-                else
-                {
-                    var batches = (await _repo.GetBatchesByInventoryIdAsync(binventory.Id)) ?? new List<BInventoryBatch>();
-                    if (!batches.Any() && actual_q > 0)
-                    {
-                        var initBatch = new BInventoryBatch
-                        {
-                            BInventoryId = binventory.Id,
-                            BatchCode = "LEGACY-INIT",
-                            QuantityOriginal = actual_q,
-                            QuantityRemaining = actual_q,
-                            UnitCost = binventory.Avg,
-                            ReceivedDate = document.PostedAt ?? DateTime.UtcNow,
-                            Status = BatchStatus.Active,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        await _repo.AddBatchAsync(initBatch);
-                    }
-                    else if (batches.Any())
-                    {
-                        decimal currentTotalBatch = batches.Sum(b => b.QuantityRemaining);
-                        decimal diff = actual_q - currentTotalBatch;
-                        if (diff != 0)
-                        {
-                            var latestBatch = batches.OrderByDescending(b => b.ReceivedDate).FirstOrDefault(b => b.Status == BatchStatus.Active)
-                                           ?? batches.OrderByDescending(b => b.ReceivedDate).First();
-                            
-                            latestBatch.QuantityRemaining = Math.Max(0, latestBatch.QuantityRemaining + diff);
-                            if (latestBatch.QuantityRemaining == 0)
-                            {
-                                latestBatch.Status = BatchStatus.Depleted;
-                            }
-                            else if (latestBatch.Status == BatchStatus.Depleted)
-                            {
-                                latestBatch.Status = BatchStatus.Active;
-                            }
-                            latestBatch.UpdatedAt = DateTime.UtcNow;
-
-                            var batchAlloc = new BatchAllocation
-                            {
-                                DocumentDetailId = detail.Id,
-                                BatchId = latestBatch.Id,
-                                AllocationType = BatchAllocationType.StockCheck,
-                                QuantityAllocated = diff,
-                                UnitCost = latestBatch.UnitCost,
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            await _repo.AddBatchAllocationAsync(batchAlloc);
-                        }
-                    }
-                }
             }
 
             document.TotalAmount = document.DocumentDetails.Sum(d => (d.BaseQuantity - (d.SystemQuantity ?? 0m)) * d.SnapshotAvgCost);

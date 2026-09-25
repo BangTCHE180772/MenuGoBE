@@ -97,6 +97,7 @@ namespace MenuGoBE.Controllers.Document
                     BatchCodeSnapshot = d.BatchCodeSnapshot,
                     ManufactureDateSnapshot = d.ManufactureDateSnapshot,
                     ExpiryDateSnapshot = d.ExpiryDateSnapshot,
+                    SystemQuantity = d.SystemQuantity,
                     Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
@@ -141,6 +142,7 @@ namespace MenuGoBE.Controllers.Document
                     BatchCodeSnapshot = d.BatchCodeSnapshot,
                     ManufactureDateSnapshot = d.ManufactureDateSnapshot,
                     ExpiryDateSnapshot = d.ExpiryDateSnapshot,
+                    SystemQuantity = d.SystemQuantity,
                     Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note
@@ -193,6 +195,7 @@ namespace MenuGoBE.Controllers.Document
                     BatchCodeSnapshot = d.BatchCodeSnapshot,
                     ManufactureDateSnapshot = d.ManufactureDateSnapshot,
                     ExpiryDateSnapshot = d.ExpiryDateSnapshot,
+                    SystemQuantity = d.SystemQuantity,
                     Quantity = d.ActualQuantity,
                     ActualQuantity = d.ActualQuantity,
                     Note = d.Note

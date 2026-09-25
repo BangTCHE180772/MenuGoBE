@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -39,6 +39,9 @@ namespace MenuGoBE.Dtos.Document
         public DateTime? ManufactureDateSnapshot { get; set; }
 
         public DateTime? ExpiryDateSnapshot { get; set; }
+
+        [Range(0, double.MaxValue, ErrorMessage = "Số lượng tồn hệ thống không được nhỏ hơn 0.")]
+        public decimal? SystemQuantity { get; set; }
 
         [Range(0, double.MaxValue, ErrorMessage = "Số lượng tồn thực tế không được nhỏ hơn 0.")]
         public decimal ActualQuantity { get; set; }
@@ -82,6 +85,9 @@ namespace MenuGoBE.Dtos.Document
         public DateTime? ManufactureDateSnapshot { get; set; }
 
         public DateTime? ExpiryDateSnapshot { get; set; }
+
+        [Range(0, double.MaxValue, ErrorMessage = "Số lượng tồn hệ thống không được nhỏ hơn 0.")]
+        public decimal? SystemQuantity { get; set; }
 
         [Range(0, double.MaxValue, ErrorMessage = "Số lượng tồn thực tế không được nhỏ hơn 0.")]
         public decimal ActualQuantity { get; set; }

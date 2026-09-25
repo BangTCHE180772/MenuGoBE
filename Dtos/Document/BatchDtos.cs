@@ -137,4 +137,12 @@ namespace MenuGoBE.Dtos.Document
         public int WarningDays { get; set; } = 14;
     }
     #endregion
+
+    #region DTO Cập nhật Ngày sản xuất và Hạn sử dụng Lô hàng
+    public class UpdateBatchDatesDto
+    {
+        public DateTime? ManufactureDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+    }
+    #endregion
 }
