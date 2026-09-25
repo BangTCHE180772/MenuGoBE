@@ -502,6 +502,60 @@ namespace MenuGoBE.Service
 
                 var order = orderWithDetails;
 
+                var childOrdersCheck = await _repo.GetChildOrdersWithDetailsAsync(order.Id);
+                int effectiveItemsCount = order.OrderDetails.Count(od => od.Status != "Cancelled" && (od.Quantity - od.ReturnedQuantity) > 0);
+                foreach (var child in childOrdersCheck)
+                {
+                    effectiveItemsCount += child.OrderDetails.Count(od => od.Status != "Cancelled" && (od.Quantity - od.ReturnedQuantity) > 0);
+                }
+
+                if (effectiveItemsCount == 0)
+                {
+                    order.Status = "Cancelled";
+                    foreach (var detail in order.OrderDetails)
+                    {
+                        if (detail.Status != "Cancelled") detail.Status = "Cancelled";
+                    }
+
+                    if (order.TableId > 0)
+                    {
+                        var table = await _tableRepo.GetByIdAsync(order.TableId);
+                        if (table != null)
+                        {
+                            table.Status = "Cleaning";
+                            paidTableIds.Add(table.Id);
+                        }
+                    }
+
+                    var childTableIdsForCancel = childOrdersCheck.Where(c => c.TableId > 0).Select(c => c.TableId).Distinct().ToList();
+                    var childTablesForCancel = await _tableRepo.GetByIdsAsync(childTableIdsForCancel);
+                    var childTableCancelDict = childTablesForCancel.ToDictionary(t => t.Id);
+
+                    foreach (var child in childOrdersCheck)
+                    {
+                        if (child.Status == "Active")
+                        {
+                            child.Status = "Cancelled";
+                            foreach (var detail in child.OrderDetails)
+                            {
+                                if (detail.Status != "Cancelled") detail.Status = "Cancelled";
+                            }
+                            if (child.TableId > 0 && childTableCancelDict.TryGetValue(child.TableId, out var childTable))
+                            {
+                                if (!paidTableIds.Contains(childTable.Id))
+                                {
+                                    childTable.Status = "Cleaning";
+                                    paidTableIds.Add(childTable.Id);
+                                }
+                            }
+                        }
+                    }
+
+                    await _repo.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                    return paidTableIds;
+                }
+
                 if (paymentMethod == "Cash" || dto != null)
                 {
                     await PreparePaymentAsync(orderId, dto, paymentMethod);
