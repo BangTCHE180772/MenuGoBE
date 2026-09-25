@@ -70,7 +70,6 @@ namespace MenuGoBE.Service
                     if (shiftEndLocal <= localNow)
                     {
                         ws.Status = "ABSENT";
-                        await _repo.UpdateAsync(ws);
                         hasChanges = true;
                     }
                 }

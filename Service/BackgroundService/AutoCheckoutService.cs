@@ -82,7 +82,6 @@ namespace MenuGoBE.Service
                 if (shiftEndLocal <= localNow)
                 {
                     ws.Status = "ABSENT";
-                    await _repo.UpdateAsync(ws);
                     _logger.LogInformation($"Auto-Absent: Marked ScheduleId: {ws.Id}, AccountId: {ws.AccountId} as ABSENT (expired at {shiftEndLocal})");
                     hasChanges = true;
                 }
@@ -129,7 +128,6 @@ namespace MenuGoBE.Service
                                 ws.ActualHours = WorkScheduleService.CalculateBoundedActualHours(ws);
                             }
                             
-                            await _repo.UpdateAsync(ws);
                             _logger.LogInformation($"Auto-Transition: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {checkOutTimeUtc}");
 
                             // Auto-unassign tất cả bàn của nhân viên khi chuyển ca
@@ -143,7 +141,6 @@ namespace MenuGoBE.Service
                             nextSchedule.CheckInAt = nextShiftStartUtc;
                             nextSchedule.Status = "Working";
                             
-                            await _repo.UpdateAsync(nextSchedule);
                             _logger.LogInformation($"Auto-Transition: Checked-in AccountId: {nextSchedule.AccountId}, ScheduleId: {nextSchedule.Id} at {nextShiftStartUtc}");
                             
                             hasChanges = true;
@@ -162,7 +159,6 @@ namespace MenuGoBE.Service
                                 ws.ActualHours = WorkScheduleService.CalculateBoundedActualHours(ws);
                             }
                             
-                            await _repo.UpdateAsync(ws);
                             _logger.LogInformation($"Auto-ForcedCheckout: Checked-out AccountId: {ws.AccountId}, ScheduleId: {ws.Id} at {forcedCheckOutTimeUtc}");
 
                             // Auto-unassign tất cả bàn của nhân viên khi ép checkout

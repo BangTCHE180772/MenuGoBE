@@ -120,7 +120,6 @@ namespace MenuGoBE.Repositories
         {
             return await _context.WorkSchedules
                 .Include(ws => ws.Shift)
-                .AsNoTracking()
                 .Where(ws => ws.CheckInAt != null && ws.CheckOutAt == null)
                 .ToListAsync();
         }
@@ -129,7 +128,6 @@ namespace MenuGoBE.Repositories
         {
             return await _context.WorkSchedules
                 .Include(ws => ws.Shift)
-                .AsNoTracking()
                 .Where(ws => accountIds.Contains(ws.AccountId)
                           && ws.CheckInAt == null
                           && (ws.Status.ToUpper() == "APPROVED" || ws.Status.ToUpper() == "PENDING" || ws.Status.ToUpper() == "SCHEDULED"))
@@ -140,7 +138,6 @@ namespace MenuGoBE.Repositories
         {
             return await _context.WorkSchedules
                 .Include(ws => ws.Shift)
-                .AsNoTracking()
                 .Where(ws => ws.CheckInAt == null
                           && ws.Status != "ABSENT"
                           && ws.Status != "Absent"
