@@ -345,9 +345,6 @@ public class ReservationMonitorService : Microsoft.Extensions.Hosting.Background
                 {
                     await _hubContext.Clients.All.SendAsync("ReceiveTableListUpdate", stoppingToken);
                 }
-
-                // Fixed 5-minute interval check
-                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -356,6 +353,16 @@ public class ReservationMonitorService : Microsoft.Extensions.Hosting.Background
             catch (Exception ex)
             {
                 Console.WriteLine($"ReservationMonitorService Error: {ex.Message}");
+            }
+
+            // Luôn delay 5 phút trước lần quét kế tiếp kể cả khi có lỗi
+            try
+            {
+                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
             }
         }
     }

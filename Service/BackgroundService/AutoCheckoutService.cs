@@ -21,6 +21,7 @@ namespace MenuGoBE.Service
             _hubContext = hubContext;
         }
 
+        #region Vòng lặp chạy ngầm tự động checkout và điểm danh vắng
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("AutoCheckoutService started. Waiting 10s before first run.");
@@ -32,7 +33,6 @@ namespace MenuGoBE.Service
                 {
                     // Dọn dẹp tự động check-out cho các ca đã hết hạn
                     await ProcessAutoCheckoutsAsync();
-                    await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -42,8 +42,19 @@ namespace MenuGoBE.Service
                 {
                     _logger.LogError(ex, "Error occurred during AutoCheckoutService execution.");
                 }
+
+                // Luôn delay 10 phút trước lần quét tiếp theo kể cả khi gặp lỗi
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
+        #endregion
 
         private async Task ProcessAutoCheckoutsAsync()
         {

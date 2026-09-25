@@ -179,6 +179,18 @@ namespace MenuGoBE.Service
                     .Where(bi => bi.BranchId == branchId && bi.IsManageQuantity && bi.IsAlertEnabled)
                     .ToListAsync();
 
+                // Lấy trước danh sách BInventory đã có thông báo trong ngày để tránh N+1 Query
+                var existingBiNotifIds = (await _context.Notifications
+                    .Where(n => n.BranchId == branchId &&
+                                n.Type == "Inventory" &&
+                                n.CreatedAt >= startUtc &&
+                                n.CreatedAt <= endUtc &&
+                                n.ReferenceType == "BInventory" &&
+                                n.ReferenceId.HasValue)
+                    .Select(n => n.ReferenceId!.Value)
+                    .ToListAsync())
+                    .ToHashSet();
+
                 foreach (var bi in managedBInventories)
                 {
                     decimal crit = bi.CustomCriticalThreshold ?? defaultStockCrit;
@@ -224,33 +236,23 @@ namespace MenuGoBE.Service
                         msg = $"Mặt hàng \"{productName}\" hiện còn {bi.Quantity:N1} {unitName}, dưới mức cảnh báo ({warn:N1} {unitName}).";
                     }
 
-                    if (shouldAlert)
+                    if (shouldAlert && !existingBiNotifIds.Contains(bi.Id))
                     {
-                        var exists = await _context.Notifications.AnyAsync(n =>
-                            n.BranchId == branchId &&
-                            n.Type == "Inventory" &&
-                            n.CreatedAt >= startUtc &&
-                            n.CreatedAt <= endUtc &&
-                            n.ReferenceType == "BInventory" &&
-                            n.ReferenceId == bi.Id);
-
-                        if (!exists)
+                        existingBiNotifIds.Add(bi.Id);
+                        newNotifications.Add(new Notification
                         {
-                            newNotifications.Add(new Notification
-                            {
-                                BranchId = branchId,
-                                Type = "Inventory",
-                                Title = title,
-                                Message = msg,
-                                CreatedAt = DateTime.UtcNow,
-                                IsRead = false,
-                                IsImportant = isImportant,
-                                Priority = priority,
-                                ReferenceType = "BInventory",
-                                ReferenceId = bi.Id,
-                                RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(productName)}&productId={bi.ProductId}&inventoryId={bi.Id}&expand=true"
-                            });
-                        }
+                            BranchId = branchId,
+                            Type = "Inventory",
+                            Title = title,
+                            Message = msg,
+                            CreatedAt = DateTime.UtcNow,
+                            IsRead = false,
+                            IsImportant = isImportant,
+                            Priority = priority,
+                            ReferenceType = "BInventory",
+                            ReferenceId = bi.Id,
+                            RedirectUrl = $"/inventory-management?tab=Product&search={Uri.EscapeDataString(productName)}&productId={bi.ProductId}&inventoryId={bi.Id}&expand=true"
+                        });
                     }
                 }
                 #endregion
@@ -293,6 +295,26 @@ namespace MenuGoBE.Service
                     .Where(ws => ws.BranchId == branchId && ws.WorkDate == todayDateOnly)
                     .ToListAsync();
 
+                var existingWsNotifEntries = await _context.Notifications
+                    .Where(n => n.BranchId == branchId &&
+                                n.Type == "Attendance" &&
+                                n.CreatedAt >= startUtc &&
+                                n.CreatedAt <= endUtc &&
+                                (n.ReferenceType == "WorkScheduleLate" || n.ReferenceType == "WorkScheduleStart") &&
+                                n.ReferenceId.HasValue)
+                    .Select(n => new { n.ReferenceType, Id = n.ReferenceId!.Value })
+                    .ToListAsync();
+
+                var existingWsLateIds = existingWsNotifEntries
+                    .Where(n => n.ReferenceType == "WorkScheduleLate")
+                    .Select(n => n.Id)
+                    .ToHashSet();
+
+                var existingWsStartIds = existingWsNotifEntries
+                    .Where(n => n.ReferenceType == "WorkScheduleStart")
+                    .Select(n => n.Id)
+                    .ToHashSet();
+
                 foreach (var ws in todaySchedules)
                 {
                     var shiftStart = ws.Shift != null ? ws.Shift.StartTime : new TimeOnly(8, 0);
@@ -303,16 +325,9 @@ namespace MenuGoBE.Service
                     if (ws.CheckInAt == null && nowLocalTime >= shiftStart.AddMinutes(15) && nowLocalTime <= shiftEnd)
                     {
                         var msg = $"Nhân viên \"{employeeName}\" đã quá giờ vào ca ({shiftStart:HH:mm} - {shiftEnd:HH:mm}) nhưng chưa thực hiện chấm công Check-in.";
-                        var exists = await _context.Notifications.AnyAsync(n =>
-                            n.BranchId == branchId &&
-                            n.Type == "Attendance" &&
-                            n.CreatedAt >= startUtc &&
-                            n.CreatedAt <= endUtc &&
-                            n.ReferenceType == "WorkScheduleLate" &&
-                            n.ReferenceId == ws.Id);
-
-                        if (!exists)
+                        if (!existingWsLateIds.Contains(ws.Id))
                         {
+                            existingWsLateIds.Add(ws.Id);
                             newNotifications.Add(new Notification
                             {
                                 BranchId = branchId,
@@ -334,16 +349,9 @@ namespace MenuGoBE.Service
                     else if (ws.CheckInAt == null && nowLocalTime >= shiftStart.AddMinutes(-30) && nowLocalTime < shiftStart.AddMinutes(15))
                     {
                         var msg = $"Ca làm \"{ws.Shift?.Name ?? "Ca làm"}\" ({shiftStart:HH:mm} - {shiftEnd:HH:mm}) của \"{employeeName}\" đã mở cổng chấm công. Vui lòng chấm công trước khi vào ca.";
-                        var exists = await _context.Notifications.AnyAsync(n =>
-                            n.BranchId == branchId &&
-                            n.Type == "Attendance" &&
-                            n.CreatedAt >= startUtc &&
-                            n.CreatedAt <= endUtc &&
-                            n.ReferenceType == "WorkScheduleStart" &&
-                            n.ReferenceId == ws.Id);
-
-                        if (!exists)
+                        if (!existingWsStartIds.Contains(ws.Id))
                         {
+                            existingWsStartIds.Add(ws.Id);
                             newNotifications.Add(new Notification
                             {
                                 BranchId = branchId,
@@ -377,19 +385,23 @@ namespace MenuGoBE.Service
                                 dd.ActualQuantity.Value < dd.SystemQuantity.Value)
                     .ToListAsync();
 
+                var existingDdNotifIds = (await _context.Notifications
+                    .Where(n => n.BranchId == branchId &&
+                                n.Type == "Quality" &&
+                                n.ReferenceType == "DocumentDetail" &&
+                                n.ReferenceId.HasValue)
+                    .Select(n => n.ReferenceId!.Value)
+                    .ToListAsync())
+                    .ToHashSet();
+
                 foreach (var dd in negativeDiscrepancies)
                 {
                     var loss = (dd.SystemQuantity ?? 0m) - (dd.ActualQuantity ?? 0m);
                     var msg = $"Nguyên liệu \"{dd.BInventory.Product.Name}\" bị hao hụt {loss:N1} trong đợt kiểm kho chốt ngày {dd.Document.PostedAt?.AddHours(7):dd/MM/yyyy}.";
 
-                    var exists = await _context.Notifications.AnyAsync(n =>
-                        n.BranchId == branchId &&
-                        n.Type == "Quality" &&
-                        n.ReferenceType == "DocumentDetail" &&
-                        n.ReferenceId == dd.Id);
-
-                    if (!exists)
+                    if (!existingDdNotifIds.Contains(dd.Id))
                     {
+                        existingDdNotifIds.Add(dd.Id);
                         newNotifications.Add(new Notification
                         {
                             BranchId = branchId,
@@ -421,6 +433,17 @@ namespace MenuGoBE.Service
                                 b.QuantityRemaining > 0 &&
                                 !b.IsNotificationMuted)
                     .ToListAsync();
+
+                var existingBatchNotifIds = (await _context.Notifications
+                    .Where(n => n.BranchId == branchId &&
+                                n.Type == "ShelfLife" &&
+                                n.CreatedAt >= startUtc &&
+                                n.CreatedAt <= endUtc &&
+                                n.ReferenceType == "BInventoryBatch" &&
+                                n.ReferenceId.HasValue)
+                    .Select(n => n.ReferenceId!.Value)
+                    .ToListAsync())
+                    .ToHashSet();
 
                 foreach (var batch in activeBatches)
                 {
@@ -473,33 +496,23 @@ namespace MenuGoBE.Service
                         }
                     }
 
-                    if (shouldAlert)
+                    if (shouldAlert && !existingBatchNotifIds.Contains(batch.Id))
                     {
-                        var exists = await _context.Notifications.AnyAsync(n =>
-                            n.BranchId == branchId &&
-                            n.Type == "ShelfLife" &&
-                            n.CreatedAt >= startUtc &&
-                            n.CreatedAt <= endUtc &&
-                            n.ReferenceType == "BInventoryBatch" &&
-                            n.ReferenceId == batch.Id);
-
-                        if (!exists)
+                        existingBatchNotifIds.Add(batch.Id);
+                        newNotifications.Add(new Notification
                         {
-                            newNotifications.Add(new Notification
-                            {
-                                BranchId = branchId,
-                                Type = "ShelfLife",
-                                Title = title,
-                                Message = msg,
-                                CreatedAt = DateTime.UtcNow,
-                                IsRead = false,
-                                IsImportant = isImportant,
-                                Priority = priority,
-                                ReferenceType = "BInventoryBatch",
-                                ReferenceId = batch.Id,
-                                RedirectUrl = $"/inventory-management?tab=BatchExpiry&search={Uri.EscapeDataString(batch.BatchCode)}&batchId={batch.Id}"
-                            });
-                        }
+                            BranchId = branchId,
+                            Type = "ShelfLife",
+                            Title = title,
+                            Message = msg,
+                            CreatedAt = DateTime.UtcNow,
+                            IsRead = false,
+                            IsImportant = isImportant,
+                            Priority = priority,
+                            ReferenceType = "BInventoryBatch",
+                            ReferenceId = batch.Id,
+                            RedirectUrl = $"/inventory-management?tab=BatchExpiry&search={Uri.EscapeDataString(batch.BatchCode)}&batchId={batch.Id}"
+                        });
                     }
                 }
                 #endregion
