@@ -642,6 +642,7 @@ namespace MenuGoBE.Service
                 }
 
                 order.Status = "Paid";
+                await _repo.UpdateAsync(order);
 
                 var hasSuccessPayment = await _paymentRepo.HasSuccessPaymentAsync(order.Id);
                 if (!hasSuccessPayment && paymentMethod == "Cash")
@@ -674,6 +675,7 @@ namespace MenuGoBE.Service
                     if (child.Status == "Active")
                     {
                         child.Status = "Paid";
+                        await _repo.UpdateAsync(child);
                         if (child.TableId > 0)
                         {
                             var childTable = await _tableRepo.GetByIdAsync(child.TableId);
