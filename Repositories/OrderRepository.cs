@@ -207,5 +207,12 @@ namespace MenuGoBE.Repositories
         {
             return _context.Database.CreateExecutionStrategy();
         }
+
+        // Sau khi rollback transaction, EF vẫn giữ các thay đổi chưa lưu trong change tracker —
+        // gọi hàm này để món lỗi không "dính" sang lần SaveChanges của món kế tiếp.
+        public void ClearChangeTracker()
+        {
+            _context.ChangeTracker.Clear();
+        }
     }
 }
