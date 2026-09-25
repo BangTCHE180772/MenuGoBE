@@ -127,20 +127,25 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync();
         }
 
+        #region Lấy danh sách hóa đơn đã thanh toán theo chi nhánh và khoảng thời gian
         public async Task<List<Order>> GetPaidOrdersByBranchAsync(long branchId, DateTime? startDate = null, DateTime? endDate = null)
         {
             var query = _context.Orders
                 .AsNoTracking()
                 .Where(o => (branchId <= 0 || (o.Table != null && o.Table.Area != null && o.Table.Area.BranchId == branchId)) && o.Status == "Paid");
 
+            // Lọc theo mốc thời gian bắt đầu (UTC+7)
             if (startDate.HasValue)
             {
-                query = query.Where(o => o.CreatedAt >= startDate.Value);
+                var startUtc = DateTime.SpecifyKind(startDate.Value.Date.AddHours(-7), DateTimeKind.Utc);
+                query = query.Where(o => o.CreatedAt >= startUtc);
             }
 
+            // Lọc theo mốc thời gian kết thúc (UTC+7)
             if (endDate.HasValue)
             {
-                query = query.Where(o => o.CreatedAt <= endDate.Value);
+                var endUtc = DateTime.SpecifyKind(endDate.Value.Date.AddDays(1).AddHours(-7).AddTicks(-1), DateTimeKind.Utc);
+                query = query.Where(o => o.CreatedAt <= endUtc);
             }
 
             return await query
@@ -154,6 +159,7 @@ namespace MenuGoBE.Repositories
                 .OrderByDescending(o => o.CreatedAt)
                 .ToListAsync();
         }
+        #endregion
 
         public async Task<List<Order>> GetReturnableOrdersByBranchAsync(long branchId)
         {
