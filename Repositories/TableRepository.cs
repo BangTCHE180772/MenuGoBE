@@ -41,6 +41,13 @@ namespace MenuGoBE.Repositories
             return entity;
         }
 
+        public async Task<List<Table>> GetByIdsAsync(IEnumerable<long> ids)
+        {
+            return await _context.Tables.Include(t => t.Area)
+                .Where(t => ids.Contains(t.Id) && t.IsActive)
+                .ToListAsync();
+        }
+
         public async Task<Table?> GetByNameAndAreaAsync(string name, long areaId)
         {
             return await _context.Tables

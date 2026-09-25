@@ -652,6 +652,9 @@ namespace MenuGoBE.Service
             }
 
             var eligibleAccounts = await accountsQuery.ToListAsync();
+            var accountIds = eligibleAccounts.Select(a => a.Id).ToList();
+            var existingPayrolls = await _payrollRepo.GetByAccountsMonthYearAsync(accountIds, dto.Month, dto.Year);
+            var existingPayrollsDict = existingPayrolls.ToDictionary(p => p.AccountId);
 
             var monthStart = new DateOnly(dto.Year, dto.Month, 1);
             var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -665,7 +668,7 @@ namespace MenuGoBE.Service
 
                 if (contract == null) continue;
 
-                var existingPayroll = await _payrollRepo.GetByAccountMonthYearAsync(acc.Id, dto.Month, dto.Year);
+                existingPayrollsDict.TryGetValue(acc.Id, out var existingPayroll);
                 if (existingPayroll != null && existingPayroll.Status == PayrollStatus.Paid)
                 {
                     continue;

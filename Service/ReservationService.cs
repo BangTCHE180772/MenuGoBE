@@ -767,6 +767,9 @@ public class ReservationService : IReservationService
 
         // Queue Email notification cho khách
         var confirmCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
+        var tableTasks = tableIds.Select(async tid => (await _tableRepo.GetByIdAsync(tid))?.Name ?? "");
+        var tableNamesArray = await Task.WhenAll(tableTasks);
+        
         _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
         {
             CustomerId = reservation.CustomerId,
@@ -776,7 +779,7 @@ public class ReservationService : IReservationService
             ReservationTime = reservation.ReservationTime,
             BranchName = branchName,
             ReservationId = reservation.Id,
-            TableNames = string.Join(", ", tableIds.Select(async tid => (await _tableRepo.GetByIdAsync(tid))?.Name ?? "").Select(t => t.Result))
+            TableNames = string.Join(", ", tableNamesArray)
         });
 
         _signalService.TriggerSignal();

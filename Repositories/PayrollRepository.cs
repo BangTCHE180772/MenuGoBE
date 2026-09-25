@@ -109,6 +109,20 @@ namespace MenuGoBE.Repositories
                 .FirstOrDefaultAsync(p => p.AccountId == accountId && p.Month == month && p.Year == year);
         }
 
+        public async Task<List<Payroll>> GetByAccountsMonthYearAsync(IEnumerable<long> accountIds, int month, int year)
+        {
+            return await _context.Payrolls
+                .Include(p => p.Account)
+                .Include(p => p.Branch)
+                .Include(p => p.Contract)
+                .Include(p => p.Locker)
+                .Include(p => p.Approver)
+                .Include(p => p.SalaryDetails)
+                .Include(p => p.PayrollShiftDetails)
+                .Where(p => accountIds.Contains(p.AccountId) && p.Month == month && p.Year == year)
+                .ToListAsync();
+        }
+
         public async Task CreateAsync(Payroll entity)
         {
             await _context.Payrolls.AddAsync(entity);

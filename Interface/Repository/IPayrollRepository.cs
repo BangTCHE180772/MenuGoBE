@@ -10,6 +10,7 @@ namespace MenuGoBE.Interface.Repository
         Task<Payroll?> GetByIdAsync(long id);
         Task<List<Payroll>> GetByAccountIdAsync(long accountId, int? month = null, int? year = null);
         Task<Payroll?> GetByAccountMonthYearAsync(long accountId, int month, int year);
+        Task<List<Payroll>> GetByAccountsMonthYearAsync(IEnumerable<long> accountIds, int month, int year);
         Task CreateAsync(Payroll entity);
         Task UpdateAsync(Payroll entity);
         Task DeleteAsync(long id);
