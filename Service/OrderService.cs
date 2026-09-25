@@ -505,6 +505,7 @@ namespace MenuGoBE.Service
                 if (paymentMethod == "Cash" || dto != null)
                 {
                     await PreparePaymentAsync(orderId, dto, paymentMethod);
+                    _repo.ClearChangeTracker();
                     order = await _repo.GetActiveOrderByIdWithDetailsAsync(orderId);
                     if (order == null) return paidTableIds;
                 }
@@ -531,6 +532,7 @@ namespace MenuGoBE.Service
                 if (orderDetailIdsForBonus.Count > 0 && _pointConfig.EarnRate_SpendAmount > 0)
                 {
                     var delayedRecords = await _context.LeftoverRecords
+                        .AsNoTracking()
                         .Include(l => l.OrderDetail)
                         .ThenInclude(od => od.Product)
                         .Where(l => l.Type == LeftoverType.Return
@@ -642,7 +644,6 @@ namespace MenuGoBE.Service
                 }
 
                 order.Status = "Paid";
-                await _repo.UpdateAsync(order);
 
                 var hasSuccessPayment = await _paymentRepo.HasSuccessPaymentAsync(order.Id);
                 if (!hasSuccessPayment && paymentMethod == "Cash")
@@ -679,7 +680,6 @@ namespace MenuGoBE.Service
                     if (child.Status == "Active")
                     {
                         child.Status = "Paid";
-                        await _repo.UpdateAsync(child);
                         if (child.TableId > 0 && childTableDict.TryGetValue(child.TableId, out var childTable))
                         {
                             childTable.Status = "Cleaning";
@@ -851,7 +851,6 @@ namespace MenuGoBE.Service
                 }
             }
 
-            await _repo.UpdateAsync(orderWithDetails);
             await _repo.SaveChangesAsync();
 
             return true;

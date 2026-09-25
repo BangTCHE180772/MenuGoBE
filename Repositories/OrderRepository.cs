@@ -49,7 +49,6 @@ namespace MenuGoBE.Repositories
         public async Task<List<Order>> GetChildOrdersWithDetailsAsync(long fatherId)
         {
             return await _context.Orders
-                .AsNoTracking()
                 .Where(o => o.FatherId == fatherId && (o.Status == "Active" || o.Status == "Reserved"))
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
@@ -60,7 +59,6 @@ namespace MenuGoBE.Repositories
         public async Task<Order?> GetActiveOrderByTableIdAsync(long tableId)
         {
             var activeOrders = await _context.Orders
-                .AsNoTracking()
                 .Where(o => o.TableId == tableId && (o.Status == "Active" || o.Status == "Internal"))
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
@@ -77,7 +75,6 @@ namespace MenuGoBE.Repositories
         public async Task<Order?> GetActiveOrderByIdWithDetailsAsync(long orderId)
         {
             return await _context.Orders
-                .AsNoTracking()
                 .Where(o => o.Id == orderId && o.Status == "Active")
                 .Include(o => o.OrderDetails)
                     .ThenInclude(od => od.Product)
