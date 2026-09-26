@@ -134,10 +134,6 @@ namespace MenuGoBE.Service
                 {
                     throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không được gắn với đơn hàng của khách.", 400));
                 }
-                if (dto.AtFaultAccountId.HasValue)
-                {
-                    throw new MenuGoException(new ErrorResult(400, "Bếp làm dư không gắn tài khoản làm sai.", 400));
-                }
             }
 
             var entity = new LeftoverRecord
