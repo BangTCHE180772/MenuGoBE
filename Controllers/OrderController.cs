@@ -882,19 +882,27 @@ namespace MenuGoBE.Controllers
         [HttpPut("batch-cooking-status")]
         public async Task<IActionResult> BatchUpdateCookingStatus([FromBody] BatchUpdateCookingStatusDto dto)
         {
-            var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId"));
-            var allowedBranchIds = branchClaims
-                .Select(c => long.TryParse(c.Value, out var bid) ? bid : 0)
-                .Where(bid => bid > 0)
-                .Distinct()
-                .ToArray();
+            long[] branchIdsToUse = Array.Empty<long>();
+            if (dto.BranchId.HasValue && dto.BranchId.Value > 0)
+            {
+                branchIdsToUse = new[] { dto.BranchId.Value };
+            }
+            else
+            {
+                var branchClaims = User.FindAll("branchId").Concat(User.FindAll("BranchId"));
+                branchIdsToUse = branchClaims
+                    .Select(c => long.TryParse(c.Value, out var bid) ? bid : 0)
+                    .Where(bid => bid > 0)
+                    .Distinct()
+                    .ToArray();
+            }
 
-            if (!allowedBranchIds.Any())
+            if (!branchIdsToUse.Any())
             {
                 return Forbid();
             }
 
-            var result = await _detailService.BatchUpdateCookingStatusAsync(dto.ProductId, dto.CookingStatus, allowedBranchIds);
+            var result = await _detailService.BatchUpdateCookingStatusAsync(dto.ProductId, dto.CookingStatus, branchIdsToUse);
             if (result.Started == 0 && result.Errors.Count == 0)
                 return NotFound(new { message = "Không tìm thấy món ăn nào đang chờ xác nhận." });
 
