@@ -183,9 +183,23 @@ public class ReservationService : IReservationService
                 var endTime = dto.ReservationTime.AddMinutes(59);
                 var overlappingReservations = await _reservationRepo.GetOverlappingReservationsAsync(startTime, endTime);
 
-                var overlappingTables = overlappingReservations.Where(r => r.Id != reservation.Id && r.OrderId.HasValue && 
-                    (r.Order != null && tableIds.Contains(r.Order.TableId) || 
-                     _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value).Result.Any(c => tableIds.Contains(c.TableId))));
+                var overlappingTables = new List<Reservation>();
+                foreach (var r in overlappingReservations)
+                {
+                    if (r.Id != reservation.Id && r.OrderId.HasValue)
+                    {
+                        if (r.Order != null && tableIds.Contains(r.Order.TableId))
+                        {
+                            overlappingTables.Add(r);
+                            continue;
+                        }
+                        var childOrdersForR = await _orderRepo.GetChildOrdersWithDetailsAsync(r.OrderId.Value);
+                        if (childOrdersForR.Any(c => tableIds.Contains(c.TableId)))
+                        {
+                            overlappingTables.Add(r);
+                        }
+                    }
+                }
 
                 if (overlappingTables.Any())
                 {
@@ -767,8 +781,12 @@ public class ReservationService : IReservationService
 
         // Queue Email notification cho khách
         var confirmCustomer = await _customerRepo.GetByIdAsync(reservation.CustomerId);
-        var tableTasks = tableIds.Select(async tid => (await _tableRepo.GetByIdAsync(tid))?.Name ?? "");
-        var tableNamesArray = await Task.WhenAll(tableTasks);
+        var tableNamesArray = new List<string>();
+        foreach (var tid in tableIds)
+        {
+            var table = await _tableRepo.GetByIdAsync(tid);
+            tableNamesArray.Add(table?.Name ?? "");
+        }
         
         _ = _notificationQueue.QueueAsync(new Dtos.Reservation.ReservationEmailNotification
         {
@@ -805,6 +823,13 @@ public class ReservationService : IReservationService
             
             if (fatherOrder != null)
             {
+                var activeFatherOrder = await _orderRepo.GetActiveOrderByTableIdAsync(fatherOrder.TableId);
+                if (activeFatherOrder != null && activeFatherOrder.Id != fatherOrder.Id)
+                {
+                    var tableInfo = await _tableRepo.GetByIdAsync(fatherOrder.TableId);
+                    throw new InvalidOperationException($"Bàn chính {tableInfo?.Name} hiện đang có khách. Vui lòng thanh toán cho khách cũ trước khi nhận bàn.");
+                }
+
                 fatherOrder.Status = "Active";
                 fatherOrder.CustomerId = reservation.CustomerId;
                 await _orderRepo.UpdateAsync(fatherOrder);
@@ -881,6 +906,13 @@ public class ReservationService : IReservationService
                 var childOrders = await _orderRepo.GetChildOrdersWithDetailsAsync(fatherOrder.Id);
                 foreach (var child in childOrders)
                 {
+                    var activeChildOrder = await _orderRepo.GetActiveOrderByTableIdAsync(child.TableId);
+                    if (activeChildOrder != null && activeChildOrder.Id != child.Id)
+                    {
+                        var childTableInfo = await _tableRepo.GetByIdAsync(child.TableId);
+                        throw new InvalidOperationException($"Bàn ghép {childTableInfo?.Name} hiện đang có khách. Vui lòng thanh toán cho khách cũ trước khi nhận bàn.");
+                    }
+
                     child.Status = "Active";
                     await _orderRepo.UpdateAsync(child);
 
