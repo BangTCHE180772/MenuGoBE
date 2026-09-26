@@ -902,7 +902,7 @@ namespace MenuGoBE.Controllers
                 return Forbid();
             }
 
-            var result = await _detailService.BatchUpdateCookingStatusAsync(dto.ProductId, dto.CookingStatus, branchIdsToUse);
+            var result = await _detailService.BatchUpdateCookingStatusAsync(dto.ProductId, dto.CookingStatus, branchIdsToUse, dto.Quantity);
             if (result.Started == 0 && result.Errors.Count == 0)
                 return NotFound(new { message = "Không tìm thấy món ăn nào đang chờ xác nhận." });
 
