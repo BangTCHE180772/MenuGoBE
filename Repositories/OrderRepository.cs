@@ -132,7 +132,12 @@ namespace MenuGoBE.Repositories
         {
             var query = _context.Orders
                 .AsNoTracking()
-                .Where(o => (branchId <= 0 || (o.Table != null && o.Table.Area != null && o.Table.Area.BranchId == branchId)) && o.Status == "Paid");
+                .Where(o => (branchId <= 0 || (o.Table != null && o.Table.Area != null && o.Table.Area.BranchId == branchId)) 
+                         && o.Status == "Paid" 
+                         && o.FatherId == null
+                         && !(o.TotalAmount == 0 
+                              && !o.OrderDetails.Any(od => (od.Quantity - od.ReturnedQuantity) > 0) 
+                              && !o.ChildOrders.Any(c => c.OrderDetails.Any(od => (od.Quantity - od.ReturnedQuantity) > 0))));
 
             // Lọc theo mốc thời gian bắt đầu (UTC+7)
             if (startDate.HasValue)
@@ -153,6 +158,8 @@ namespace MenuGoBE.Repositories
                     .ThenInclude(od => od.Product)
                 .Include(o => o.Table)
                     .ThenInclude(t => t.Area)
+                .Include(o => o.ChildOrders)
+                    .ThenInclude(c => c.Table)
                 .Include(o => o.Customer)
                 .Include(o => o.Voucher)
                 .Include(o => o.Payments)

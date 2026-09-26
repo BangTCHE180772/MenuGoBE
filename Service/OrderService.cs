@@ -922,15 +922,19 @@ namespace MenuGoBE.Service
             var dtos = _mapper.Map<List<OrderViewDto>>(orders);
 
             var creatorIds = orders.Where(o => o.CreatedBy.HasValue).Select(o => o.CreatedBy!.Value).Distinct().ToList();
+            var accounts = new Dictionary<long, string>();
             if (creatorIds.Any())
             {
-                var accounts = await _context.Accounts.Where(a => creatorIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Name);
-                foreach (var dto in dtos)
+                accounts = await _context.Accounts.Where(a => creatorIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => a.Name);
+            }
+
+
+
+            foreach (var dto in dtos)
+            {
+                if (dto.CreatedBy.HasValue && accounts.TryGetValue(dto.CreatedBy.Value, out var name))
                 {
-                    if (dto.CreatedBy.HasValue && accounts.TryGetValue(dto.CreatedBy.Value, out var name))
-                    {
-                        dto.CreatedByName = name;
-                    }
+                    dto.CreatedByName = name;
                 }
             }
 
