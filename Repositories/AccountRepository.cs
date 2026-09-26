@@ -39,12 +39,12 @@ namespace MenuGoBE.Repositories
             var query = _context.Accounts
                 .Include(a => a.Contracts)
                 .AsNoTracking()
-                .Where(a => !a.Contracts.Any() || a.Contracts.Any(c => roleIds.Contains(c.RoleId)))
+                .Where(a => a.Contracts.Any(c => roleIds.Contains(c.RoleId)))
                 .AsQueryable();
 
             if (branchId.HasValue)
             {
-                query = query.Where(a => !a.Contracts.Any() || a.Contracts.Any(c => c.BranchId == branchId.Value));
+                query = query.Where(a => a.Contracts.Any(c => c.BranchId == branchId.Value));
             }
 
             return await query.ToListAsync();
