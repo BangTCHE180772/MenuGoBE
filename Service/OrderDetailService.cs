@@ -957,10 +957,43 @@ namespace MenuGoBE.Service
             string oldStatus = entity.Status;
             var productType = await _productRepo.GetProductTypeAsync(entity.ProductId);
 
-            var result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
+            bool result = false;
+            if (entity.Quantity > 1)
+            {
+                var cancelledDetail = new OrderDetail
+                {
+                    OrderId = entity.OrderId,
+                    ProductId = entity.ProductId,
+                    Quantity = 1,
+                    Price = entity.Price,
+                    OriginalPrice = entity.OriginalPrice,
+                    PromotionId = entity.PromotionId,
+                    Note = entity.Note,
+                    Status = "Cancelled",
+                    CookingStatus = entity.CookingStatus,
+                    BatchId = entity.BatchId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                entity.Quantity -= 1;
+                
+                await _detailRepo.UpdateAsync(entity);
+                await _detailRepo.CreateAsync(cancelledDetail);
+                await _detailRepo.SaveChangesAsync();
+                
+                entity = cancelledDetail;
+                result = true;
+            }
+            else
+            {
+                result = await _detailRepo.UpdateStatusAsync(orderDetailId, "Cancelled");
+                if (result)
+                {
+                    await _detailRepo.SaveChangesAsync();
+                }
+            }
+
             if (result)
             {
-                await _detailRepo.SaveChangesAsync();
 
                 var order = await _orderRepo.GetByIdAsync(entity.OrderId);
                 if (order != null)
