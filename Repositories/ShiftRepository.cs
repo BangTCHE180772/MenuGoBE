@@ -21,7 +21,6 @@ namespace MenuGoBE.Repositories
             return await _context.Shifts
                 .Include(s => s.RoleRequirements)
                 .ThenInclude(rr => rr.Role)
-                .AsNoTracking()
                 .ToListAsync();
         }
 
@@ -30,7 +29,6 @@ namespace MenuGoBE.Repositories
             return await _context.Shifts
                 .Include(s => s.RoleRequirements)
                 .ThenInclude(rr => rr.Role)
-                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.Id == id);
         }
 
@@ -39,7 +37,6 @@ namespace MenuGoBE.Repositories
             return await _context.Shifts
                 .Include(s => s.RoleRequirements)
                 .ThenInclude(rr => rr.Role)
-                .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.StartTime == startTime && s.EndTime == endTime);
         }
 
@@ -50,7 +47,15 @@ namespace MenuGoBE.Repositories
 
         public Task UpdateAsync(Shift entity)
         {
-            _context.Shifts.Update(entity);
+            var tracked = _context.Shifts.Local.FirstOrDefault(e => e.Id == entity.Id);
+            if (tracked != null)
+            {
+                _context.Entry(tracked).CurrentValues.SetValues(entity);
+            }
+            else
+            {
+                _context.Shifts.Update(entity);
+            }
             return Task.CompletedTask;
         }
 

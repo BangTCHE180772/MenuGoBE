@@ -24,7 +24,6 @@ public class PayrollSuggestionRepository : IPayrollSuggestionRepository
             .Include(s => s.Creator)
             .Include(s => s.Processor)
             .Include(s => s.AppliedPayroll)
-            .AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == id);
     }
 
@@ -35,7 +34,6 @@ public class PayrollSuggestionRepository : IPayrollSuggestionRepository
             .Include(s => s.Account)
             .Include(s => s.Creator)
             .Include(s => s.Processor)
-            .AsNoTracking()
             .AsQueryable();
 
         if (query.BranchId.HasValue && query.BranchId.Value > 0)
@@ -69,7 +67,6 @@ public class PayrollSuggestionRepository : IPayrollSuggestionRepository
     public async Task<List<PayrollSuggestion>> GetApprovedUnappliedForMonthAsync(long branchId, long accountId, int month, int year)
     {
         return await _context.PayrollSuggestions
-            .AsNoTracking()
             .Where(s => s.BranchId == branchId &&
                         s.AccountId == accountId &&
                         s.Status == PayrollSuggestionStatus.Approved &&

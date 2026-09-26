@@ -151,9 +151,13 @@ namespace MenuGoBE.Mapper
             CreateMap<ContractUpdateDto, Contract>();
 
             //Shift
-            CreateMap<Shift, ShiftViewDto>();
+            CreateMap<Shift, ShiftViewDto>()
+                .ForMember(dest => dest.RoleRequirements, opt => opt.MapFrom(src => src.RoleRequirements != null
+                    ? src.RoleRequirements.GroupBy(rr => rr.RoleId).Select(g => g.Last()).ToList()
+                    : null));
             CreateMap<ShiftCreateDto, Shift>();
-            CreateMap<ShiftUpdateDto, Shift>();
+            CreateMap<ShiftUpdateDto, Shift>()
+                .ForMember(dest => dest.RoleRequirements, opt => opt.Ignore());
             CreateMap<ShiftRoleRequirement, ShiftRoleRequirementDto>()
                 .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role != null ? src.Role.Name : string.Empty));
             CreateMap<ShiftRoleRequirementDto, ShiftRoleRequirement>();
