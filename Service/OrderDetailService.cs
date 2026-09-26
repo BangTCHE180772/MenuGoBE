@@ -1271,7 +1271,7 @@ namespace MenuGoBE.Service
             return await Task.FromResult(true);
         }
 
-        public async Task<BatchCookingResultDto> BatchUpdateCookingStatusAsync(long productId, string cookingStatus, long[] branchIds)
+        public async Task<BatchCookingResultDto> BatchUpdateCookingStatusAsync(long productId, string cookingStatus, long[] branchIds, int? maxQuantity = null)
         {
             var result = new BatchCookingResultDto();
             var pendingItems = await _detailRepo.GetPendingByProductIdAsync(productId, branchIds);
@@ -1280,38 +1280,51 @@ namespace MenuGoBE.Service
             // Chốt id + nhãn bàn trước vì change tracker sẽ bị reset khi một món lỗi.
             var targets = pendingItems
                 .OrderBy(i => i.CreatedAt)
-                .Select(i => (i.Id, Label: i.Order?.Table?.Name ?? $"Đơn #{i.OrderId}"))
+                .Select(i => new { i.Id, Label = i.Order?.Table?.Name ?? $"Đơn #{i.OrderId}", i.Quantity })
                 .ToList();
 
             string batchId = Guid.NewGuid().ToString();
+            int currentProcessedQuantity = 0;
 
-            foreach (var (id, label) in targets)
+            foreach (var target in targets)
             {
+                if (maxQuantity.HasValue && currentProcessedQuantity >= maxQuantity.Value)
+                {
+                    break;
+                }
+
+                int qtyToProcess = target.Quantity;
+                if (maxQuantity.HasValue && currentProcessedQuantity + target.Quantity > maxQuantity.Value)
+                {
+                    qtyToProcess = maxQuantity.Value - currentProcessedQuantity;
+                }
+
                 try
                 {
-                    var success = await UpdateCookingStatusAsync(id, cookingStatus);
+                    var success = await UpdateCookingStatusAsync(target.Id, cookingStatus, qtyToProcess);
                     if (!success)
                     {
-                        result.Errors.Add($"{label}: không cập nhật được món.");
+                        result.Errors.Add($"{target.Label}: không cập nhật được món.");
                         continue;
                     }
 
                     // Chỉ gán mã mẻ khi món đã thực sự chuyển trạng thái — tránh món lỗi
                     // vẫn "dính" mẻ trong khi còn đang chờ.
-                    var detail = await _detailRepo.GetByIdAsync(id);
+                    var detail = await _detailRepo.GetByIdAsync(target.Id);
                     if (detail != null)
                     {
                         detail.BatchId = batchId;
                         await _detailRepo.SaveChangesAsync();
                     }
                     result.Started++;
+                    currentProcessedQuantity += qtyToProcess;
                 }
                 catch (Exception ex)
                 {
                     // Một món lỗi (vd: thiếu nguyên liệu) không được làm hỏng cả mẻ: ghi nhận
                     // lý do, bỏ các thay đổi dở dang rồi tiếp tục các món còn lại.
                     _orderRepo.ClearChangeTracker();
-                    result.Errors.Add($"{label}: {ex.InnerException?.Message ?? ex.Message}");
+                    result.Errors.Add($"{target.Label}: {ex.InnerException?.Message ?? ex.Message}");
                 }
             }
 
