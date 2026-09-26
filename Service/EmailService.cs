@@ -67,6 +67,7 @@ namespace MenuGoBE.Service
                 message.IsBodyHtml = true;
 
                 using var client = new SmtpClient(smtpServer, port);
+                client.Timeout = 10000; // 10 seconds timeout to prevent hanging on server
                 client.DeliveryMethod = SmtpDeliveryMethod.Network;
                 client.UseDefaultCredentials = false;
                 client.Credentials = new NetworkCredential(senderEmail, senderPassword);

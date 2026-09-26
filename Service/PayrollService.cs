@@ -884,12 +884,27 @@ namespace MenuGoBE.Service
                     </div>
                 </div>";
 
-                _logger.LogInformation($"[PAYROLL EMAIL] Sending email to '{account.Name}' <{account.Email}> for Payroll ID {payroll.Id}...");
-                await _emailService.SendEmailAsync(account.Email, subject, body);
+                var targetEmail = account.Email;
+                var targetName = account.Name;
+                var payrollId = payroll.Id;
+
+                // Fire-and-forget email dispatch in background task to avoid blocking HTTP API response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        _logger.LogInformation($"[PAYROLL EMAIL BG] Sending email to '{targetName}' <{targetEmail}> for Payroll ID {payrollId}...");
+                        await _emailService.SendEmailAsync(targetEmail, subject, body);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"[PAYROLL EMAIL ERROR] Exception occurred while sending email for Payroll ID {payrollId}: {ex.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"[PAYROLL EMAIL ERROR] Exception occurred while sending email for Payroll ID {payroll.Id}: {ex.Message}");
+                _logger.LogError(ex, $"[PAYROLL EMAIL ERROR] Exception occurred while preparing email for Payroll ID {payroll.Id}: {ex.Message}");
             }
         }
         #endregion
