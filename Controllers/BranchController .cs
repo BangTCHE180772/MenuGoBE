@@ -57,6 +57,30 @@ namespace MenuGoBE.Controllers
             }
         }
 
+        #region GET Lấy danh sách các chi nhánh nhận hàng đang hoạt động (dùng cho chuyển kho)
+        [HttpGet("transfer-destinations")]
+        public async Task<IActionResult> GetTransferDestinations()
+        {
+            try
+            {
+                var result = await _service.GetAllAsync();
+                var activeBranches = result
+                    .Where(b => !b.IsDeleted && b.Status == "Hoạt động")
+                    .ToList();
+
+                return Ok(activeBranches);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Đã xảy ra lỗi khi lấy danh sách chi nhánh nhận hàng.",
+                    error = ex.Message
+                });
+            }
+        }
+        #endregion
+
         [HttpGet("{id:long}")]
         public async Task<IActionResult> GetById(long id)
         {

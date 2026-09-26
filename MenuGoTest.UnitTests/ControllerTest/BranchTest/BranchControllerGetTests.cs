@@ -154,5 +154,41 @@ namespace MenuGoTest.UnitTests.ControllerTest.BranchTest
             Assert.Equal(500, objectResult.StatusCode);
             _serviceMock.Verify(s => s.SearchFilteredBranchesAsync(dto), Times.Once);
         }
+
+        #region Unit test cho GetTransferDestinations
+        [Fact]
+        public async Task Test_GetTransferDestinations_Should_Return_Only_Active_And_NonDeleted_Branches()
+        {
+            var branches = new List<BranchViewDto>
+            {
+                new BranchViewDto { Id = 1, Name = "Branch Active 1", Status = "Hoạt động", IsDeleted = false },
+                new BranchViewDto { Id = 2, Name = "Branch Inactive", Status = "Ngừng kinh doanh", IsDeleted = false },
+                new BranchViewDto { Id = 3, Name = "Branch Deleted", Status = "Hoạt động", IsDeleted = true },
+                new BranchViewDto { Id = 4, Name = "Branch Active 2", Status = "Hoạt động", IsDeleted = false }
+            };
+
+            _serviceMock.Setup(s => s.GetAllAsync()).ReturnsAsync(branches);
+
+            var result = await _controller.GetTransferDestinations();
+
+            var okResult = Assert.IsType<OkObjectResult>(result);
+            var data = Assert.IsType<List<BranchViewDto>>(okResult.Value);
+            Assert.Equal(2, data.Count);
+            Assert.Contains(data, b => b.Id == 1);
+            Assert.Contains(data, b => b.Id == 4);
+        }
+
+        [Fact]
+        public async Task Test_GetTransferDestinations_Should_Return_500_When_Exception()
+        {
+            _serviceMock.Setup(s => s.GetAllAsync()).ThrowsAsync(new Exception("Database error"));
+
+            var result = await _controller.GetTransferDestinations();
+
+            var objectResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, objectResult.StatusCode);
+        }
+        #endregion
     }
 }
+
