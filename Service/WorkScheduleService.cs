@@ -1287,20 +1287,33 @@ namespace MenuGoBE.Service
             }
 
             var startTime = ws.CheckInAt.Value;
+            var minStartTime = startTime.AddHours(-1); // Mở rộng thêm 1 tiếng để bao gồm các bàn được assign trước khi check-in một chút
+
             // Tính toán EndTime: Nếu chưa CheckOut thì là min của hiện tại hoặc giờ kết thúc ca + 4 tiếng
             var endTime = ws.CheckOutAt ?? DateTime.UtcNow;
             if (!ws.CheckOutAt.HasValue && ws.Shift != null)
             {
-                // Giả định ws.WorkDate là ngày của ca làm việc
-                var shiftEndTime = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
-                var maxEndTime = shiftEndTime.AddHours(4);
-                if (maxEndTime < DateTime.UtcNow)
+                var shiftStartTimeLocal = ws.WorkDate.ToDateTime(ws.Shift.StartTime);
+                var shiftEndTimeLocal = ws.WorkDate.ToDateTime(ws.Shift.EndTime);
+                
+                // Xử lý ca qua đêm (VD: 22:00 -> 06:00)
+                if (ws.Shift.EndTime < ws.Shift.StartTime)
                 {
-                    endTime = maxEndTime;
+                    shiftEndTimeLocal = shiftEndTimeLocal.AddDays(1);
+                }
+
+                // Chuyển sang UTC để so sánh chính xác với DateTime.UtcNow
+                var shiftEndUtc = DateTime.SpecifyKind(shiftEndTimeLocal.AddHours(-7), DateTimeKind.Utc);
+                var maxEndTimeUtc = shiftEndUtc.AddHours(4);
+
+                if (maxEndTimeUtc < DateTime.UtcNow)
+                {
+                    endTime = maxEndTimeUtc;
                 }
             }
 
-            var assignments = await _orderAssignmentRepo.GetActivityLogAssignmentsAsync(ws.AccountId, startTime, endTime);
+            // Dùng minStartTime thay vì startTime để query an toàn hơn
+            var assignments = await _orderAssignmentRepo.GetActivityLogAssignmentsAsync(ws.AccountId, minStartTime, endTime);
 
             var logs = new List<MenuGoBE.Dtos.WorkSchedule.WorkScheduleActivityLogDto>();
             foreach (var a in assignments)
